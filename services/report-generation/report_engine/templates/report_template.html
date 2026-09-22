@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ report_title }}</title>
+    <style>
+        {{ assets.get_font_face_css() }}
+        
+        :root {
+            --bg-color: #f4f6f3;
+            --surface: #ffffff;
+            --surface2: #fbfcfa;
+            --ink: #15201a;
+            --muted: #5c6b62;
+            --faint: #8a988f;
+            --line: #e5e9e4;
+            --line-strong: #d6dcd4;
+            --primary-green: #5aa552;
+            --primary-dark: #1b263b; /* For the KUMARAGURU logo box color */
+            --teal: #4f9a8c;
+            --amber: #c18a2e;
+            --rust: #b8623a;
+            --red: #be4b3b;
+        }
+
+        body {
+            font-family: 'Public Sans', sans-serif;
+            color: var(--ink);
+            background-color: var(--bg-color);
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+        }
+
+        h1, h2, h3, h4, h5 {
+            font-family: 'Archivo', sans-serif;
+            color: var(--ink);
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+
+        /* Publication Paged Media Settings */
+        @page {
+            size: A4 portrait;
+            margin: 25mm 20mm 25mm 20mm;
+            
+            @bottom-left {
+                content: "Microcosm Sustainability Intelligence";
+                font-family: 'Public Sans', sans-serif;
+                font-size: 8pt;
+                color: var(--muted);
+            }
+            @bottom-right {
+                content: "Page " counter(page) " of " counter(pages);
+                font-family: 'Public Sans', sans-serif;
+                font-size: 8pt;
+                color: var(--muted);
+            }
+        }
+        
+        /* Cover page has no header/footer, and no margins */
+        @page cover {
+            margin: 0;
+            @bottom-left { content: none; }
+            @bottom-right { content: none; }
+        }
+
+        .cover-page {
+            page: cover;
+            position: relative;
+            width: 210mm;
+            height: 297mm;
+            display: block;
+            overflow: hidden;
+            background-color: #fff;
+        }
+
+        .cover-bg-img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+        }
+
+        .cover-content {
+            position: absolute;
+            top: 20%;
+            left: 10%;
+            z-index: 3;
+            color: #1b263b; 
+        }
+        
+        .cover-title {
+            font-family: 'Archivo', sans-serif;
+            font-size: 32pt;
+            font-weight: 800;
+            margin-bottom: 5px;
+            display: none; 
+        }
+        
+        .cover-year {
+            font-family: 'Archivo', sans-serif;
+            font-size: 28pt;
+            font-weight: 800;
+            margin: 0;
+            color: #1b263b; 
+        }
+
+        .cover-meta {
+            position: absolute;
+            bottom: 6%;
+            left: 10%;
+            z-index: 3;
+            color: #ffffff;
+            font-family: 'Public Sans', sans-serif;
+            font-size: 10pt;
+        }
+
+        /* Top right logo for every page */
+        .header-logo {
+            position: absolute;
+            top: -25mm;
+            right: -20mm;
+            background-color: var(--primary-dark);
+            padding: 15px 30px;
+            z-index: 100;
+        }
+        .header-logo img {
+            height: 25px;
+        }
+
+        .page-break { page-break-before: always; }
+        .avoid-break { break-inside: avoid; page-break-inside: avoid; }
+        p, li, div { orphans: 3; widows: 3; }
+
+        /* CSS Micro Charts */
+        .css-chart-card {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+        }
+        .css-sparkline-container {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            flex-grow: 1;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--line);
+        }
+        .css-bar-wrapper {
+            width: 6%;
+            height: 100px; /* Fixed height for sparklines */
+            display: flex;
+            align-items: flex-end;
+            background-color: rgba(0,0,0,0.02);
+            border-radius: 2px 2px 0 0;
+        }
+        .css-bar {
+            width: 100%;
+            border-radius: 2px 2px 0 0;
+            transition: height 0.3s ease;
+        }
+        .css-sparkline-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 5px;
+            font-size: 8pt;
+            color: var(--muted);
+            font-weight: 600;
+        }
+        .css-hbar-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 10pt;
+            color: var(--ink);
+        }
+        .css-hbar-container {
+            width: 100%;
+            height: 16px;
+            background-color: var(--line);
+            border-radius: 8px;
+            display: flex;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        .css-hbar-segment {
+            height: 100%;
+        }
+
+        /* Adaptive Page Layout */
+        .page-container {
+            position: relative;
+            min-height: 240mm; /* Force pages to fill printable height */
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 20px;
+        }
+        .flex-auto {
+            flex: 1;
+        }
+        .compact-executive .section-title { margin-bottom: 15px; margin-top: 0; font-size: 20pt; }
+        .compact-executive .insight-box { padding: 10px; margin-bottom: 10px; }
+        .compact-executive p { font-size: 10pt; margin-bottom: 10px; }
+        .compact-executive ul { font-size: 10pt; margin-bottom: 10px; }
+        .compact-executive .kpi-card { padding: 15px; }
+        .compact-executive .highlight-box { margin-bottom: 10px; }
+
+        /* Intro Page layout */
+        @page intro {
+            margin: 0 0 25mm 0; /* No top/side margins so image bleeds, keep bottom margin for footer */
+            @bottom-left {
+                content: "Microcosm Sustainability Intelligence";
+                font-family: 'Public Sans', sans-serif;
+                font-size: 8pt;
+                color: var(--muted);
+                margin-left: 20mm;
+            }
+            @bottom-right {
+                content: "Page " counter(page) " of " counter(pages);
+                font-family: 'Public Sans', sans-serif;
+                font-size: 8pt;
+                color: var(--muted);
+                margin-right: 20mm;
+            }
+        }
+
+        .intro-page {
+            page: intro;
+            page-break-before: always;
+            background-color: var(--bg-color);
+        }
+
+        .intro-hero-container {
+            width: 100%;
+            height: 380px; /* Fixed height for the hero banner */
+            overflow: hidden; /* Crop the rest of the image (baked text) */
+            position: relative;
+            background-color: var(--surface);
+        }
+
+        .intro-hero-img {
+            width: 100%;
+            height: auto;
+            position: absolute;
+            top: 0;
+            left: 0;
+            display: block;
+        }
+
+        .intro-content {
+            padding: 10mm 20mm; /* Restore safe margins for text */
+        }
+
+        /* Components */
+        .highlight-box {
+            background-color: var(--surface);
+            display: flex;
+            align-items: center;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+            padding: 0;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        .highlight-icon {
+            background-color: var(--primary-dark);
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .highlight-icon svg, .highlight-icon img {
+            width: 32px;
+            height: 32px;
+            filter: brightness(0) invert(1);
+        }
+
+        .highlight-title {
+            padding-left: 20px;
+            font-family: 'Archivo', sans-serif;
+            font-weight: 800;
+            font-size: 14pt;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .grid-row {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .col-12 { grid-column: span 12; }
+        .col-6 { grid-column: span 6; }
+        .col-4 { grid-column: span 4; }
+        .col-8 { grid-column: span 8; }
+        .col-3 { grid-column: span 3; }
+        .col-9 { grid-column: span 9; }
+        .col-5 { grid-column: span 5; }
+        .col-7 { grid-column: span 7; }
+
+        .flex-col {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .flex-row {
+            display: flex;
+            flex-direction: row;
+            gap: 20px;
+            margin-bottom: 20px;
+            align-items: stretch;
+        }
+
+        .kpi-card {
+            background: var(--surface);
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        
+        .kpi-card-horizontal {
+            background: var(--surface);
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            padding: 15px 20px;
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .kpi-title {
+            font-family: 'Public Sans', sans-serif;
+            font-size: 12pt;
+            color: var(--ink);
+            margin-bottom: 10px;
+            line-height: 1.2;
+        }
+
+        .kpi-title-small {
+            margin: 0;
+            font-size: 11pt;
+            color: var(--ink);
+            line-height: 1.2;
+        }
+
+        .kpi-value-container {
+            display: flex;
+            align-items: baseline;
+            gap: 5px;
+            margin-top: auto;
+        }
+
+        .kpi-value {
+            font-family: 'Archivo', sans-serif;
+            font-size: 28pt;
+            font-weight: 800;
+            line-height: 1;
+        }
+        
+        .kpi-value-small {
+            font-family: 'Archivo', sans-serif;
+            font-size: 18pt;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .kpi-unit {
+            font-size: 10pt;
+            color: var(--muted);
+            font-weight: 600;
+        }
+        
+        .insight-box {
+            background-color: rgba(90, 165, 82, 0.1);
+            border-left: 4px solid var(--primary-green);
+            padding: 15px;
+            border-radius: 0 8px 8px 0;
+            margin-bottom: 20px;
+        }
+        
+        .insight-title {
+            font-weight: 700;
+            color: var(--primary-green);
+            margin-bottom: 5px;
+        }
+
+        /* Tables */
+        table.enterprise {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9pt;
+            margin-bottom: 10mm;
+            background: var(--surface);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            border-radius: 8px;
+            overflow: hidden;
+            table-layout: fixed;
+        }
+        table.enterprise th {
+            background-color: rgba(0,0,0,0.03);
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--line-strong);
+        }
+        table.enterprise td {
+            padding: 12px;
+            border-bottom: 1px solid var(--line);
+            color: var(--ink);
+            word-wrap: break-word;
+        }
+        
+        /* Typography overrides */
+        .section-title {
+            font-family: 'Archivo', sans-serif;
+            font-size: 24pt;
+            font-weight: 800;
+            color: var(--ink);
+            margin-bottom: 10mm;
+            margin-top: 10mm;
+        }
+        
+        .section-subtitle {
+            font-size: 14pt;
+            color: var(--muted);
+            margin-top: -8mm;
+            margin-bottom: 10mm;
+        }
+        
+        .chart-card {
+            background: var(--surface);
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .card-header {
+            font-weight: 600;
+            color: var(--muted);
+            margin-bottom: 15px;
+        }
+        .chart-img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+    </style>
+</head>
+<body>
+    {% block content %}{% endblock %}
+</body>
+</html>

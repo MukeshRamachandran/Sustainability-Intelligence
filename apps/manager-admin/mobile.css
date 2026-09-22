@@ -1,0 +1,200 @@
+/* =====================================================================
+   MICROCOSM — MOBILE ADDON (mobile.css)
+   Phone/touch optimisation as a pure overlay: every rule here lives
+   behind a small-viewport or coarse-pointer media query, so desktop
+   rendering is untouched by construction. styles.css and app.js are
+   never edited; mobile.js adds the few hooks (filter accordion bar,
+   dock swipe hints) this file styles.
+   ===================================================================== */
+
+/* The filter-accordion toggle bar exists in the DOM on all sizes
+   (mobile.js builds it) but only ever shows on phones. */
+.mob-filter-toggle { display: none; }
+
+/* ------------------------------------------------------------------ */
+/* Touch niceties — any coarse-pointer device                          */
+/* ------------------------------------------------------------------ */
+@media (pointer: coarse) {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+  }
+  .bottom-dock button,
+  .tabs button,
+  .btn,
+  .toolbar select,
+  .theme-switch,
+  .mob-filter-toggle,
+  #tableTabs button {
+    touch-action: manipulation;      /* kills the 300ms double-tap wait */
+  }
+  /* comfortable tap targets */
+  .tabs button { min-height: 40px; padding-top: 8px; padding-bottom: 8px; }
+  .kpi-sidebar-close { min-width: 44px; min-height: 44px; }
+}
+
+/* ------------------------------------------------------------------ */
+/* Phone layout                                                        */
+/* ------------------------------------------------------------------ */
+@media (max-width: 820px) {
+
+  /* --- solid sticky chrome: on phones the translucent topbar let the
+     page show through while scrolling; keep the blur but make the tint
+     strong enough to read over anything --- */
+  .topbar {
+    background: rgba(255, 255, 255, 0.92);
+    height: 60px;
+    gap: 12px;
+  }
+  body.dark-mode .topbar { background: rgba(21, 32, 26, 0.94); }
+
+  /* =========== FILTERS: collapsed accordion =========== */
+  /* One compact bar shows the current selection; tapping it expands the
+     real controls. The controls are only hidden, never removed, so
+     app.js listeners and values are untouched. */
+  .mob-filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    min-height: 44px;
+    padding: 4px 2px;
+    background: none;
+    border: 0;
+    font-family: 'Public Sans', system-ui, sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+    text-align: left;
+    cursor: pointer;
+  }
+  .mob-filter-toggle .mob-ft-chev {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    font-size: 11px;
+    transition: transform .25s ease;
+  }
+  body.mob-filters-open .mob-filter-toggle .mob-ft-chev { transform: rotate(90deg); }
+  .mob-filter-toggle .mob-ft-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mob-filter-toggle .mob-ft-hint {
+    flex: 0 0 auto;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--green);
+  }
+
+  .toolbar { padding: 4px 16px; row-gap: 12px; }
+  /* collapsed: everything but the toggle bar hidden */
+  body:not(.mob-filters-open) .toolbar > label,
+  body:not(.mob-filters-open) .toolbar > .latest-period-pill,
+  body:not(.mob-filters-open) .toolbar > .source-pill,
+  body:not(.mob-filters-open) .toolbar > .btn { display: none; }
+  /* expanded: stack the controls full-width for fat fingers */
+  body.mob-filters-open .toolbar { padding-bottom: 14px; }
+  body.mob-filters-open .toolbar > label {
+    width: 100%;
+    justify-content: space-between;
+  }
+  body.mob-filters-open .toolbar > label > select { flex: 1; max-width: 70%; }
+  body.mob-filters-open .toolbar > .source-pill { margin-left: 0; width: 100%; }
+  body.mob-filters-open .toolbar > .btn { width: 100%; min-height: 44px; }
+  /* 16px stops iOS Safari from zooming the page when a select opens */
+  .toolbar select { font-size: 16px; padding: 9px 12px; min-height: 42px; }
+
+  /* =========== BOTTOM DOCK: swipeable =========== */
+  .bottom-dock-wrapper {
+    bottom: 12px;
+    padding: 0 10px;
+  }
+  .bottom-dock {
+    max-width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+  }
+  .bottom-dock::-webkit-scrollbar { display: none; }
+  .bottom-dock button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    scroll-snap-align: center;
+    min-height: 44px;
+  }
+  /* edge fades hinting there's more to swipe; mobile.js toggles the
+     classes from the dock's scroll position */
+  .bottom-dock-wrapper::before,
+  .bottom-dock-wrapper::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 34px;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .25s ease;
+  }
+  .bottom-dock-wrapper::before {
+    left: 10px;
+    border-radius: 40px 0 0 40px;
+    background: linear-gradient(90deg, rgba(255, 255, 255, .95), transparent);
+  }
+  .bottom-dock-wrapper::after {
+    right: 10px;
+    border-radius: 0 40px 40px 0;
+    background: linear-gradient(270deg, rgba(255, 255, 255, .95), transparent);
+  }
+  body.dark-mode .bottom-dock-wrapper::before { background: linear-gradient(90deg, rgba(21, 32, 26, .95), transparent); }
+  body.dark-mode .bottom-dock-wrapper::after { background: linear-gradient(270deg, rgba(21, 32, 26, .95), transparent); }
+  .bottom-dock-wrapper.mob-can-l::before { opacity: 1; }
+  .bottom-dock-wrapper.mob-can-r::after { opacity: 1; }
+
+  /* content must clear the fixed dock */
+  .page { padding-bottom: 118px; }
+  footer { padding-bottom: 110px; }
+
+  /* =========== hero row / cards =========== */
+  /* the gross-balance card is inline-styled to 50% width for the desktop
+     two-up hero; on a phone it takes the full line (stylesheet !important
+     outranks the inline style) */
+  .hero-row .balance { max-width: none !important; }
+
+  /* =========== KPI detail sidebar: full-screen sheet =========== */
+  #kpi-sidebar {
+    width: 100vw;
+    right: -110vw;
+    border-left: 0;
+  }
+  body.sidebar-active #kpi-sidebar { right: 0; }
+  body.sidebar-active .page { padding-right: clamp(16px, 3vw, 34px); }
+  .kpi-sidebar-content { padding: 1.25rem; }
+
+  /* =========== charts & tables =========== */
+  .chart { height: 260px; }
+  .chart.short { height: 220px; }
+  .table-wrap { -webkit-overflow-scrolling: touch; }
+  .search { font-size: 16px; }   /* no iOS zoom on focus */
+}
+
+/* very small phones: tighten the brand so the topbar never crowds */
+@media (max-width: 380px) {
+  .topbar { padding: 0 12px; }
+  .brand img { max-height: 30px; }
+}

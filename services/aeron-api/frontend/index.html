@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Aeron Environment Dashboard for KCT. Monitor real-time air quality and weather data.">
+    <title>Aeron Environment Dashboard</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar" id="sidebar">
+            <div class="brand">
+                <div class="brand-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                </div>
+                <h1>Aeron Dash</h1>
+            </div>
+            
+            <ul class="nav-links">
+                <li class="active">
+                    <a href="#" id="nav-dashboard">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" id="nav-weather">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19C19.985 19 22 16.985 22 14.5C22 12.015 19.985 10 17.5 10C17.0697 10 16.6534 10.0592 16.2575 10.1691C15.421 7.21045 12.6865 5 9.5 5C5.35786 5 2 8.35786 2 12.5C2 16.6421 5.35786 20 9.5 20H17.5V19Z"/></svg>
+                        <span>Weather</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" id="nav-air-quality">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z"/><path d="M8 14C8 14 9.5 16 12 16C14.5 16 16 14 16 14"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+                        <span>Air Quality</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" id="nav-settings">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                        <span>Settings</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="topbar">
+                <div class="welcome-text">
+                    <h2>KCT Environment Overview</h2>
+                    <p class="subtitle" id="current-datetime">Loading...</p>
+                </div>
+                <div class="status-indicator">
+                    <span class="pulse-dot"></span>
+                    <span id="api-status">Live</span>
+                </div>
+            </header>
+
+            <div class="dashboard-grid">
+                <!-- KPI Cards -->
+                <div class="kpi-card glass-panel gradient-border">
+                    <div class="kpi-header">
+                        <h3>AQI Index</h3>
+                        <div class="icon-wrapper aqi-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                        </div>
+                    </div>
+                    <div class="kpi-value" id="kpi-aqi">--</div>
+                    <div class="kpi-footer">
+                        <span class="trend up">Status: <span id="kpi-aqi-status">--</span></span>
+                    </div>
+                </div>
+
+                <div class="kpi-card glass-panel">
+                    <div class="kpi-header">
+                        <h3>Temperature</h3>
+                        <div class="icon-wrapper temp-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
+                        </div>
+                    </div>
+                    <div class="kpi-value"><span id="kpi-temp">--</span>°C</div>
+                    <div class="kpi-footer">
+                        <span class="label">Feels like</span> <span class="value" id="kpi-feels-like">--</span>
+                    </div>
+                </div>
+
+                <div class="kpi-card glass-panel">
+                    <div class="kpi-header">
+                        <h3>PM 2.5</h3>
+                        <div class="icon-wrapper pm-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+                        </div>
+                    </div>
+                    <div class="kpi-value"><span id="kpi-pm25">--</span> <span class="unit">µg/m³</span></div>
+                    <div class="kpi-footer">
+                        <span class="label">Guideline: < 15 µg/m³</span>
+                    </div>
+                </div>
+
+                <div class="kpi-card glass-panel">
+                    <div class="kpi-header">
+                        <h3>Humidity</h3>
+                        <div class="icon-wrapper drop-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
+                        </div>
+                    </div>
+                    <div class="kpi-value"><span id="kpi-humidity">--</span>%</div>
+                    <div class="kpi-footer">
+                        <span class="label">Dew point:</span> <span class="value" id="kpi-dew-point">--</span>
+                    </div>
+                </div>
+
+                <!-- Charts Section -->
+                <div class="chart-container glass-panel col-span-2">
+                    <div class="chart-header">
+                        <h3>Air Quality Trends (24h)</h3>
+                    </div>
+                    <div class="canvas-wrapper">
+                        <canvas id="aqiChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-container glass-panel col-span-2">
+                    <div class="chart-header">
+                        <h3>Temperature & Humidity</h3>
+                    </div>
+                    <div class="canvas-wrapper">
+                        <canvas id="weatherChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/api.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/dashboard.js"></script>
+</body>
+</html>

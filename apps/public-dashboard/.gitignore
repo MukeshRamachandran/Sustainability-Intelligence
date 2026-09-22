@@ -1,0 +1,35 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Python environments and caches
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# JavaScript dependencies
+node_modules/
+
+# Local databases and runtime output
+*.db
+*.sqlite
+*.sqlite3
+*.log
+*.tmp
+
+# Generated report output
+reportgeneration/report_engine/exports/
+reportgeneration/assets/report/current_report/
+reportgeneration/**/debug.html
+reportgeneration/*.exe
+
+# Editor and operating-system metadata
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+

@@ -1,0 +1,136 @@
+{% import 'components/ui_components.html' as ui with context %}
+
+<!-- PAGE 3: Highlights - Emission Profile & Energy -->
+<div class="page-container page-break flex-auto">
+    <div class="header-logo"><img src="{{ assets.get_asset_uri('logo.png') }}" onerror="this.style.display='none'"></div>
+    <h1 class="section-title" style="margin-top:0;">Highlights</h1>
+
+    <!-- Emission Profile -->
+    {{ ui.highlight_box('emission', 'EMISSION PROFILE') }}
+    <div class="grid-row" style="flex: 1; align-items: stretch; margin-bottom: 20px;">
+        <div class="col-4 flex-col">
+            <div class="kpi-card avoid-break" style="flex-grow: 1; display: flex; flex-direction: column; justify-content: center;">
+                <div class="kpi-title" style="font-size: 14pt;">Total Gross GHG</div>
+                <div class="kpi-value-container">
+                    <span class="kpi-value" style="color: var(--red); font-size: 32pt;">{{ "%.2f"|format(kpis.gross.value) }}</span>
+                    <span class="kpi-unit">tCO2e</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-4 flex-col">
+            {{ ui.mini_kpi('Scope 1 (DG + Transport)', "%.1f"|format(kpis.scope1.value), 'tCO2e') }}
+            {{ ui.mini_kpi('Scope 2 (Electricity)', "%.1f"|format(kpis.scope2.value), 'tCO2e') }}
+            {{ ui.mini_kpi('Scope 3 (Others/Offset)', "0.0", 'tCO2e', 'var(--muted)') }}
+        </div>
+        <div class="col-4 flex-col">
+            {{ ui.chart_card('Emission Contribution', charts.s1_breakdown) }}
+        </div>
+    </div>
+
+    <!-- Energy Indicators -->
+    {{ ui.highlight_box('energy', 'ENERGY INDICATORS') }}
+    <div class="grid-row" style="flex: 1; align-items: stretch;">
+        <div class="col-4 flex-col">
+            <div class="kpi-card avoid-break" style="flex-grow: 1; display: flex; flex-direction: column; justify-content: center;">
+                <div class="kpi-title" style="font-size: 14pt;">Total Energy</div>
+                <div class="kpi-value-container">
+                    <span class="kpi-value" style="color: var(--primary-green); font-size: 32pt;">{{ "%.0f"|format(kpis.elec.value + kpis.re.value) }}</span>
+                    <span class="kpi-unit">kWh</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-4 flex-col">
+            {{ ui.mini_kpi('Grid Electricity', "%.0f"|format(kpis.elec.value), 'kWh') }}
+            {{ ui.mini_kpi('Renewable Energy', "%.0f"|format(kpis.re.value), 'kWh') }}
+            {{ ui.mini_kpi('Renewable Share', "%.1f"|format(kpis.reShare.value), '%') }}
+        </div>
+        <div class="col-4 flex-col">
+            {{ ui.chart_card('Energy Split', charts.re_mix) }}
+        </div>
+    </div>
+    <div class="grid-row" style="margin-top: 15px;">
+        <div class="col-12">
+            {{ ui.css_sparkline('Monthly Grid Energy Trend (kWh)', current_period.elecKwh) }}
+        </div>
+    </div>
+</div>
+
+<!-- PAGE 4: Transport Indicators -->
+<div class="page-container page-break flex-auto">
+    <div class="header-logo"><img src="{{ assets.get_asset_uri('logo.png') }}" onerror="this.style.display='none'"></div>
+    <h1 class="section-title" style="margin-top:0;">Transport Indicators</h1>
+    
+    {{ ui.highlight_box('transport', 'FLEET & FUEL OVERVIEW') }}
+    <div class="grid-row" style="margin-bottom: 20px;">
+        <div class="col-6 flex-col">
+            <div class="kpi-card avoid-break" style="flex-grow: 1;">
+                <div class="kpi-title" style="font-size: 14pt;">Total Fleet Fuel Consumption</div>
+                <div class="kpi-value-container">
+                    <span class="kpi-value" style="color: var(--red); font-size: 32pt;">{{ "%.0f"|format(kpis.petrolL.value + kpis.trDieselL.value) }}</span>
+                    <span class="kpi-unit">Litres</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 flex-col">
+            <div class="kpi-card avoid-break" style="flex-grow: 1;">
+                <div class="kpi-title" style="font-size: 14pt;">Fleet Carbon Footprint</div>
+                <div class="kpi-value-container">
+                    <span class="kpi-value" style="color: var(--red); font-size: 32pt;">{{ "%.1f"|format(kpis.petrolEm.value + kpis.trDieselEm.value) }}</span>
+                    <span class="kpi-unit">tCO2e</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid-row" style="margin-bottom: 20px; flex: 1;">
+        <div class="col-6 flex-col">
+            {{ ui.css_horizontal_bar('Petrol vs Diesel (Litres)', kpis.petrolL.value, kpis.trDieselL.value, 'Petrol', 'Diesel', 'var(--teal)', 'var(--gold)', 'L') }}
+            {{ ui.css_horizontal_bar('Petrol vs Diesel (Emissions)', kpis.petrolEm.value, kpis.trDieselEm.value, 'Petrol', 'Diesel', 'var(--teal)', 'var(--gold)', 'tCO2e') }}
+        </div>
+        <div class="col-6 flex-col">
+            {{ ui.css_sparkline('Monthly Transport Fuel (Petrol+Diesel)', current_period.scope1Selected, 'var(--gold)') }}
+        </div>
+    </div>
+    
+    {{ ui.recommendation_box('Transport Fleet Insights', insights.transport | default('Transport operations represent a significant portion of our Scope 1 footprint. Continued optimization of bus routes and transition to EV mobility solutions will directly reduce these combustion emissions.')) }}
+</div>
+
+<!-- PAGE 5: Climate Action -->
+<div class="page-container page-break flex-auto">
+    <div class="header-logo"><img src="{{ assets.get_asset_uri('logo.png') }}" onerror="this.style.display='none'"></div>
+    <h1 class="section-title" style="margin-top:0;">Climate Action & Mitigation</h1>
+    
+    {{ ui.highlight_box('leaf', 'SUSTAINABILITY INITIATIVES') }}
+    
+    <div class="grid-row" style="margin-bottom: 20px;">
+        <div class="col-12">
+            <div class="kpi-card avoid-break" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; background: linear-gradient(135deg, rgba(28,122,75,0.1) 0%, rgba(255,255,255,1) 100%);">
+                <div class="kpi-title" style="font-size: 16pt; margin-bottom: 15px;">Total Avoided Emissions via Renewables</div>
+                <div class="kpi-value-container" style="justify-content: center;">
+                    <span class="kpi-value" style="color: var(--primary-green); font-size: 48pt;">{{ "%.1f"|format(kpis.avoid.value) }}</span>
+                    <span class="kpi-unit" style="font-size: 20pt;">tCO2e</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="grid-row" style="flex: 1;">
+        <div class="col-6 flex-col">
+            {{ ui.chart_card('Renewable Integration Impact', charts.re_mix) }}
+        </div>
+        <div class="col-6 flex-col">
+            <div class="kpi-card avoid-break" style="flex-grow: 1;">
+                <div class="kpi-title" style="font-size: 14pt;">Per Capita Intensity</div>
+                <div class="kpi-value-container" style="margin-bottom: 20px;">
+                    <span class="kpi-value" style="color: var(--ink); font-size: 32pt;">{{ "%.3f"|format(kpis.perCapita.value) }}</span>
+                    <span class="kpi-unit">tCO2e / person</span>
+                </div>
+                {{ ui.css_horizontal_bar('Net Zero Progress Target (Illustrative)', kpis.avoid.value, kpis.gross.value, 'Avoided', 'Remaining', 'var(--primary-green)', 'var(--muted)', 'tCO2e') }}
+            </div>
+        </div>
+    </div>
+    
+    <div style="margin-top: 20px;">
+        {{ ui.recommendation_box('Decarbonization Story', insights.renewable | default('Through aggressive deployment of rooftop solar arrays and procurement of green energy, we continue to sever the link between institutional growth and carbon output.')) }}
+    </div>
+</div>

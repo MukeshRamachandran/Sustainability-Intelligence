@@ -1,0 +1,22 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies and caches
+node_modules/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Generated reports and transient output
+reportgeneration/report_engine/exports/
+reportgeneration/assets/report/current_report/
+reportgeneration/**/debug.html
+reportgeneration/*.exe
+*.tmp
+*.log
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db

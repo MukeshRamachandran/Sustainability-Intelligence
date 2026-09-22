@@ -1,0 +1,29 @@
+{% extends "report_template.html" %}
+
+{% block content %}
+    
+    <!-- 1. Cover Page -->
+    {% include 'pages/cover.html' %}
+    
+    <!-- 2. Introduction -->
+    {% include 'pages/introduction.html' %}
+    
+    <!-- 3. Highlights (Always show) -->
+    {% include 'pages/highlights.html' %}
+    
+    <!-- 4. Executive Summary / Carbon Story -->
+    {% include 'pages/executive_summary.html' %}
+    
+    <!-- 5. Scope Breakdown -->
+    {% include 'pages/scope1_analysis.html' %}
+    {% include 'pages/scope2_analysis.html' %}
+    
+    <!-- 6. Comparison (Conditional on 'compare' setting or Annual vs Monthly) -->
+    {% if compare != 'none' and month == 'all' %}
+        {% include 'pages/comparison.html' %}
+    {% endif %}
+    
+    <!-- 7. Conclusion & Methodology -->
+    {% include 'pages/methodology.html' %}
+    
+{% endblock %}

@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "test:contracts": "node --test tests/frontend-contract.test.js"
+  },
+  "devDependencies": {
+    "supabase": "^2.116.0"
+  }
+}

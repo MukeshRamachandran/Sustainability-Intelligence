@@ -1,0 +1,91 @@
+{% import 'components/ui_components.html' as ui with context %}
+
+<!-- PAGE 12: Comparison & Achievements -->
+<div class="page-container page-break flex-auto">
+    <div class="header-logo"><img src="{{ assets.get_asset_uri('logo.png') }}" onerror="this.style.display='none'"></div>
+    
+    <h1 class="section-title">Emissions Comparison</h1>
+    <h2 class="section-subtitle">Performance analysis vs previous reporting period</h2>
+    
+    <div style="flex: 0 0 auto;">
+        {{ ui.highlight_box('emission', 'CONSOLIDATED GHG SUMMARY') }}
+    </div>
+    
+    <table class="enterprise" style="margin-top: 20px; flex: 0 0 auto;">
+        <thead>
+            <tr>
+                <th>Category</th>
+                <th style="text-align: right;">Current Period</th>
+                <th style="text-align: right;">Previous Period</th>
+                <th style="text-align: right;">% Change</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td style="font-weight: bold; font-size: 11pt;">Total Emissions</td>
+                <td style="text-align: right; font-weight: bold;">{{ "%.2f"|format(kpis.gross.value) }}</td>
+                <td style="text-align: right;">
+                    {% if kpis.gross.trend.raw != 0 %}
+                    {{ "%.2f"|format(kpis.gross.value / (1 + kpis.gross.trend.raw/100)) }}
+                    {% else %}
+                    N/A
+                    {% endif %}
+                </td>
+                <td style="text-align: right; color: {{ 'var(--primary-green)' if kpis.gross.trend.good else 'var(--red)' }}; font-weight: bold;">
+                    {{ '+' if kpis.gross.trend.raw > 0 else '' }}{{ "%.2f"|format(kpis.gross.trend.raw) }}%
+                </td>
+            </tr>
+            <tr>
+                <td>Scope 1 Emissions</td>
+                <td style="text-align: right;">{{ "%.2f"|format(kpis.scope1.value) }}</td>
+                <td style="text-align: right;">
+                    {% if kpis.scope1.trend.raw != 0 %}
+                    {{ "%.2f"|format(kpis.scope1.value / (1 + kpis.scope1.trend.raw/100)) }}
+                    {% else %}
+                    N/A
+                    {% endif %}
+                </td>
+                <td style="text-align: right; color: {{ 'var(--primary-green)' if kpis.scope1.trend.good else 'var(--red)' }}; font-weight: bold;">
+                    {{ '+' if kpis.scope1.trend.raw > 0 else '' }}{{ "%.2f"|format(kpis.scope1.trend.raw) }}%
+                </td>
+            </tr>
+            <tr>
+                <td>Scope 2 Emissions</td>
+                <td style="text-align: right;">{{ "%.2f"|format(kpis.scope2.value) }}</td>
+                <td style="text-align: right;">
+                    {% if kpis.scope2.trend.raw != 0 %}
+                    {{ "%.2f"|format(kpis.scope2.value / (1 + kpis.scope2.trend.raw/100)) }}
+                    {% else %}
+                    N/A
+                    {% endif %}
+                </td>
+                <td style="text-align: right; color: {{ 'var(--primary-green)' if kpis.scope2.trend.good else 'var(--red)' }}; font-weight: bold;">
+                    {{ '+' if kpis.scope2.trend.raw > 0 else '' }}{{ "%.2f"|format(kpis.scope2.trend.raw) }}%
+                </td>
+            </tr>
+            <tr>
+                <td>Renewable Energy (kWh)</td>
+                <td style="text-align: right;">{{ "%.0f"|format(kpis.re.value) }}</td>
+                <td style="text-align: right;">
+                    {% if kpis.re.trend.raw != 0 %}
+                    {{ "%.0f"|format(kpis.re.value / (1 + kpis.re.trend.raw/100)) }}
+                    {% else %}
+                    N/A
+                    {% endif %}
+                </td>
+                <td style="text-align: right; color: {{ 'var(--primary-green)' if kpis.re.trend.good else 'var(--red)' }}; font-weight: bold;">
+                    {{ '+' if kpis.re.trend.raw > 0 else '' }}{{ "%.2f"|format(kpis.re.trend.raw) }}%
+                </td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <div class="grid-row" style="margin-top: 20px; flex: 1; align-items: flex-end;">
+        <div class="col-6 flex-col">
+            {{ ui.css_horizontal_bar('Current vs Previous Gross Emissions', kpis.gross.value, (kpis.gross.value / (1 + kpis.gross.trend.raw/100)) if kpis.gross.trend.raw != 0 else kpis.gross.value, 'Current', 'Previous', 'var(--primary-green)', 'var(--muted)', 'tCO2e') }}
+        </div>
+        <div class="col-6 flex-col">
+            {{ ui.recommendation_box('Progress Summary', 'The comparison table above illustrates our performance trajectory against the previous baseline. Reductions in total emissions are primarily driven by continuous optimization in energy usage and sustained renewable integration.') }}
+        </div>
+    </div>
+</div>

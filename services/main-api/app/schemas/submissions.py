@@ -1,0 +1,94 @@
+from datetime import datetime
+from decimal import Decimal
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from app.models.enums import OperationalDomain, ReviewActionType, SubmissionStatus
+from app.schemas.emission_factors import CalculationResponse
+
+
+class MetricValueWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    metric_code: str = Field(min_length=1, max_length=100)
+    value: Decimal | None = Field(default=None, max_digits=20, decimal_places=6)
+    quality_note: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("value")
+    @classmethod
+    def finite_value(cls, value: Decimal | None) -> Decimal | None:
+        if value is not None and not value.is_finite():
+            raise ValueError("metric values must be finite")
+        return value
+
+
+class SubmissionWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    reporting_period_id: UUID | None = None
+    remarks: str | None = Field(default=None, max_length=4000)
+    values: list[MetricValueWrite]
+
+    @model_validator(mode="after")
+    def unique_metrics(self) -> "SubmissionWrite":
+        codes = [item.metric_code for item in self.values]
+        if len(codes) != len(set(codes)):
+            raise ValueError("metric_code values must be unique")
+        return self
+
+
+class SubmissionCreate(SubmissionWrite):
+    reporting_period_id: UUID
+    expected_row_version: int | None = Field(default=None, ge=1)
+
+
+class SubmissionUpdate(SubmissionWrite):
+    reporting_period_id: None = None
+    expected_row_version: int = Field(ge=1)
+
+
+class MetricDefinitionResponse(BaseModel):
+    code: str
+    display_name: str
+    canonical_unit: str
+    required_for_complete: bool
+    zero_allowed: bool
+    manager_editable: bool
+    display_order: int
+
+
+class MetricValueResponse(BaseModel):
+    metric_code: str
+    value: Decimal | None
+    canonical_unit: str
+    quality_note: str | None
+
+
+class ReviewActionResponse(BaseModel):
+    action: ReviewActionType
+    from_status: SubmissionStatus | None
+    to_status: SubmissionStatus
+    comment: str | None
+    created_at: datetime
+
+
+class GenericSubmissionResponse(BaseModel):
+    id: UUID
+    domain: OperationalDomain
+    manager_user_id: UUID
+    manager_display_name: str | None = None
+    reporting_period_id: UUID
+    reporting_period_label: str
+    status: SubmissionStatus
+    revision_number: int
+    row_version: int
+    remarks: str | None
+    submitted_at: datetime | None
+    approved_at: datetime | None
+    correction_reason: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    values: list[MetricValueResponse]
+    review_actions: list[ReviewActionResponse] = []
+    calculations: list[CalculationResponse] = []

@@ -1,0 +1,110 @@
+{% import 'components/ui_components.html' as ui with context %}
+
+<!-- PAGE 10: Scope 2 Story -->
+<div class="page-container page-break flex-auto">
+    <div class="header-logo"><img src="{{ assets.get_asset_uri('logo.png') }}" onerror="this.style.display='none'"></div>
+    
+    <h1 class="section-title">Scope 2 Story</h1>
+    
+    <div class="grid-row" style="flex: 0 0 auto; margin-bottom: 20px;">
+        <div class="col-12">
+            {{ ui.recommendation_box('Indirect Emissions Overview', insights.scope2) }}
+        </div>
+    </div>
+    
+    <div class="grid-row" style="flex: 1; align-items: stretch;">
+        <!-- Breakdown Chart -->
+        <div class="col-6 flex-col">
+            {{ ui.chart_card('Renewable Energy Mix', charts.re_mix) }}
+        </div>
+        <!-- Trend Chart -->
+        <div class="col-6 flex-col">
+            {{ ui.chart_card('Grid Consumption Profile', charts.s2_stack) }}
+        </div>
+    </div>
+
+    <div class="grid-row" style="margin-top: 20px; flex: 0 0 auto;">
+        <div class="col-12">
+            {{ ui.recommendation_box('Renewable Impact', insights.renewable) }}
+        </div>
+    </div>
+</div>
+
+<!-- PAGE 11: Electricity Emissions Table -->
+<div class="page-container page-break flex-auto" style="background-color: #1b263b;">
+    <h1 class="section-title" style="color: white; padding-top: 30px;">Electricity Emissions (Scope 2)</h1>
+    <div class="kpi-value-container" style="color: #be4b3b; margin-bottom: 20px;">
+        <span class="kpi-value">{{ "%.1f"|format(kpis.scope2.value) }}</span> <span class="kpi-unit" style="color: #8a988f;">tCO2e</span>
+    </div>
+    
+    <div class="grid-row" style="color: white; margin-bottom: 20px; flex: 0 0 auto;">
+        <div class="col-4">
+            <div style="border: 1px dashed rgba(255,255,255,0.3); padding: 15px; border-radius: 4px;">
+                <div style="font-size: 10pt; text-transform: uppercase;">Renewable Energy</div>
+                <div style="font-size: 18pt; font-family: 'Archivo', sans-serif;">{{ "%.0f"|format(kpis.re.value) }} <span style="font-size: 10pt;">kWh</span></div>
+            </div>
+        </div>
+        <div class="col-4">
+            <div style="border: 1px dashed rgba(255,255,255,0.3); padding: 15px; border-radius: 4px;">
+                <div style="font-size: 10pt; text-transform: uppercase;">Grid Energy</div>
+                <div style="font-size: 18pt; font-family: 'Archivo', sans-serif;">{{ "%.0f"|format(kpis.elec.value) }} <span style="font-size: 10pt;">kWh</span></div>
+            </div>
+        </div>
+        <div class="col-4">
+            <div style="border: 1px dashed rgba(255,255,255,0.3); padding: 15px; border-radius: 4px;">
+                <div style="font-size: 10pt; text-transform: uppercase;">Total Consumption</div>
+                <div style="font-size: 18pt; font-family: 'Archivo', sans-serif;">{{ "%.0f"|format(kpis.elec.value + kpis.re.value) }} <span style="font-size: 10pt;">kWh</span></div>
+            </div>
+        </div>
+    </div>
+    
+    <table class="enterprise" style="margin-top: 0; margin-bottom: 20px;">
+        <thead>
+            <tr>
+                <th>Month</th>
+                <th colspan="2" style="text-align: center; border-left: 1px solid var(--line-strong);">GRID HT</th>
+                <th colspan="2" style="text-align: center; border-left: 1px solid var(--line-strong);">GRID COMMERCIAL</th>
+                <th colspan="2" style="text-align: center; border-left: 1px solid var(--line-strong);">GRID TEMPORARY</th>
+            </tr>
+            <tr style="font-size: 8pt;">
+                <th></th>
+                <th style="border-left: 1px solid var(--line-strong);">Electricity (KWh)</th>
+                <th>Emissions (tCO2e)</th>
+                <th style="border-left: 1px solid var(--line-strong);">Electricity (KWh)</th>
+                <th>Emissions (tCO2e)</th>
+                <th style="border-left: 1px solid var(--line-strong);">Electricity (KWh)</th>
+                <th>Emissions (tCO2e)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for i in range(12) %}
+            {% set m_htKwh = current_period.htKwh[i] if i < current_period.htKwh|length and current_period.htKwh[i] else 0 %}
+            {% set m_htEm = current_period.htEm[i] if i < current_period.htEm|length and current_period.htEm[i] else 0 %}
+            {% set m_commKwh = current_period.commKwh[i] if i < current_period.commKwh|length and current_period.commKwh[i] else 0 %}
+            {% set m_commEm = current_period.commEm[i] if i < current_period.commEm|length and current_period.commEm[i] else 0 %}
+            {% set m_tempKwh = current_period.tempKwh[i] if i < current_period.tempKwh|length and current_period.tempKwh[i] else 0 %}
+            {% set m_tempEm = current_period.tempEm[i] if i < current_period.tempEm|length and current_period.tempEm[i] else 0 %}
+            
+            {% if m_htKwh > 0 or m_commKwh > 0 or m_tempKwh > 0 or month == 'all' or (month != 'all' and i <= month|int) %}
+            <tr>
+                <td style="font-weight: bold;">{{ months[i]|upper }}</td>
+                <td style="border-left: 1px solid var(--line);">{{ "%.0f"|format(m_htKwh) }}</td>
+                <td>{{ "%.3f"|format(m_htEm) }}</td>
+                <td style="border-left: 1px solid var(--line);">{{ "%.0f"|format(m_commKwh) }}</td>
+                <td>{{ "%.3f"|format(m_commEm) }}</td>
+                <td style="border-left: 1px solid var(--line);">{{ "%.0f"|format(m_tempKwh) }}</td>
+                <td>{{ "%.3f"|format(m_tempEm) }}</td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end;">
+        <div style="background-color: rgba(255,255,255,0.9); padding: 20px; border-radius: 8px;">
+            <h3 style="margin-top: 0; color: var(--ink);">Grid Operations Insights</h3>
+            <p style="margin-bottom: 10px; font-size: 10pt; color: var(--ink);">The detailed monthly tracking indicates peak grid consumption variations. Industrial High Tension (HT) lines remain the largest contributor to our Scope 2 profile.</p>
+            {{ ui.css_horizontal_bar('Grid vs Renewable Generation', kpis.elec.value, kpis.re.value, 'Grid', 'Renewable', 'var(--red)', 'var(--primary-green)', 'kWh') }}
+        </div>
+    </div>
+</div>

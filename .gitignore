@@ -1,0 +1,41 @@
+# Recovery / backups
+recovery-backups/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Node
+node_modules/
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+*.secret
+
+# Database / backup files
+*.dump
+*.backup
+*.sql.gz
+
+# Logs / temporary files
+*.log
+*.tmp
+
+# IDE / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+# Build/cache
+dist/
+build/
+coverage/
+.cache/

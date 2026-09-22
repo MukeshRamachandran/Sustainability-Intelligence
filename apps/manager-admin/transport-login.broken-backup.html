@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transport & DG Entry - MICROCOSM Portal</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body data-auth-role="manager" data-auth-domain="transport" data-login-page="transport-login.html">
+
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <a href="manager-home.html" class="sidebar-brand">
+          <img src="microcosm-logo-white.svg" alt="K-COSMOS">
+        </a>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="manager-home.html" class="nav-item">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+          Home
+        </a>
+        <a href="transport-entry.html" class="nav-item active">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+          Monthly Entry
+        </a>
+        <a href="submission-history.html" class="nav-item">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          Submission History
+        </a>
+        <a href="change-password.html" class="nav-item">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+          Profile & Security
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Topbar -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <div class="current-period">
+            <span id="header-period-ay">AY: 2026–2027</span>
+            <span>|</span>
+            <span id="header-period-month">Transport & DG Sector</span>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <span class="badge badge-draft" id="header-status-badge">Draft</span>
+          <span class="user-badge" id="user-role-badge">Transport Manager</span>
+          <button class="btn btn-outline" id="logout-btn">Logout</button>
+        </div>
+      </header>
+
+      <!-- Content Area -->
+      <div class="content-area">
+        <div class="mb-3 d-flex justify-between align-center">
+          <div>
+            <h1>Transport & Diesel Generator Monthly Entry</h1>
+            <p>Enter data for university-owned vehicles and generators.</p>
+          </div>
+          <button class="btn btn-outline" id="reset-btn">Reset Form</button>
+        </div>
+
+        <!-- Workflow Lifecycle Card -->
+        <div class="workflow-card">
+          <div class="workflow-header">
+            <div class="workflow-meta">
+              <span>Status: <strong id="topbar-status-badge" class="badge badge-draft">Draft</strong></span>
+              <span>Revision: <strong id="header-revision-num">Revision 1 (Draft)</strong></span>
+              <span>Last Saved: <strong id="header-last-saved">Not saved yet</strong></span>
+            </div>
+          </div>
+          <div class="workflow-stepper">
+            <div class="stepper-step active" id="step-draft">
+              <div class="stepper-indicator">1</div>
+              <span>Data Entry (Draft)</span>
+            </div>
+            <div class="stepper-connector" id="conn-1"></div>
+            <div class="stepper-step" id="step-submitted">
+              <div class="stepper-indicator">2</div>
+              <span>Submitted</span>
+            </div>
+            <div class="stepper-connector" id="conn-2"></div>
+            <div class="stepper-step" id="step-review">
+              <div class="stepper-indicator">3</div>
+              <span>Admin Review</span>
+            </div>
+            <div class="stepper-connector" id="conn-3"></div>
+            <div class="stepper-step" id="step-approved">
+              <div class="stepper-indicator">4</div>
+              <span>Approved</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Correction Alert Banner -->
+        <div class="institutional-banner banner-warning d-none" id="correction-alert-banner">
+          <div>
+            <strong>⚠ Correction Requested by Sustainability Admin:</strong>
+            <p id="correction-reason-text" style="margin: 4px 0 0; font-weight: 500;">Please verify entered values.</p>
+          </div>
+        </div>
+
+        <!-- Read-only Notice Banner -->
+        <div class="institutional-banner banner-info d-none" id="readonly-notice-banner">
+          <div>
+            <strong>🔒 Submission Locked (Read-Only):</strong>
+            <p id="readonly-notice-message" style="margin: 4px 0 0;">This submission is waiting for Admin review or has been approved.</p>
+          </div>
+        </div>
+
+        <!-- Two-column layout -->
+        <div class="entry-layout">
+          <!-- Form Section -->
+          <div class="glass-card">
+            <form id="entry-form">
+              <div class="grid-3 mb-2">
+                <div class="form-group">
+                  <label class="form-label">Academic Year</label>
+                  <select class="form-control" id="ay" required>
+                    <option value="2026-2027">2026-2027</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Year</label>
+                  <select class="form-control" id="year" required>
+                    <option value="2026">2026</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Month</label>
+                  <select class="form-control" id="month" required>
+                    <option value="June">June</option>
+                    <option value="July">July</option>
+                  </select>
+                </div>
+              </div>
+
+              <hr style="border:none; border-top:1px solid #eee; margin-bottom: 24px;">
+
+              <div class="form-section-title">
+                <span>1. Petrol Consumption & Fleet</span>
+              </div>
+
+              <div class="grid-3 mb-2">
+                <div class="form-group">
+                  <label class="form-label">Petrol Consumed (Litres)</label>
+                  <div class="input-group">
+                    <input type="number" class="form-control" id="petrol" min="0" step="0.01" placeholder="0.00">
+                    <span class="input-group-addon">Litres</span>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Active Vehicles Using Petrol</label>
+                  <div class="input-group">
+                    <input type="number" class="form-control" id="active-vehicles-petrol" min="0" placeholder="0">
+                    <span class="input-group-addon">Vehicles</span>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Evidence Upload</label>
+                  <input type="file" class="form-control" id="evidence-petrol" accept=".pdf,.png,.jpg">
+                </div>
+              </div>
+
+              <div class="form-section-title">
+                <span>2. Transport Diesel & Fleet</span>
+              </div>
+
+              <div class="grid-3 mb-2">
+                <div class="form-group">
+                  <label class="form-label">Transport Diesel Consumed (Litres)</label>
+                  <div class="input-group">
+                    <input type="number" class="form-control" id="diesel-transport" min="0" step="0.01" placeholder="0.00">
+                    <span class="input-group-addon">Litres</span>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Active Vehicles Using Diesel</label>
+                  <div class="input-group">
+                    <input type="number" class="form-control" id="active-vehicles-diesel" min="0" placeholder="0">
+                    <span class="input-group-addon">Vehicles</span>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Evidence Upload</label>
+                  <input type="file" class="form-control" id="evidence-diesel" accept=".pdf,.png,.jpg">
+                </div>
+              </div>
+
+              <div class="form-section-title">
+                <span>3. Electric Mobility</span>
+              </div>
+
+              <div class="grid-3 mb-2">
+                <div class="form-group">
+                  <label class="form-label">Electric Vehicle Consumption (kWh)</label>
+                  <div class="input-group">
+                    <input type="number" class="form-control" id="ev-consumption" min="0" step="0.01" placeholder="0.00">
+                    <span class="input-group-addon">kWh</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-section-title">
+                <span>4. Diesel Generator (DG)</span>
+              </div>
+
+              <div class="grid-3 mb-2">
+                <div class="form-group">
+                  <label class="form-label">Diesel Generator Consumed (Litres)</label>
+                  <div class="input-group">
+                    <input type="number" class="form-control" id="diesel-dg" min="0" step="0.01" placeholder="0.00">
+                    <span class="input-group-addon">Litres</span>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Active Diesel Generators (NOs)</label>
+                  <div class="input-group">
+                    <input type="number" class="form-control" id="active-dg" min="0" placeholder="0">
+                    <span class="input-group-addon">Units</span>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Evidence Proof</label>
+                  <input type="file" class="form-control" id="evidence-dg" accept=".pdf,.png,.jpg">
+                </div>
+              </div>
+
+              <div class="form-group mb-3">
+                <label class="form-label">Remarks (Optional)</label>
+                <textarea class="form-control" id="remarks" rows="3" placeholder="Enter remarks..."></textarea>
+              </div>
+
+              <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline" id="save-draft-btn">Save Draft</button>
+                <button type="button" class="btn btn-primary" id="submit-btn">Submit for Review</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Preview Section -->
+          <div class="card" style="align-self: start; background: linear-gradient(180deg, #ffffff 0%, #f9fbf9 100%);">
+            <h3>Emission Preview</h3>
+            <p style="font-size: 13px; margin-bottom: 24px;">Calculations based on current factors.</p>
+
+            <div class="d-flex justify-between mb-2">
+              <span class="text-muted">Petrol Emission:</span>
+              <strong id="prev-petrol">0.00 kgCO2e</strong>
+            </div>
+            <div class="d-flex justify-between mb-2">
+              <span class="text-muted">Transport Diesel:</span>
+              <strong id="prev-diesel-t">0.00 kgCO2e</strong>
+            </div>
+            <div class="d-flex justify-between mb-3">
+              <span class="text-muted">DG Diesel:</span>
+              <strong id="prev-diesel-dg">0.00 kgCO2e</strong>
+            </div>
+            
+            <hr style="border:none; border-top:1px solid #eee; margin-bottom: 16px;">
+            
+            <div class="d-flex justify-between align-center">
+              <strong style="color: var(--primary-dark);">Total Scope 1:</strong>
+              <strong style="font-size: 18px; color: var(--primary);" id="prev-total">0.00 kgCO2e</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Submission Confirmation Modal -->
+  <div class="modal-overlay" id="confirm-submit-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Submit Transport Report for Review?</h3>
+        <button type="button" class="btn-close" id="modal-close-btn">&times;</button>
+      </div>
+      <div style="font-size: 14px; line-height: 1.6; margin-bottom: 20px; color: var(--text-muted);">
+        <p>You are submitting the report for <strong id="modal-period-label" style="color: var(--primary-dark);">this period</strong>.</p>
+        <p style="margin-top: 8px;">After submission, the report becomes <strong>read-only</strong> while Admin reviews it. You can edit it again only if Admin requests a correction.</p>
+      </div>
+      <div class="d-flex justify-end gap-2">
+        <button type="button" class="btn btn-outline" id="modal-cancel-btn">Cancel</button>
+        <button type="button" class="btn btn-primary" id="modal-confirm-submit-btn">Submit for Review</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="auth-client.js"></script>
+  <script src="role-auth.js"></script>
+  <script src="app.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const factors = JSON.parse(localStorage.getItem('emissionFactors')) || { petrol: 2.388, diesel: 2.701 };
+      
+      const pInput = document.getElementById('petrol');
+      const dtInput = document.getElementById('diesel-transport');
+      const dgInput = document.getElementById('diesel-dg');
+      
+      const pPrev = document.getElementById('prev-petrol');
+      const dtPrev = document.getElementById('prev-diesel-t');
+      const dgPrev = document.getElementById('prev-diesel-dg');
+      const totalPrev = document.getElementById('prev-total');
+
+      function calculatePreview() {
+        const pVal = parseFloat(pInput?.value) || 0;
+        const dtVal = parseFloat(dtInput?.value) || 0;
+        const dgVal = parseFloat(dgInput?.value) || 0;
+
+        const pEm = pVal * factors.petrol;
+        const dtEm = dtVal * factors.diesel;
+        const dgEm = dgVal * factors.diesel;
+        const total = pEm + dtEm + dgEm;
+
+        if (pPrev) pPrev.textContent = pEm.toFixed(2) + ' kgCO2e';
+        if (dtPrev) dtPrev.textContent = dtEm.toFixed(2) + ' kgCO2e';
+        if (dgPrev) dgPrev.textContent = dgEm.toFixed(2) + ' kgCO2e';
+        if (totalPrev) totalPrev.textContent = total.toFixed(2) + ' kgCO2e';
+      }
+
+      [pInput, dtInput, dgInput].forEach(input => {
+        if (input) input.addEventListener('input', calculatePreview);
+      });
+
+      const resetBtn = document.getElementById('reset-btn');
+      if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+          const form = document.getElementById('entry-form');
+          if (form) form.reset();
+          calculatePreview();
+        });
+      }
+
+      calculatePreview();
+    });
+  </script>
+  <script src="manager-submissions-api.js"></script>
+</body>
+</html>

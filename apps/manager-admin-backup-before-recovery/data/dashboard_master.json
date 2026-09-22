@@ -1,0 +1,40 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "last_updated": 1783260164
+  },
+  "data": {
+    "energy": [
+      {
+        "Month": "Jun",
+        "Year": 2026,
+        "Industrial": 1250.0,
+        "Temporary": 1300.0,
+        "Commercial": 3000.0,
+        "Procured_RE": 340.0,
+        "EB_Excluding_RE": 120.0,
+        "RE_On_Campus": 245.0,
+        "Solar_Water_Heater": 356.0,
+        "Total_RE": 977.0,
+        "DG_kWh": 9888.0,
+        "Status": "Approved",
+        "SubmittedAt": null,
+        "SubmittedBy": null,
+        "SubmissionID": null
+      }
+    ],
+    "transport": [
+      {
+        "ResponseID": null,
+        "Month": "Jun",
+        "Year": 2026,
+        "Petrol_Litres": 64.0,
+        "Diesel_Litres": 67.0,
+        "Vehicle_Count": 16,
+        "Status": "Approved",
+        "SubmittedAt": null,
+        "SubmittedBy": null
+      }
+    ]
+  }
+}

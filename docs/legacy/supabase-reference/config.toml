@@ -1,0 +1,9 @@
+[api]
+enabled = true
+schemas = ["api"]
+extra_search_path = ["pg_catalog", "extensions"]
+max_rows = 1000
+
+# Hosted staging must be configured and independently verified to expose only
+# `api` (plus any Supabase-mandated platform defaults). Never expose
+# `app_private`. This local file does not by itself change a hosted project.

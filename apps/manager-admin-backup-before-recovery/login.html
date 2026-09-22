@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K-COSMOS Login</title>
+</head>
+
+<body>
+
+    <main>
+        <h1>K-COSMOS</h1>
+        <p>Sustainability Management Portal</p>
+
+        <form id="loginForm">
+
+            <div>
+                <label for="username">Username</label>
+                <input
+                    id="username"
+                    name="username"
+                    type="text"
+                    autocomplete="username"
+                    required
+                >
+            </div>
+
+            <div>
+                <label for="password">Password</label>
+                <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    autocomplete="current-password"
+                    required
+                >
+            </div>
+
+            <button type="submit">
+                Sign In
+            </button>
+
+            <p id="message"></p>
+
+        </form>
+    </main>
+
+    <script src="auth-client.js"></script>
+    <script src="portal-router.js"></script>
+
+    <script>
+        const form = document.getElementById("loginForm");
+        const message = document.getElementById("message");
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            message.textContent = "Signing in...";
+
+            const username =
+                document.getElementById("username").value.trim();
+
+            const password =
+                document.getElementById("password").value;
+
+            try {
+                const session = await login(username, password);
+
+                document.getElementById("password").value = "";
+
+                routeUser(session);
+
+            } catch (error) {
+                document.getElementById("password").value = "";
+                message.textContent = error.message;
+            }
+        });
+    </script>
+
+</body>
+</html>

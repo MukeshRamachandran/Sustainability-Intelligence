@@ -1,0 +1,65 @@
+{% import 'components/ui_components.html' as ui with context %}
+
+<!-- PAGE 6: Executive Summary -->
+<div class="page-container page-break compact-executive flex-auto">
+    <div class="header-logo"><img src="{{ assets.get_asset_uri('logo.png') }}" onerror="this.style.display='none'"></div>
+    
+    <h1 class="section-title">Executive Summary</h1>
+    <h2 class="section-subtitle">High-level overview of carbon performance for {{ report_title }}.</h2>
+    
+    <div class="grid-row" style="flex: 0 0 auto;">
+        <!-- Text Insight -->
+        <div class="col-12">
+            {{ ui.recommendation_box('Performance Overview', insights.executive) }}
+        </div>
+    </div>
+    
+    {{ ui.highlight_box('emission', 'CARBON STORY') }}
+    
+    <div class="grid-row" style="flex: 1;">
+        <!-- Main KPI -->
+        <div class="col-4 flex-col">
+            <div class="kpi-card" style="flex-grow: 1; display: flex; flex-direction: column; justify-content: center;">
+                <div class="kpi-title">Gross GHG Emissions</div>
+                <div class="kpi-value-container">
+                    <span class="kpi-value" style="color: var(--red);">{{ "%.1f"|format(kpis.gross.value) }}</span>
+                    <span class="kpi-unit">tCO2e</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main KPI -->
+        <div class="col-4 flex-col">
+            <div class="kpi-card" style="flex-grow: 1; display: flex; flex-direction: column; justify-content: center;">
+                <div class="kpi-title">Net GHG Emissions</div>
+                <div class="kpi-value-container">
+                    <span class="kpi-value" style="color: var(--amber);">{{ "%.1f"|format(kpis.net.value) }}</span>
+                    <span class="kpi-unit">tCO2e</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main KPI -->
+        <div class="col-4 flex-col">
+            <div class="kpi-card" style="flex-grow: 1; display: flex; flex-direction: column; justify-content: center;">
+                <div class="kpi-title">Avoided Emissions</div>
+                <div class="kpi-value-container">
+                    <span class="kpi-value" style="color: var(--primary-green);">{{ "%.1f"|format(kpis.avoid.value) }}</span>
+                    <span class="kpi-unit">tCO2e</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="grid-row" style="flex: 0 0 auto;">
+        <!-- Actionable Recommendations -->
+        <div class="col-12">
+            {{ ui.highlight_box('energy', 'STRATEGIC RECOMMENDATIONS') }}
+            <ul style="padding-left: 20px; font-size: 10pt; color: var(--ink); margin-bottom: 0;">
+                {% for rec in insights.recommendations %}
+                    <li style="margin-bottom: 10px;">{{ rec }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>

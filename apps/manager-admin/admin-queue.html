@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Admin Review Queue — K-COSMOS Portal</title><link rel="stylesheet" href="styles.css"></head>
+<body data-auth-role="microcosm_admin" data-login-page="admin-login.html">
+  <div class="app-container">
+    <aside class="sidebar"><div class="sidebar-header"><a href="admin-overview.html" class="sidebar-brand" style="display:flex;align-items:center;gap:10px;padding:4px 0;"><img src="microcosm-logo-white.svg" alt="MICROCOSM" style="height:48px;width:auto;"></a></div><nav class="sidebar-nav"><a href="admin-overview.html" class="nav-item">Admin Overview</a><a href="admin-queue.html" class="nav-item active">Approval Queue</a><a href="admin-evidence.html" class="nav-item">Evidence Repository</a><a href="admin-factors.html" class="nav-item">Emission Factors</a><a href="admin-preview.html" class="nav-item">Dashboard Preview</a><a href="admin-users.html" class="nav-item">Managers &amp; Access</a><a href="admin-audit.html" class="nav-item">Audit Log</a></nav></aside>
+    <main class="main-content">
+      <header class="topbar"><div class="topbar-left"><div class="current-period"><span>K-COSMOS</span><span>|</span><span>Administration</span></div></div><div class="topbar-right"><span class="user-badge">Admin</span><button class="btn btn-outline" id="logout-btn">Logout</button></div></header>
+      <div class="content-area">
+        <div class="mb-3"><h1>Admin Review Queue</h1><p>Review manager submissions without modifying manager-provided values.</p></div>
+        <div class="glass-card mb-3"><div class="d-flex justify-between align-center"><h3>Submissions awaiting review</h3><button class="btn btn-outline" id="refresh-queue">Refresh</button></div><div class="form-group"><label class="form-label" for="queue-period">Reporting period</label><select id="queue-period" class="form-control"></select></div><div class="table-responsive"><table class="table"><thead><tr><th>Domain</th><th>Submission</th><th>Period</th><th>Manager</th><th>Submitted</th><th>Status</th><th>Action</th></tr></thead><tbody id="queue-body"><tr><td colspan="7">Loading…</td></tr></tbody></table></div></div>
+        <div class="glass-card"><h3>Publication</h3><p class="text-muted">Approval does not publish. Prepare an immutable candidate, review it, then publish explicitly.</p><div class="grid-2"><div class="form-group"><label class="form-label" for="release-period">Approved reporting period</label><select id="release-period" class="form-control"></select></div><div class="form-group"><label class="form-label" for="release-version">Release version</label><input id="release-version" class="form-control" placeholder="sustainability-2026-09-v1"></div></div><div class="card mb-2" id="publication-readiness"><div class="d-flex justify-between align-center"><strong id="readiness-period">Publication readiness</strong><span class="badge badge-draft" id="readiness-state">Loading</span></div><p id="readiness-count" style="margin:8px 0;">— / 5 Approved</p><div class="table-responsive"><table class="table"><thead><tr><th>Domain</th><th>Status</th><th>Revision</th></tr></thead><tbody><tr><td>Transport</td><td id="readiness-transport">—</td><td id="readiness-transport-revision">—</td></tr><tr><td>Energy</td><td id="readiness-energy">—</td><td id="readiness-energy-revision">—</td></tr><tr><td>LPG</td><td id="readiness-lpg">—</td><td id="readiness-lpg-revision">—</td></tr><tr><td>Water</td><td id="readiness-water">—</td><td id="readiness-water-revision">—</td></tr><tr><td>Outreach</td><td id="readiness-outreach">—</td><td id="readiness-outreach-revision">—</td></tr></tbody></table></div><p class="text-muted" id="readiness-blockers" style="margin-bottom:0;">Checking approval status…</p></div><div class="d-flex gap-2"><button class="btn btn-primary" id="prepare-release" disabled>Prepare release</button><button class="btn btn-accent" id="open-release" disabled>Open release preview</button></div><pre id="release-preview" style="white-space:pre-wrap;max-height:360px;overflow:auto;margin-top:16px;"></pre></div>
+      </div>
+    </main>
+  </div>
+  <div class="modal-overlay" id="details-modal"><div class="modal-content" style="max-width:960px;max-height:90vh;overflow:auto;"><div class="modal-header"><h2>Submission <span id="modal-sub-id"></span></h2><button class="btn-close" id="close-modal">&times;</button></div><div id="modal-data-container"></div><div id="modal-evidence-container"></div><div class="form-group"><label class="form-label" for="admin-comment">Correction reason</label><textarea id="admin-comment" class="form-control" rows="3"></textarea></div><div class="d-flex gap-2 justify-end"><button class="btn btn-outline" id="btn-under-review">Begin Review</button><button class="btn btn-warning" id="btn-correction">Request Correction</button><button class="btn btn-primary" id="btn-approve">Approve</button></div></div></div>
+  <script src="auth-client.js"></script><script src="role-auth.js"></script><script src="outreach-api.js"></script><script src="evidence-api.js"></script><script src="app.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      const domains = ['transport', 'energy', 'lpg', 'water', 'outreach'];
+      const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[character]));
+      let currentSubmission = null;
+      let preparedRelease = null;
+      let currentReadiness = null;
+      const modal = document.getElementById('details-modal');
+      try { await KCosmos.requireRole('microcosm_admin'); } catch (_) { return; }
+
+      function programmeHtml(programme) {
+        const ignored = new Set(['id', 'submission_id', 'created_at', 'updated_at']);
+        const fields = Object.entries(programme).filter(([key]) => !ignored.has(key));
+        return `<div class="card mb-3"><h3>${escapeHtml(programme.programme_name || 'Outreach programme')}</h3><div class="grid-2">${fields.map(([key,value]) => `<div><span class="text-muted">${escapeHtml(key.replaceAll('_',' '))}</span><br><strong>${escapeHtml(Array.isArray(value) ? JSON.stringify(value) : value ?? 'Not recorded')}</strong></div>`).join('')}</div></div>`;
+      }
+
+      function metricsHtml(values) {
+        return `<div class="card mb-3"><h3>Manager-entered metrics</h3><div class="table-responsive"><table class="table"><thead><tr><th>Metric</th><th>Value</th><th>Unit</th><th>Quality note</th></tr></thead><tbody>${values.map(item => `<tr><td>${escapeHtml(item.metric_code)}</td><td>${escapeHtml(item.value ?? 'Not submitted')}</td><td>${escapeHtml(item.canonical_unit)}</td><td>${escapeHtml(item.quality_note || '—')}</td></tr>`).join('')}</tbody></table></div></div>`;
+      }
+
+      function calculationsHtml(items) {
+        if (!items.length) return '';
+        const rows = items.map(item => `<tr><td>${escapeHtml(item.calculation_code.replaceAll('_',' '))}</td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.result_value ?? 'Unavailable')} ${escapeHtml(item.result_unit || '')}</td><td>${escapeHtml(item.factor_set_version || '—')}</td><td>${escapeHtml(item.factor_value ?? '—')} ${escapeHtml(item.factor_unit || '')}</td><td>${escapeHtml(item.reason ? item.reason.replaceAll('_',' ') : '—')}</td></tr>`).join('');
+        return `<div class="card mb-3"><h3>Authoritative calculations</h3><div class="table-responsive"><table class="table"><thead><tr><th>Calculation</th><th>Status</th><th>Result</th><th>Factor set</th><th>Factor used</th><th>Reason</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+      }
+
+      function evidenceHtml(items) {
+        if (!items.length) return '<div class="card mb-3"><h3>Supporting evidence</h3><p class="text-muted">No evidence uploaded</p></div>';
+        const latestRevision = Math.max(...items.map(item => Number(item.revision_number) || 0));
+        const rows = items.map(item => `<tr><td>${escapeHtml(item.metric_code || item.evidence_category || 'General')}</td><td><strong>${escapeHtml(item.original_filename)}</strong><br><span class="text-muted">${escapeHtml(item.mime_type)} • ${(item.file_size_bytes / 1024).toFixed(1)} KB</span></td><td>Revision ${escapeHtml(item.revision_number)}</td><td>${Number(item.revision_number) === latestRevision ? '<span class="badge badge-approved">Current revision</span>' : '<span class="badge badge-draft">Previous submitted revision</span>'}</td><td><a class="btn btn-outline" target="_blank" rel="noopener" href="${escapeHtml(KCosmosEvidence.contentUrl('admin', null, item.id))}">View</a> <a class="btn btn-outline" href="${escapeHtml(KCosmosEvidence.contentUrl('admin', null, item.id, true))}">Download</a></td></tr>`).join('');
+        return `<div class="card mb-3"><h3>Supporting evidence</h3><div class="table-responsive"><table class="table"><thead><tr><th>Metric / category</th><th>File</th><th>Revision</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+      }
+
+      async function loadQueue() {
+        try {
+          const periodId = document.getElementById('queue-period').value;
+          if (!periodId) return;
+          const groups = await Promise.all(domains.map(async domain => (await KCosmos.api(`/api/admin/review-queue?domain=${domain}&reporting_period_id=${encodeURIComponent(periodId)}`)).map(item => ({...item, domain}))));
+          const queue = groups.flat();
+          const body = document.getElementById('queue-body');
+          body.innerHTML = queue.length ? queue.map(item => `<tr><td><strong>${escapeHtml(item.domain)}</strong></td><td>${escapeHtml(item.id)}</td><td>${escapeHtml(item.reporting_period_label)}</td><td>${escapeHtml(item.manager_display_name || '—')}</td><td>${item.submitted_at ? escapeHtml(new Date(item.submitted_at).toLocaleString()) : '—'}</td><td><span class="badge badge-review">${escapeHtml(item.status.replaceAll('_',' '))}</span></td><td><button class="btn btn-outline review-item" data-id="${escapeHtml(item.id)}">Review</button></td></tr>`).join('') : '<tr><td colspan="7" class="text-center text-muted">No submissions awaiting review.</td></tr>';
+          document.querySelectorAll('.review-item').forEach(button => button.addEventListener('click', () => openSubmission(button.dataset.id)));
+          const requested = new URLSearchParams(window.location.search).get('submission');
+          if (requested && queue.some(item => item.id === requested)) openSubmission(requested);
+        } catch (error) { showToast(error.message, 'error'); }
+      }
+
+      async function openSubmission(id) {
+        try {
+          const [submission, evidence] = await Promise.all([
+            KCosmos.api(`/api/admin/submissions/${encodeURIComponent(id)}`),
+            KCosmosEvidence.listAdmin(id)
+          ]);
+          currentSubmission = submission;
+          document.getElementById('modal-sub-id').textContent = currentSubmission.id;
+          const detail = Array.isArray(currentSubmission.programmes)
+            ? currentSubmission.programmes.map(programmeHtml).join('')
+            : metricsHtml(currentSubmission.values || []);
+          document.getElementById('modal-data-container').innerHTML = `<p><strong>Domain:</strong> ${escapeHtml(currentSubmission.domain)} &nbsp; <strong>Period:</strong> ${escapeHtml(currentSubmission.reporting_period_label)} &nbsp; <strong>Revision:</strong> ${escapeHtml(currentSubmission.revision_number)} &nbsp; <strong>Status:</strong> ${escapeHtml(currentSubmission.status)}</p>${detail}${calculationsHtml(currentSubmission.calculations || [])}`;
+          document.getElementById('modal-evidence-container').innerHTML = evidenceHtml(evidence);
+          document.getElementById('admin-comment').value = '';
+          modal.classList.add('active');
+        } catch (error) { showToast(error.message, 'error'); }
+      }
+
+      async function action(suffix, body) {
+        if (!currentSubmission) return;
+        try {
+          await KCosmos.api(`/api/admin/submissions/${currentSubmission.id}/${suffix}`, {method:'POST', body:body ? JSON.stringify(body) : undefined});
+          modal.classList.remove('active'); showToast('Admin action recorded.', 'success'); await loadQueue(); await loadPeriods();
+        } catch (error) { showToast(error.message, 'error'); }
+      }
+
+      async function loadPeriods() {
+        const periods = await KCosmos.api('/api/admin/periods');
+        const options = periods.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label || `${item.year}-${String(item.month).padStart(2,'0')}`)}</option>`).join('');
+        const queuePeriod = document.getElementById('queue-period');
+        const releasePeriod = document.getElementById('release-period');
+        queuePeriod.innerHTML = options;
+        releasePeriod.innerHTML = options;
+        const parameters = new URLSearchParams(window.location.search);
+        const requestedPeriod = parameters.get('period');
+        const institutionalParts = Object.fromEntries(new Intl.DateTimeFormat('en', {timeZone:'Asia/Kolkata', year:'numeric', month:'numeric'}).formatToParts(new Date()).filter(part => part.type === 'year' || part.type === 'month').map(part => [part.type, Number(part.value)]));
+        const currentPeriod = periods.find(item => item.year === institutionalParts.year && item.month === institutionalParts.month);
+        const selectedPeriod = periods.find(item => item.id === requestedPeriod) || currentPeriod || periods[0];
+        if (selectedPeriod) {
+          queuePeriod.value = selectedPeriod.id;
+          releasePeriod.value = selectedPeriod.id;
+        }
+        await loadQueue();
+        await loadReadiness();
+      }
+
+      async function loadReadiness() {
+        const periodId = document.getElementById('release-period').value;
+        const prepareButton = document.getElementById('prepare-release');
+        prepareButton.disabled = true;
+        if (!periodId) return;
+        try {
+          currentReadiness = await KCosmos.api(`/api/admin/reporting-periods/${encodeURIComponent(periodId)}/publication-readiness`);
+          document.getElementById('readiness-period').textContent = currentReadiness.reporting_period.label;
+          document.getElementById('readiness-count').textContent = `${currentReadiness.approved_domains} / ${currentReadiness.required_domains} Approved`;
+          const state = document.getElementById('readiness-state');
+          state.textContent = currentReadiness.ready_to_publish ? 'READY' : 'NOT READY';
+          state.className = `badge ${currentReadiness.ready_to_publish ? 'badge-approved' : 'badge-correction'}`;
+          domains.forEach(domain => {
+            const item = currentReadiness.domains[domain];
+            document.getElementById(`readiness-${domain}`).textContent = (item?.status || 'missing').replaceAll('_', ' ');
+            document.getElementById(`readiness-${domain}-revision`).textContent = item?.revision_number ? `Revision ${item.revision_number}` : '—';
+          });
+          document.getElementById('readiness-blockers').textContent = currentReadiness.ready_to_publish
+            ? 'All five required domains are approved. Preparation is available.'
+            : `Blockers: ${currentReadiness.blockers.map(item => `${item.domain} — ${item.status.replaceAll('_', ' ')}`).join('; ')}`;
+          prepareButton.disabled = !currentReadiness.ready_to_publish;
+        } catch (error) {
+          currentReadiness = null;
+          document.getElementById('readiness-state').textContent = 'UNAVAILABLE';
+          document.getElementById('readiness-blockers').textContent = error.message;
+          showToast(error.message, 'error');
+        }
+      }
+
+      document.getElementById('close-modal').addEventListener('click', () => modal.classList.remove('active'));
+      document.getElementById('btn-under-review').addEventListener('click', () => action('begin-review'));
+      document.getElementById('btn-approve').addEventListener('click', () => action('approve'));
+      document.getElementById('btn-correction').addEventListener('click', () => { const reason=document.getElementById('admin-comment').value.trim(); if(!reason) return showToast('A correction reason is required.','error'); action('request-correction',{reason}); });
+      document.getElementById('refresh-queue').addEventListener('click', loadQueue);
+      document.getElementById('queue-period').addEventListener('change', async event => {
+        const parameters = new URLSearchParams(window.location.search);
+        parameters.set('period', event.target.value);
+        parameters.delete('submission');
+        history.replaceState(null, '', `${window.location.pathname}?${parameters.toString()}`);
+        await loadQueue();
+      });
+      document.getElementById('release-period').addEventListener('change', loadReadiness);
+      document.getElementById('prepare-release').addEventListener('click', async () => {
+        if (!currentReadiness?.ready_to_publish) return showToast('All five domains must be approved before preparation.', 'error');
+        try {
+          preparedRelease = await KCosmos.api('/api/admin/releases/prepare', {method:'POST', body:JSON.stringify({reporting_period_id:document.getElementById('release-period').value,version:document.getElementById('release-version').value.trim()})});
+          document.getElementById('release-preview').textContent = JSON.stringify(preparedRelease, null, 2);
+          document.getElementById('open-release').disabled = false;
+          showToast('Release candidate prepared.', 'success');
+        } catch (error) { showToast(error.message, 'error'); }
+      });
+      document.getElementById('open-release').addEventListener('click', () => { if(preparedRelease) window.location.href=`admin-preview.html?release_id=${encodeURIComponent(preparedRelease.id)}`; });
+      await loadPeriods();
+    });
+  </script>
+</body>
+</html>

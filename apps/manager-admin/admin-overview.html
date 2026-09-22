@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Admin Overview - MICROCOSM Portal</title><link rel="stylesheet" href="styles.css"></head>
+<body data-auth-role="microcosm_admin" data-login-page="admin-login.html">
+  <div class="app-container">
+    <aside class="sidebar">
+      <div class="sidebar-header"><a href="admin-overview.html" class="sidebar-brand" style="display:flex;align-items:center;gap:10px;padding:4px 0;"><img src="microcosm-logo-white.svg" alt="MICROCOSM" style="height:48px;width:auto;"></a></div>
+      <nav class="sidebar-nav">
+        <a href="admin-overview.html" class="nav-item active">Admin Overview</a><a href="admin-queue.html" class="nav-item">Approval Queue</a><a href="admin-evidence.html" class="nav-item">Evidence Repository</a><a href="admin-factors.html" class="nav-item">Emission Factors</a><a href="admin-preview.html" class="nav-item">Dashboard Preview</a><a href="admin-users.html" class="nav-item">Managers &amp; Access</a><a href="admin-audit.html" class="nav-item">Audit Log</a>
+      </nav>
+    </aside>
+    <main class="main-content">
+      <header class="topbar"><div class="topbar-left"><div class="current-period"><span>K-COSMOS</span><span>|</span><span>Administration</span></div></div><div class="topbar-right"><span class="user-badge" id="user-role-badge">Admin</span><button class="btn btn-outline" id="logout-btn">Logout</button></div></header>
+      <div class="content-area">
+        <div class="mb-3 d-flex justify-between align-center"><div><h1>Admin Overview</h1><p>System status and monthly data collection overview.</p></div><button class="btn btn-primary" onclick="window.location.href='admin-queue.html'">Go to Approval Queue</button></div>
+        <div class="grid-4 mb-3">
+          <div class="glass-card stat-card"><span class="stat-title">Pending Submissions</span><span class="stat-value" id="stat-pending">—</span></div>
+          <div class="glass-card stat-card"><span class="stat-title">Approved</span><span class="stat-value text-success" id="stat-approved">—</span></div>
+          <div class="glass-card stat-card"><span class="stat-title">Correction Requested</span><span class="stat-value text-danger" id="stat-correction">—</span></div>
+          <div class="glass-card stat-card"><span class="stat-title">Missing Data Modules</span><span class="stat-value" id="stat-missing">—</span></div>
+        </div>
+        <div class="glass-card"><h3 class="mb-2">Current Review Status</h3><div class="table-responsive"><table class="table"><thead><tr><th>Module</th><th>Period</th><th>Submitted By</th><th>Submitted At</th><th>Status</th><th>Action</th></tr></thead><tbody id="overview-table-body"><tr><td colspan="6">Loading…</td></tr></tbody></table></div></div>
+      </div>
+    </main>
+  </div>
+  <script src="auth-client.js"></script><script src="role-auth.js"></script><script src="app.js"></script><script src="admin-overview-api.js"></script>
+</body>
+</html>

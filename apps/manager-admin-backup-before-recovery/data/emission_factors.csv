@@ -1,0 +1,5 @@
+factor_key,unit,emission_factor,ef_unit
+petrol,L,2.388,kgCO2e_per_L
+diesel,L,2.701,kgCO2e_per_L
+grid,kWh,0.727,kgCO2e_per_kWh
+lpg,L,2.939,kgCO2e_per_L

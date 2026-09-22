@@ -1,0 +1,115 @@
+{% import 'components/ui_components.html' as ui with context %}
+
+<!-- PAGE 7: Scope 1 Story -->
+<div class="page-container page-break flex-auto">
+    <div class="header-logo"><img src="{{ assets.get_asset_uri('logo.png') }}" onerror="this.style.display='none'"></div>
+    
+    <h1 class="section-title">Scope 1 Story</h1>
+    
+    <div class="grid-row" style="flex: 0 0 auto; margin-bottom: 20px;">
+        <div class="col-12">
+            {{ ui.recommendation_box('Direct Emissions Overview', insights.scope1) }}
+        </div>
+    </div>
+    
+    <div class="grid-row" style="flex: 1; align-items: stretch;">
+        <!-- Breakdown Chart -->
+        <div class="col-6 flex-col">
+            {{ ui.chart_card('Scope 1 Composition', charts.s1_breakdown) }}
+        </div>
+        <!-- Trend Chart -->
+        <div class="col-6 flex-col">
+            {{ ui.chart_card('Emissions Trend', charts.s1_diesel) }}
+        </div>
+    </div>
+
+    <div class="grid-row" style="margin-top: 20px; flex: 0 0 auto;">
+        <div class="col-12">
+            {{ ui.recommendation_box('Transport Deep Dive', insights.transport) }}
+        </div>
+    </div>
+</div>
+
+<!-- PAGE 8: Transport Emissions Table -->
+<div class="page-container page-break flex-auto" style="background-color: #3b749d;">
+    <h1 class="section-title" style="color: white; padding-top: 30px;">Transport Emissions (Scope 1)</h1>
+    <div class="kpi-value-container" style="color: #c18a2e; margin-bottom: 20px;">
+        <span class="kpi-value">{{ "%.1f"|format(kpis.trDieselEm.value + kpis.petrolEm.value) }}</span> <span class="kpi-unit" style="color: white;">tCO2e</span>
+    </div>
+    
+    <table class="enterprise" style="margin-top: 0; margin-bottom: 20px;">
+        <thead>
+            <tr>
+                <th>Month</th>
+                <th>Petrol (Litres)</th>
+                <th>Emissions (tCO2e)</th>
+                <th>Diesel (Litres)</th>
+                <th>Emissions (tCO2e)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for i in range(12) %}
+            {% set m_petrolL = current_period.petrolL[i] if i < current_period.petrolL|length and current_period.petrolL[i] else 0 %}
+            {% set m_petrolEm = current_period.petrolEm[i] if i < current_period.petrolEm|length and current_period.petrolEm[i] else 0 %}
+            {% set m_dieselL = current_period.trDieselL[i] if i < current_period.trDieselL|length and current_period.trDieselL[i] else 0 %}
+            {% set m_dieselEm = current_period.trDieselEm[i] if i < current_period.trDieselEm|length and current_period.trDieselEm[i] else 0 %}
+            {% if m_petrolL > 0 or m_dieselL > 0 or month == 'all' or (month != 'all' and i <= month|int) %}
+            <tr>
+                <td style="font-weight: bold;">{{ months[i]|upper }}</td>
+                <td>{{ "%.1f"|format(m_petrolL) }}</td>
+                <td>{{ "%.4f"|format(m_petrolEm) }}</td>
+                <td>{{ "%.0f"|format(m_dieselL) }}</td>
+                <td>{{ "%.4f"|format(m_dieselEm) }}</td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    <div style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end;">
+        <div style="background-color: rgba(255,255,255,0.9); padding: 20px; border-radius: 8px;">
+            <h3 style="margin-top: 0; color: var(--ink);">Transport Insights</h3>
+            <p style="margin-bottom: 10px; font-size: 10pt; color: var(--ink);">The table above highlights the monthly breakdown of combustion fuels used in institutional mobility. Diesel remains the primary fuel source for heavy transport and buses.</p>
+            {{ ui.css_horizontal_bar('Cumulative Fuel Mix', kpis.petrolL.value, kpis.trDieselL.value, 'Petrol', 'Diesel', 'var(--teal)', 'var(--gold)', 'L') }}
+        </div>
+    </div>
+</div>
+
+<!-- PAGE 9: DG Set Emissions Table -->
+<div class="page-container page-break flex-auto" style="background-color: #5d757d;">
+    <h1 class="section-title" style="color: white; padding-top: 30px;">DG Set Emissions (Scope 1)</h1>
+    <div class="kpi-value-container" style="color: #5aa552; margin-bottom: 20px;">
+        <span class="kpi-value">{{ "%.1f"|format(kpis.dgEm.value) }}</span> <span class="kpi-unit" style="color: white;">tCO2e</span>
+    </div>
+    
+    <table class="enterprise" style="margin-top: 0; margin-bottom: 20px;">
+        <thead>
+            <tr>
+                <th>Month</th>
+                <th>Diesel (Litres)</th>
+                <th>Emissions (tCO2e)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for i in range(12) %}
+            {% set m_dgL = current_period.dgL[i] if i < current_period.dgL|length and current_period.dgL[i] else 0 %}
+            {% set m_dgEm = current_period.dgEm[i] if i < current_period.dgEm|length and current_period.dgEm[i] else 0 %}
+            {% if m_dgL > 0 or month == 'all' or (month != 'all' and i <= month|int) %}
+            <tr>
+                <td style="font-weight: bold;">{{ months[i]|upper }}</td>
+                <td>{{ "%.2f"|format(m_dgL) }}</td>
+                <td>{{ "%.4f"|format(m_dgEm) }}</td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    <div style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end;">
+        <div style="background-color: rgba(255,255,255,0.9); padding: 20px; border-radius: 8px;">
+            <h3 style="margin-top: 0; color: var(--ink);">DG Operations Analysis</h3>
+            <p style="margin-bottom: 10px; font-size: 10pt; color: var(--ink);">Diesel Generator usage is strictly reserved for grid outages and critical power backups. Optimizing backup load management helps minimize these localized emissions.</p>
+            {{ ui.css_sparkline('DG Monthly Trend', current_period.dgL, 'var(--primary-green)') }}
+        </div>
+    </div>
+</div>

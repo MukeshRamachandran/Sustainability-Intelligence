@@ -1,0 +1,142 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Transport Login - K-COSMOS</title>
+
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="role-login.css">
+</head>
+
+<body
+    data-login-role="manager"
+    data-login-domain="transport"
+    data-destination="transport-entry.html"
+>
+
+    <div class="login-container">
+
+        <div class="login-left">
+            <img
+                src="microcosm-logo-white.svg"
+                alt="K-COSMOS"
+                style="
+                    height:130px;
+                    width:auto;
+                    margin-bottom:24px;
+                    filter:drop-shadow(0 4px 12px rgba(0,0,0,.15));
+                "
+            >
+
+            <p
+                style="
+                    font-size:18px;
+                    color:rgba(255,255,255,.9);
+                    font-weight:500;
+                    margin-bottom:8px;
+                "
+            >
+                Transport & DG Management
+            </p>
+
+            <p
+                style="
+                    font-size:14px;
+                    color:rgba(255,255,255,.7);
+                "
+            >
+                K-COSMOS Sustainability Management Portal
+            </p>
+        </div>
+
+        <div class="login-right">
+
+            <div class="glass-card login-card">
+
+                <div class="login-card-header">
+                    <h2>Transport Manager Sign In</h2>
+
+                    <p>
+                        K-COSMOS Sustainability Data Management Portal
+                    </p>
+                </div>
+
+                <form id="login-form">
+
+                    <div class="form-group">
+                        <label
+                            class="form-label"
+                            for="login-username"
+                        >
+                            Username
+                        </label>
+
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="login-username"
+                            autocomplete="username"
+                            placeholder="Enter your username"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label
+                            class="form-label"
+                            for="login-password"
+                        >
+                            Password
+                        </label>
+
+                        <input
+                            type="password"
+                            class="form-control"
+                            id="login-password"
+                            autocomplete="current-password"
+                            placeholder="Enter your password"
+                            required
+                        >
+                    </div>
+
+                    <button
+                        type="submit"
+                        class="btn btn-primary btn-block"
+                    >
+                        Sign In
+                    </button>
+
+                    <p
+                        id="login-message"
+                        class="text-center text-muted"
+                        style="
+                            margin-top:12px;
+                            min-height:20px;
+                        "
+                    ></p>
+
+                </form>
+
+                <div class="text-center">
+                    <a
+                        class="portal-back"
+                        href="index.html"
+                    >
+                        Back to portal selection
+                    </a>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <script src="auth-client.js"></script>
+    <script src="role-auth.js"></script>
+    <script src="role-login.js"></script>
+
+</body>
+</html>

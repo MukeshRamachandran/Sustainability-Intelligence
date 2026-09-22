@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MICROCOSM Sustainability Portal</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .login-container { display:flex; min-height:100vh; width:100%; }
+    .login-left { flex:1; background:linear-gradient(135deg,var(--primary) 0%,var(--primary-dark) 100%); color:white; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:40px; text-align:center; }
+    .login-left p { color:rgba(255,255,255,.8); max-width:400px; }
+    .login-right { flex:1; display:flex; justify-content:center; align-items:center; background:var(--bg-color); padding:40px; }
+    .login-card { width:100%; max-width:450px; }
+    .login-card-header { margin-bottom:24px; text-align:center; }
+    .portal-links { display:grid; gap:10px; }
+    .portal-links .btn { text-align:center; text-decoration:none; }
+    @media (max-width:760px) { .login-container{flex-direction:column}.login-left{min-height:280px}.login-right{padding:24px} }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="login-left">
+      <img src="microcosm-logo-white.svg" alt="MICROCOSM - The Co-existing Architecture" style="height:130px;width:auto;margin-bottom:24px;filter:drop-shadow(0 4px 12px rgba(0,0,0,.15));">
+      <p style="font-size:18px;color:rgba(255,255,255,.9);font-weight:500;margin-bottom:8px;">Sustainability Data Workflow</p>
+      <p style="font-size:14px;color:rgba(255,255,255,.7);">Official ESG &amp; Environmental Governance Portal</p>
+    </div>
+    <div class="login-right">
+      <div class="glass-card login-card">
+        <div class="login-card-header">
+          <h2>Select Your Portal</h2>
+          <p>MICROCOSM Sustainability Data Management Portal</p>
+        </div>
+        <div class="portal-links">
+          <a class="btn btn-accent btn-block" href="admin-login.html">Admin</a>
+          <a class="btn btn-outline btn-block" href="transport-login.html">Transport</a>
+          <a class="btn btn-outline btn-block" href="energy-login.html">Energy</a>
+          <a class="btn btn-outline btn-block" href="lpg-login.html">LPG</a>
+          <a class="btn btn-outline btn-block" href="water-login.html">Water</a>
+          <a class="btn btn-outline btn-block" href="outreach-login.html">Outreach</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

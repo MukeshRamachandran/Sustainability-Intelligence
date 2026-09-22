@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Emission Factors - MICROCOSM Portal</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body data-auth-role="microcosm_admin" data-login-page="admin-login.html">
+
+  <div class="app-container">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <a href="admin-overview.html" class="sidebar-brand" style="display: flex; align-items: center; gap: 10px; padding: 4px 0;">
+          <img src="microcosm-logo-white.svg" alt="MICROCOSM - The Co-existing Architecture" style="height: 48px; width: auto;">
+        </a>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="admin-overview.html" class="nav-item">Admin Overview</a>
+        <a href="admin-queue.html" class="nav-item">Approval Queue</a>
+        <a href="admin-factors.html" class="nav-item active">Emission Factors</a>
+        <a href="admin-preview.html" class="nav-item">Dashboard Preview</a>
+        <a href="#" class="nav-item">Managers & Access</a>
+        <a href="admin-audit.html" class="nav-item">Audit Log</a>
+      </nav>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div class="topbar-left">
+          <div class="current-period">
+            <span>AY: 2026–2027</span>
+            <span>|</span>
+            <span>June 2026</span>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <span class="user-badge" id="user-role-badge">Admin</span>
+          <button class="btn btn-outline" id="logout-btn">Logout</button>
+        </div>
+      </header>
+
+      <div class="content-area">
+        <div class="mb-3 d-flex justify-between align-center">
+          <div>
+            <h1>Emission Factor Management</h1>
+            <p>Manage system-wide emission conversion factors.</p>
+          </div>
+          <button class="btn btn-primary" id="btn-new-factor">Create New Factor Version</button>
+        </div>
+
+        <div class="card mb-3" style="border-left: 4px solid var(--warning);">
+          <p style="margin: 0; color: var(--text-dark); font-size: 14px;"><strong>Warning:</strong> Changing a factor affects future approved records only. Already approved records keep the factor version used during approval.</p>
+        </div>
+
+        <div class="glass-card">
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Factor Name</th>
+                  <th>Current Value</th>
+                  <th>Unit</th>
+                  <th>Source / Jurisdiction</th>
+                  <th>Effective From</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="factors-table-body">
+                <!-- Injected via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- New Factor Modal -->
+  <div class="modal-overlay" id="factor-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Create New Factor Version</h2>
+        <button class="btn-close" id="close-factor-modal">&times;</button>
+      </div>
+      
+      <div id="factor-modal-body">
+        <div class="grid-2 mb-2">
+          <div class="form-group">
+            <label class="form-label">Factor Name</label>
+            <select class="form-control" id="f-name">
+              <option value="petrol">Petrol</option>
+              <option value="diesel">Diesel</option>
+              <option value="grid">Grid Electricity</option>
+              <option value="lpg">LPG</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Factor Value</label>
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

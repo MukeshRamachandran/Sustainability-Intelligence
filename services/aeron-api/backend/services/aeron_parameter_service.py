@@ -1,0 +1,42 @@
+AERON_PARAMETER_MAP = {
+    "63d0da020016a": {"normalized_name": "co_mg_m3", "caption": "CO", "unit": "mg/m3"},
+    "63d0da885f1a0": {"normalized_name": "no2_ug_m3", "caption": "NO2", "unit": "ug/m3"},
+    "63d0daa4740ba": {"normalized_name": "so2_ug_m3", "caption": "SO2", "unit": "ug/m3"},
+    "63d0daf2bcb74": {"normalized_name": "o3_ug_m3", "caption": "O3", "unit": "ug/m3"},
+    "63d0db066e993": {"normalized_name": "no_ug_m3", "caption": "NO", "unit": "ug/m3"},
+    "63d0db8f77ecb": {"normalized_name": "pm25_ug_m3", "caption": "PM 2.5", "unit": "ug/m3"},
+    "63d0dbb867a7c": {"normalized_name": "pm10_ug_m3", "caption": "PM 10", "unit": "ug/m3"},
+    "63d0dbfe0a111": {"normalized_name": "temperature_c", "caption": "Ambient Temperature", "unit": "degC"},
+    "63d0dc28f109d": {"normalized_name": "relative_humidity_percent", "caption": "Relative Humidity", "unit": "Per"},
+    "63d0dc5164112": {"normalized_name": "rain_mm", "caption": "RAIN", "unit": "mm"},
+    "63d0dd3721886": {"normalized_name": "wind_speed_kmph", "caption": "Wind Speed", "unit": "kmph"},
+    "63d0dd4ff30c9": {"normalized_name": "wind_direction_deg", "caption": "Wind Direction", "unit": "Deg"},
+    "63d0ddf115956": {"normalized_name": "noise_average_db", "caption": "Noise Average", "unit": "db"},
+    "63d0de104027f": {"normalized_name": "noise_min_db", "caption": "Min value of Noise level", "unit": "db"},
+    "63d0de34a0b72": {"normalized_name": "noise_max_db", "caption": "Max value of Noise level", "unit": "db"},
+    "63d0de7568a3b": {"normalized_name": "uv_index", "caption": "UV", "unit": "index"},
+    "63d0ea1253e8f": {"normalized_name": "co2_ppm", "caption": "CO2", "unit": "ppm"},
+    "63d0ea927306d": {"normalized_name": "co_we_mv", "caption": "CO_WE", "unit": "mv"},
+    "63d0eb32b7070": {"normalized_name": "co_aux_mv", "caption": "CO_AUX", "unit": "mV"},
+    "63d0eb591ee3a": {"normalized_name": "no2_we_mv", "caption": "NO2_WE", "unit": "mV"},
+    "63d0eb7f49e34": {"normalized_name": "no2_aux_mv", "caption": "NO2_AUX", "unit": "mV"},
+    "63d0eba20cd96": {"normalized_name": "so2_we_mv", "caption": "SO2_WE", "unit": "mV"},
+    "63d0ebc89f18d": {"normalized_name": "so2_aux_mv", "caption": "SO2_AUX", "unit": "mV"},
+    "63d0ebfa17c49": {"normalized_name": "o3_we_mv", "caption": "O3_WE", "unit": "mV"},
+    "63d0ec7aa5a61": {"normalized_name": "o3_aux_mv", "caption": "O3_AUX", "unit": "mV"},
+    "63d0ec9873bc3": {"normalized_name": "no_we_mv", "caption": "NO_WE", "unit": "mV"},
+    "63d0ecc9829f2": {"normalized_name": "no_aux_mv", "caption": "NO_AUX", "unit": "mV"},
+    "63d0ee3fcd99a": {"normalized_name": "barometric_pressure_mba", "caption": "Baromteric Pressure", "unit": "mBa"},
+    "63d0eeb2aaeef": {"normalized_name": "molecular_volume_ltr", "caption": "Molecular Volume", "unit": "ltr"},
+    "641d7b36d4413": {"normalized_name": "co_ppb", "caption": "CO_ppm", "unit": "ppb"},
+    "6421673518c4f": {"normalized_name": "no2_ppb", "caption": "NO2_ppb", "unit": "ppb"},
+    "64216914170b7": {"normalized_name": "so2_ppb", "caption": "SO2_ppb", "unit": "ppb"},
+    "64216a7500e46": {"normalized_name": "o3_ppb", "caption": "O3_ppb", "unit": "ppb"},
+    "64216b8187e5e": {"normalized_name": "no_ppb", "caption": "NO_ppb", "unit": "ppb"},
+    "6422ae0f8147e": {"normalized_name": "air_quality_index", "caption": "Air Quality Index", "unit": "Unit"},
+}
+
+class AeronParameterService:
+    @staticmethod
+    def get_parameter_mapping():
+        return AERON_PARAMETER_MAP

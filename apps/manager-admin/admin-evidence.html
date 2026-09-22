@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Evidence Repository — K-COSMOS Portal</title><link rel="stylesheet" href="styles.css"></head>
+<body data-auth-role="microcosm_admin" data-login-page="admin-login.html">
+  <div class="app-container">
+    <aside class="sidebar"><div class="sidebar-header"><a href="admin-overview.html" class="sidebar-brand" style="display:flex;align-items:center;gap:10px;padding:4px 0;"><img src="microcosm-logo-white.svg" alt="MICROCOSM" style="height:48px;width:auto;"></a></div><nav class="sidebar-nav"><a href="admin-overview.html" class="nav-item">Admin Overview</a><a href="admin-queue.html" class="nav-item">Approval Queue</a><a href="admin-evidence.html" class="nav-item active">Evidence Repository</a><a href="admin-factors.html" class="nav-item">Emission Factors</a><a href="admin-preview.html" class="nav-item">Dashboard Preview</a><a href="admin-users.html" class="nav-item">Managers &amp; Access</a><a href="admin-audit.html" class="nav-item">Audit Log</a></nav></aside>
+    <main class="main-content">
+      <header class="topbar"><div class="topbar-left"><div class="current-period"><span>K-COSMOS</span><span>|</span><span>Administration</span></div></div><div class="topbar-right"><span class="user-badge">Admin</span><button class="btn btn-outline" id="logout-btn">Logout</button></div></header>
+      <div class="content-area">
+        <div class="mb-3"><h1>Evidence Repository</h1><p>Read-only retrieval of committed evidence from submitted revisions.</p></div>
+        <form class="glass-card mb-3" id="evidence-filters">
+          <div class="grid-4">
+            <div class="form-group"><label class="form-label" for="filter-year">Year</label><input class="form-control" id="filter-year" name="year" type="number" min="2000" max="9999" placeholder="All years"></div>
+            <div class="form-group"><label class="form-label" for="filter-month">Month</label><select class="form-control" id="filter-month" name="month"><option value="">All months</option><option value="1">January</option><option value="2">February</option><option value="3">March</option><option value="4">April</option><option value="5">May</option><option value="6">June</option><option value="7">July</option><option value="8">August</option><option value="9">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option></select></div>
+            <div class="form-group"><label class="form-label" for="filter-domain">Domain</label><select class="form-control" id="filter-domain" name="domain"><option value="">All domains</option><option value="transport">Transport</option><option value="energy">Energy</option><option value="lpg">LPG</option><option value="water">Water</option><option value="outreach">Outreach</option></select></div>
+            <div class="form-group"><label class="form-label" for="filter-status">Submission Status</label><select class="form-control" id="filter-status" name="submission_status"><option value="">All statuses</option><option value="submitted">Submitted</option><option value="under_review">Under Review</option><option value="correction_requested">Correction Requested</option><option value="approved">Approved</option></select></div>
+            <div class="form-group"><label class="form-label" for="filter-submission">Submission ID</label><input class="form-control" id="filter-submission" name="submission_id" placeholder="All submissions"></div>
+            <div class="form-group"><label class="form-label" for="filter-revision">Revision</label><input class="form-control" id="filter-revision" name="revision_number" type="number" min="1" placeholder="All revisions"></div>
+            <div class="form-group"><label class="form-label" for="filter-metric">Metric Code</label><input class="form-control" id="filter-metric" name="metric_code" maxlength="100" placeholder="All metrics"></div>
+            <div class="form-group"><label class="form-label" for="filter-category">Evidence Category</label><input class="form-control" id="filter-category" name="evidence_category" maxlength="100" placeholder="All categories"></div>
+            <div class="form-group"><label class="form-label" for="filter-filename">Filename</label><input class="form-control" id="filter-filename" name="filename" maxlength="255" placeholder="Search filename"></div>
+            <div class="form-group"><label class="form-label" for="filter-scope">Evidence</label><select class="form-control" id="filter-scope" name="latest_revision"><option value="true">Latest Submitted Revision</option><option value="false">All Submitted Revisions</option></select></div>
+            <div class="form-group"><label class="form-label" for="filter-page-size">Results per page</label><select class="form-control" id="filter-page-size" name="page_size"><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></div>
+          </div>
+          <div class="d-flex gap-2 mt-2"><button class="btn btn-primary" type="submit" id="search-evidence">Search</button><button class="btn btn-outline" type="button" id="clear-evidence-filters">Clear filters</button></div>
+        </form>
+        <div id="evidence-repository-status" class="text-muted mb-2" role="status">Loading evidence...</div>
+        <div id="evidence-repository-results"></div>
+        <div class="d-flex justify-between align-center mt-2" id="evidence-pagination" hidden><button class="btn btn-outline" type="button" id="previous-evidence-page">Previous</button><span id="evidence-page-summary"></span><button class="btn btn-outline" type="button" id="next-evidence-page">Next</button></div>
+      </div>
+    </main>
+  </div>
+  <script src="auth-client.js"></script><script src="role-auth.js"></script><script src="outreach-api.js"></script><script src="evidence-api.js"></script><script src="app.js"></script><script src="admin-evidence.js"></script>
+</body>
+</html>

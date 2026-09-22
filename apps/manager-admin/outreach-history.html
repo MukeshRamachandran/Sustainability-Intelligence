@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Outreach Submission History — K-COSMOS Portal</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body data-auth-role="manager" data-auth-domain="outreach" data-login-page="outreach-login.html">
+  <div class="app-container">
+    <aside class="sidebar">
+      <div class="sidebar-header"><a href="community-outreach-entry.html" class="sidebar-brand">K-COSMOS</a></div>
+      <nav class="sidebar-nav">
+        <a href="community-outreach-entry.html" class="nav-item">New Outreach Entry</a>
+        <a href="outreach-history.html" class="nav-item active">Submission History</a>
+        <a href="#" class="nav-item" id="sidebar-logout">Logout</a>
+      </nav>
+    </aside>
+    <main class="main-content">
+      <div class="content-area">
+        <div class="mb-3">
+          <h1>Outreach Submission History</h1>
+          <p>Only your Outreach programme records are shown.</p>
+        </div>
+        <div class="glass-card">
+          <div class="table-responsive">
+            <table class="table">
+              <thead><tr><th>Period</th><th>Programme</th><th>Submitted</th><th>Status</th><th>Correction reason</th><th>Action</th></tr></thead>
+              <tbody id="outreach-history-body"><tr><td colspan="6">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script src="auth-client.js"></script>
+  <script src="role-auth.js"></script>
+  <script src="outreach-api.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      document.getElementById('sidebar-logout').addEventListener('click', event => { event.preventDefault(); KCosmosAuth.logoutTo('outreach-login.html'); });
+      const body = document.getElementById('outreach-history-body');
+      const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+      try {
+        await KCosmos.requireRole('manager', 'outreach');
+        const submissions = await KCosmos.api('/api/manager/outreach/submissions');
+        const rows = submissions.flatMap(submission => submission.programmes.map(programme => ({ submission, programme })));
+        body.innerHTML = rows.length ? rows.map(({ submission, programme }) => {
+          const editable = ['draft', 'correction_requested'].includes(submission.status);
+          return `<tr>
+            <td>${escapeHtml(submission.reporting_period_label)}</td>
+            <td>${escapeHtml(programme.programme_name)}</td>
+            <td>${submission.submitted_at ? new Date(submission.submitted_at).toLocaleString() : 'Not submitted'}</td>
+            <td><span class="badge badge-${submission.status === 'approved' ? 'approved' : submission.status === 'correction_requested' ? 'correction' : submission.status === 'draft' ? 'draft' : 'submitted'}">${escapeHtml(submission.status.replaceAll('_', ' '))}</span></td>
+            <td>${escapeHtml(submission.correction_reason || '—')}</td>
+            <td><a class="btn btn-outline" href="community-outreach-entry.html?programme=${programme.id}">${editable ? 'Edit' : 'View'}</a></td>
+          </tr>`;
+        }).join('') : '<tr><td colspan="6" class="text-center text-muted">No Outreach records found.</td></tr>';
+      } catch (error) {
+        body.innerHTML = `<tr><td colspan="6">${escapeHtml(error.message)}</td></tr>`;
+      }
+    });
+  </script>
+</body>
+</html>

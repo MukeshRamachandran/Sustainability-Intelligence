@@ -1,0 +1,100 @@
+{% macro get_icon(name) %}
+    {% if name == 'energy' %}
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+    {% elif name == 'transport' %}
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0"></path></svg>
+    {% elif name == 'emission' %}
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"></path></svg>
+    {% elif name == 'leaf' %}
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"></path></svg>
+    {% elif name == 'target' %}
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+    {% else %}
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+    {% endif %}
+{% endmacro %}
+
+{% macro kpi_card(title, value, unit, color='var(--primary-green)', width='33%') %}
+<div class="kpi-card avoid-break" style="width: {{ width }}; flex-grow: 1;">
+    <div class="kpi-title">{{ title }}</div>
+    <div class="kpi-value-container">
+        <span class="kpi-value" style="color: {{ color }};">{{ value }}</span>
+        <span class="kpi-unit">{{ unit }}</span>
+    </div>
+</div>
+{% endmacro %}
+
+{% macro mini_kpi(title, value, unit, color='var(--primary-green)') %}
+<div class="kpi-card-horizontal avoid-break" style="flex: 1;">
+    <div class="kpi-title-small">{{ title }}</div>
+    <div class="kpi-value-container">
+        <span class="kpi-value-small" style="color: {{ color }};">{{ value }}</span>
+        <span class="kpi-unit">{{ unit }}</span>
+    </div>
+</div>
+{% endmacro %}
+
+{% macro highlight_box(icon, title) %}
+<div class="highlight-box avoid-break">
+    <div class="highlight-icon">
+        {{ get_icon(icon) }}
+    </div>
+    <div class="highlight-title">{{ title }}</div>
+</div>
+{% endmacro %}
+
+{% macro chart_card(title, chart_base64) %}
+<div class="chart-card avoid-break" style="flex-grow: 1; display: flex; flex-direction: column;">
+    <div class="card-header">{{ title }}</div>
+    <div class="chart-container" style="flex-grow: 1; display: flex; align-items: center; justify-content: center;">
+        <img src="data:image/svg+xml;base64,{{ chart_base64 }}" class="chart-img" alt="Chart" style="max-height: 250px; width: auto; object-fit: contain;"/>
+    </div>
+</div>
+{% endmacro %}
+
+{% macro recommendation_box(title, text) %}
+<div class="insight-box avoid-break">
+    <div class="insight-title">{{ title }}</div>
+    <p style="margin: 0;">{{ text }}</p>
+</div>
+{% endmacro %}
+
+{% macro css_sparkline(title, data_array, color='var(--primary-green)') %}
+{% set max_val = 0 %}
+{% for val in data_array %}
+    {% if val != None and val > max_val %}{% set max_val = val %}{% endif %}
+{% endfor %}
+{% if max_val == 0 %}{% set max_val = 1 %}{% endif %}
+<div class="chart-card avoid-break css-chart-card">
+    <div class="card-header">{{ title }}</div>
+    <div class="css-sparkline-container">
+        {% for val in data_array %}
+            {% set h = ((val or 0) / max_val * 100) %}
+            <div class="css-bar-wrapper">
+                <div class="css-bar" style="height: {{ h }}%; background-color: {{ color }};"></div>
+            </div>
+        {% endfor %}
+    </div>
+    <div class="css-sparkline-labels">
+        <span>J</span><span>F</span><span>M</span><span>A</span><span>M</span><span>J</span><span>J</span><span>A</span><span>S</span><span>O</span><span>N</span><span>D</span>
+    </div>
+</div>
+{% endmacro %}
+
+{% macro css_horizontal_bar(title, value1, value2, label1, label2, color1, color2, unit) %}
+{% set total = value1 + value2 %}
+{% if total == 0 %}{% set total = 1 %}{% endif %}
+{% set p1 = (value1 / total * 100)|round(1) %}
+{% set p2 = (value2 / total * 100)|round(1) %}
+<div class="chart-card avoid-break">
+    <div class="card-header">{{ title }}</div>
+    <div class="css-hbar-labels">
+        <div><strong style="color:{{color1}}">{{ value1|round(1) }}</strong> {{ unit }}<br><small>{{ label1 }} ({{ p1 }}%)</small></div>
+        <div style="text-align:right;"><strong style="color:{{color2}}">{{ value2|round(1) }}</strong> {{ unit }}<br><small>{{ label2 }} ({{ p2 }}%)</small></div>
+    </div>
+    <div class="css-hbar-container">
+        <div class="css-hbar-segment" style="width: {{ p1 }}%; background-color: {{ color1 }};"></div>
+        <div class="css-hbar-segment" style="width: {{ p2 }}%; background-color: {{ color2 }};"></div>
+    </div>
+</div>
+{% endmacro %}

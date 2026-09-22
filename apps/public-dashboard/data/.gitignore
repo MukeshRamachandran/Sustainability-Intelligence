@@ -1,0 +1,10 @@
+@"
+venv/
+**/venv/
+__pycache__/
+*.pyc
+node_modules/
+dist/
+build/
+.env
+"@ | Out-File -FilePath .gitignore -Encoding utf8

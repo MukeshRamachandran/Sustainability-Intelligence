@@ -1,0 +1,17 @@
+<div class="page-break">
+    <h1 class="section-title">Strategic Recommendations</h1>
+    <h2 class="section-subtitle">Actionable Insights for Decarbonization</h2>
+    
+    <p class="paragraph">
+        Based on the data collected and analyzed for the {{ report_label }} reporting period, the following recommendations are provided to accelerate our progress towards our net-zero targets.
+    </p>
+
+    <div class="row" style="flex-direction: column; gap: 5mm;">
+        {% for rec in insights.recommendations %}
+        <div class="card" style="border-left: 4px solid var(--blue);">
+            <div class="card-header">Initiative {{ loop.index }}</div>
+            <p class="paragraph" style="margin: 0;">{{ rec }}</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>

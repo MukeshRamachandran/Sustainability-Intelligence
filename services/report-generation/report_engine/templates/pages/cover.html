@@ -1,0 +1,12 @@
+<!-- PAGE 1: Cover Page -->
+<div class="page-container cover-page">
+    <img class="cover-bg-img" src="{{ assets.get_asset_uri('cover.png') }}" alt="Cover Image">
+    <div class="cover-content">
+        <!-- Title is baked into the image, just overlay dynamic variables -->
+        <h2 class="cover-year">{{ year }} {% if month != 'all' %}- {{ month|capitalize }}{% endif %}</h2>
+    </div>
+    <div class="cover-meta">
+        Generated on: {{ generated_date }}<br>
+        {% if compare != 'none' %}Compare Mode: {{ compare|upper }}{% endif %}
+    </div>
+</div>

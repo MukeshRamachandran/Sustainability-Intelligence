@@ -1,0 +1,3 @@
+year,month,source,renewable_kwh,period_start_month,period_end_month,notes
+2025,ALL,solar_or_renewable_total,3373368,Jan,Dec,Period total. Replace with monthly rows when monthly RE data is available.
+2026,YTD,solar_or_renewable_total,324744,Jan,Apr,Period total. Replace with monthly rows when monthly RE data is available.

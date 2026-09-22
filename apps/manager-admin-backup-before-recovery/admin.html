@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>K-COSMOS Admin Portal</title>
+</head>
+
+<body>
+
+<header>
+    <h1>K-COSMOS</h1>
+    <p>Microcosm Administration Portal</p>
+
+    <p id="userInfo">
+        Checking session...
+    </p>
+
+    <button id="logoutButton">
+        Logout
+    </button>
+</header>
+
+<hr>
+
+<main>
+
+    <h2>Administrator Portal</h2>
+
+    <p>
+        Authentication and administrator routing are working.
+    </p>
+
+    <section>
+        <h3>Manager Domains</h3>
+
+        <div>Transport</div>
+        <div>Energy</div>
+        <div>LPG</div>
+        <div>Water</div>
+        <div>Outreach</div>
+    </section>
+
+    <section>
+        <h3>Administration Workflow</h3>
+
+        <p>Submitted records</p>
+        <p>Review</p>
+        <p>Request correction</p>
+        <p>Approve</p>
+        <p>Prepare release</p>
+        <p>Publish</p>
+    </section>
+
+</main>
+
+<script src="auth-client.js"></script>
+<script src="portal-router.js"></script>
+<script src="portal-guard.js"></script>
+
+<script>
+    async function initializeAdminPortal() {
+
+        const session = await requireAdminPage();
+
+        if (!session) {
+            return;
+        }
+
+        const user = session.user;
+
+        document.getElementById("userInfo").textContent =
+            `${user.display_name} (${user.username})`;
+    }
+
+
+    document
+        .getElementById("logoutButton")
+        .addEventListener("click", async () => {
+
+            try {
+
+                await logout();
+
+                window.location.href = "login.html";
+
+            } catch (error) {
+
+                alert(error.message);
+
+            }
+
+        });
+
+
+    initializeAdminPortal();
+</script>
+
+</body>
+</html>

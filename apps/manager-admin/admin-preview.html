@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Dashboard Preview - MICROCOSM Portal</title><link rel="stylesheet" href="styles.css">
+  <style>.json-box{background:#1e1e1e;color:#d4d4d4;padding:20px;border-radius:8px;font-family:monospace;font-size:14px;overflow-x:auto;line-height:1.5;white-space:pre-wrap}</style>
+</head>
+<body data-auth-role="microcosm_admin" data-login-page="admin-login.html">
+  <div class="app-container">
+    <aside class="sidebar"><div class="sidebar-header"><a href="admin-overview.html" class="sidebar-brand" style="display:flex;align-items:center;gap:10px;padding:4px 0;"><img src="microcosm-logo-white.svg" alt="MICROCOSM" style="height:48px;width:auto;"></a></div><nav class="sidebar-nav"><a href="admin-overview.html" class="nav-item">Admin Overview</a><a href="admin-queue.html" class="nav-item">Approval Queue</a><a href="admin-evidence.html" class="nav-item">Evidence Repository</a><a href="admin-factors.html" class="nav-item">Emission Factors</a><a href="admin-preview.html" class="nav-item active">Dashboard Preview</a><a href="admin-users.html" class="nav-item">Managers &amp; Access</a><a href="admin-audit.html" class="nav-item">Audit Log</a></nav></aside>
+    <main class="main-content">
+      <header class="topbar"><div class="topbar-left"><div class="current-period"><span>K-COSMOS</span><span>|</span><span>Administration</span></div></div><div class="topbar-right"><span class="user-badge">Admin</span><button class="btn btn-outline" id="logout-btn">Logout</button></div></header>
+      <div class="content-area">
+        <div class="mb-3 d-flex justify-between align-center"><div><h1>Approved Dashboard Release Preview</h1><p>Preview an immutable release before it is published to the public dashboard.</p></div><button class="btn btn-primary" id="publish-btn" disabled>Publish Prepared Release</button></div>
+        <div class="grid-4 mb-3"><div class="glass-card stat-card"><span class="stat-title">Reporting Period</span><span class="stat-value" id="preview-period" style="font-size:20px;">—</span></div><div class="glass-card stat-card"><span class="stat-title">Release Version</span><span class="stat-value" id="preview-version" style="font-size:20px;">—</span></div><div class="glass-card stat-card"><span class="stat-title">Release Status</span><span class="stat-value text-success" id="ready-count">—</span></div><div class="glass-card stat-card"><span class="stat-title">Checksum</span><span class="stat-value" id="preview-checksum" style="font-size:12px;overflow-wrap:anywhere;">—</span></div></div>
+        <div class="card mb-3" style="border-left:4px solid var(--info);"><p style="margin:0;color:var(--text-dark);font-size:14px;"><strong>Privacy Note:</strong> Only approved and sanitized values are published. Evidence files, manager emails, admin comments and audit records remain strictly private.</p></div>
+        <div class="glass-card"><h3 class="mb-2">Data Payload Preview (JSON)</h3><div class="json-box" id="json-preview">Open a prepared release from the Approval Queue.</div></div>
+      </div>
+    </main>
+  </div>
+  <script src="auth-client.js"></script><script src="role-auth.js"></script><script src="app.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      const releaseId = new URLSearchParams(window.location.search).get('release_id');
+      const preview = document.getElementById('json-preview');
+      const publish = document.getElementById('publish-btn');
+      if (!releaseId) return;
+      try {
+        const release = await apiRequest(`/api/admin/releases/${encodeURIComponent(releaseId)}/preview`);
+        document.getElementById('preview-period').textContent = release.payload?.period?.label || release.reporting_period_id;
+        document.getElementById('preview-version').textContent = release.version;
+        document.getElementById('ready-count').textContent = release.status;
+        document.getElementById('preview-checksum').textContent = release.checksum_sha256;
+        preview.textContent = JSON.stringify(release.payload, null, 2);
+        publish.disabled = release.status !== 'candidate';
+      } catch (error) { preview.textContent = error.message; showToast(error.message, 'error'); }
+      publish.addEventListener('click', async () => {
+        try { await apiRequest(`/api/admin/releases/${encodeURIComponent(releaseId)}/publish`, {method:'POST', csrf:true}); publish.disabled=true; document.getElementById('ready-count').textContent='active'; showToast('Release published.','success'); }
+        catch (error) { showToast(error.message, 'error'); }
+      });
+    });
+  </script>
+</body>
+</html>
