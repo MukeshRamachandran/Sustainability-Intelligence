@@ -31,14 +31,17 @@ EXPECTED_UNITS = {
     FactorCode.PETROL: "L",
     FactorCode.DIESEL: "L",
     FactorCode.GRID_ELECTRICITY: "kWh",
-    FactorCode.LPG: "kg",
+    FactorCode.LPG: "L",
 }
+# The governed activity metric for each calculation. LPG is litre-based
+# (0008_lpg_litre_governance); lpg_weight_kg is reference metadata only and
+# must never appear here.
 CALCULATION_CODES = {
     "transport_petrol_litres": "transport_petrol_emissions",
     "transport_diesel_litres": "transport_diesel_emissions",
     "dg_diesel_litres": "dg_diesel_emissions",
     "grid_total_kwh": "grid_electricity_emissions",
-    "lpg_weight_kg": "lpg_emissions",
+    "lpg_consumption_litres": "lpg_emissions",
 }
 FORMULA_VERSION = "activity_x_factor_kgco2e_v1"
 EDITABLE_STATUSES = {SubmissionStatus.DRAFT, SubmissionStatus.CORRECTION_REQUESTED}
@@ -149,7 +152,7 @@ def _unavailable(submission: Submission, reason: str) -> list[CalculationRespons
     elif submission.domain.value == "energy":
         codes = [("grid_total_kwh", CALCULATION_CODES["grid_total_kwh"])]
     elif submission.domain.value == "lpg":
-        codes = [("lpg_weight_kg", CALCULATION_CODES["lpg_weight_kg"])]
+        codes = [("lpg_consumption_litres", CALCULATION_CODES["lpg_consumption_litres"])]
     else:
         return []
     return [

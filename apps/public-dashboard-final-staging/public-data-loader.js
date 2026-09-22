@@ -53,7 +53,7 @@
       year: Number(year), label: `${year} Published snapshot`, frequency: 'ytd', population: null,
       publicationState: 'unavailable', totalGHG: null, totalEnergy: null, gridEnergy: null,
       reEnergy: null, reShare: null, avoided: null, perCapita: null,
-      petrolL: empty(), trDieselL: empty(), dgL: empty(), lpgKg: empty(),
+      petrolL: empty(), trDieselL: empty(), dgL: empty(), lpgL: empty(),
       petrolEm: empty(), trDieselEm: empty(), dgEm: empty(), lpgEm: empty(),
       dieselCombo: empty(), scope1Selected: empty(), scope1Full: empty(),
       htKwh: empty(), commKwh: empty(), tempKwh: empty(), elecKwh: empty(),
@@ -112,7 +112,7 @@
     setMetric(item.reProcuredKwh, month, energy, 'renewable_procured_kwh');
     setMetric(item.reKwh, month, energy, 'renewable_total_kwh');
     item.reEnergy = item.reKwh[month];
-    setMetric(item.lpgKg, month, lpg, 'lpg_weight_kg');
+    setMetric(item.lpgL, month, lpg, 'lpg_consumption_litres');
     setCalculation(item.lpgEm, month, lpg, 'lpg_emissions');
     setMetric(item.waterKL, month, water, 'water_consumed_kl');
     item.waterRecycledKL = window.KCOSMOSPublicAPI.metric(water, 'water_recycled_kl').value;

@@ -21,6 +21,9 @@
       'ren-solar': 'solar_water_heater_kwh'
     },
     lpg: {
+      // lpg_consumption_litres is the governed emissions activity; the other
+      // two are optional reference metadata and drive no calculation.
+      'lpg-litres': 'lpg_consumption_litres',
       'lpg-cylinders': 'lpg_cylinder_count',
       'lpg-kg': 'lpg_weight_kg'
     },

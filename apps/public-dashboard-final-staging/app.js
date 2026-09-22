@@ -445,7 +445,7 @@ function makeKpis() {
       kpi('Fleet diesel emissions', valFor(d, d.trDieselEm, month), 'tCO₂e', colors.gold, 'cloud', previousValue('trDieselEm'), true),
       kpi('DG diesel consumption', valFor(d, d.dgL, month), 'L', colors.orange, 'gear', previousValue('dgL'), true, 0),
       kpi('DG diesel emissions', valFor(d, d.dgEm, month), 'tCO₂e', colors.orange, 'factory', previousValue('dgEm'), true),
-      kpi('LPG consumption', valFor(d, d.lpgKg, month), 'kg', colors.violet, 'battery', previousValue('lpgKg'), true, 0),
+      kpi('LPG consumption', valFor(d, d.lpgL, month), 'L', colors.violet, 'battery', previousValue('lpgL'), true, 0),
       kpi('LPG emissions', valFor(d, d.lpgEm, month), 'tCO₂e', colors.violet, 'flame', previousValue('lpgEm'), true),
       kpi('Combined diesel emissions', diesel, 'tCO₂e', colors.red, 'flame', previousValue('dieselCombo'), true)
     ].join('');
@@ -828,7 +828,7 @@ function drawCharts() {
      (fuel/Fleet/DG typically lag grid electricity), not a hardcoded cutoff.
      Sources with zero months (not yet reporting at all, e.g. LPG some years)
      are excluded rather than zeroing the whole window out. */
-  const s1s2Months = [d.trDieselL, d.dgL, d.petrolL, d.lpgKg, d.htKwh, d.commKwh, d.tempKwh].map(monthsWithData).filter(m => m > 0);
+  const s1s2Months = [d.trDieselL, d.dgL, d.petrolL, d.lpgL, d.htKwh, d.commKwh, d.tempKwh].map(monthsWithData).filter(m => m > 0);
   const available = d.frequency === 'ytd' && s1s2Months.length ? Math.min(...s1s2Months) : 12;
   const labels = months.slice(0, available); const sl = a => a.slice(0, available);
   const home = document.body.classList.contains('home'); const axc = home ? '#cbe2d6' : '#5c6b62'; const grc = home ? 'rgba(255,255,255,.1)' : colors.grid;
@@ -1466,7 +1466,7 @@ const tables = {};
 /* Flatten the master data into the five explorer views (built once at
    startup - filtering and sorting happen in renderTable). */
 function buildTables() {
-  const rows = []; for (const [year, d] of Object.entries(data)) { months.forEach((m, i) => { if (d.petrolL[i] != null) { rows.push([year, m, 'S1', 'Petrol', d.petrolL[i], 'L', EF.petrol, d.petrolEm[i]]); rows.push([year, m, 'S1', 'Fleet Diesel', d.trDieselL[i], 'L', EF.diesel, d.trDieselEm[i]]); rows.push([year, m, 'S1', 'DG Diesel', d.dgL[i], 'L', EF.diesel, d.dgEm[i]]); rows.push([year, m, 'S2', 'Grid Electricity', d.elecKwh[i], 'kWh', EF.grid, d.elecEm[i]]); } if (d.lpgKg[i] != null) rows.push([year, m, 'S1', 'LPG', d.lpgKg[i], 'kg', EF.lpg, d.lpgEm[i]]); }) }
+  const rows = []; for (const [year, d] of Object.entries(data)) { months.forEach((m, i) => { if (d.petrolL[i] != null) { rows.push([year, m, 'S1', 'Petrol', d.petrolL[i], 'L', EF.petrol, d.petrolEm[i]]); rows.push([year, m, 'S1', 'Fleet Diesel', d.trDieselL[i], 'L', EF.diesel, d.trDieselEm[i]]); rows.push([year, m, 'S1', 'DG Diesel', d.dgL[i], 'L', EF.diesel, d.dgEm[i]]); rows.push([year, m, 'S2', 'Grid Electricity', d.elecKwh[i], 'kWh', EF.grid, d.elecEm[i]]); } if (d.lpgL[i] != null) rows.push([year, m, 'S1', 'LPG', d.lpgL[i], 'L', EF.lpg, d.lpgEm[i]]); }) }
   tables.unified = { cols: ['Year', 'Month', 'Scope', 'Source', 'Quantity', 'Unit', 'EF', 'Emissions tCO₂e'], rows };
   tables.fleet = { cols: ['Year', 'Month', 'Petrol L', 'Petrol tCO₂e', 'Diesel L', 'Diesel tCO₂e'], rows: Object.entries(data).flatMap(([year, d]) => months.map((m, i) => d.petrolL[i] != null ? [year, m, d.petrolL[i], d.petrolEm[i], d.trDieselL[i], d.trDieselEm[i]] : null).filter(Boolean)) };
   tables.dg = { cols: ['Year', 'Month', 'DG Diesel L', 'DG Emissions tCO₂e'], rows: Object.entries(data).flatMap(([year, d]) => months.map((m, i) => d.dgL[i] != null ? [year, m, d.dgL[i], d.dgEm[i]] : null).filter(Boolean)) };

@@ -268,15 +268,15 @@ def test_multidomain_release_snapshot_privacy_checksum_and_publish(postgres_engi
                     submission_revision=1,
                     calculation_code="lpg_emissions",
                     calculation_status="available",
-                    metric_code="lpg_weight_kg",
-                    activity_value=Decimal("28"),
-                    activity_unit="kg",
+                    metric_code="lpg_consumption_litres",
+                    activity_value=Decimal("52"),
+                    activity_unit="L",
                     factor_set_version="synthetic-publication-test-v1",
                     factor_code="LPG",
-                    factor_value=Decimal("3.0"),
-                    factor_unit="kgCO2e/kg",
-                    result_kgco2e=Decimal("84"),
-                    result_value=Decimal("0.084"),
+                    factor_value=Decimal("1.5571"),
+                    factor_unit="kgCO2e/L",
+                    result_kgco2e=Decimal("80.9692"),
+                    result_value=Decimal("0.080969"),
                     result_unit="tCO2e",
                     formula_version="activity_x_factor_kgco2e_v1",
                 ),
@@ -331,14 +331,16 @@ def test_multidomain_release_snapshot_privacy_checksum_and_publish(postgres_engi
         }
         assert payload["energy"]["metrics"]["grid_total_kwh"]["value"] == 30
         assert payload["energy"]["metrics"]["renewable_total_kwh"]["value"] == 10
-        assert payload["lpg"]["metrics"] == {"lpg_weight_kg": {"value": 28, "unit": "kg"}}
+        assert payload["lpg"]["metrics"] == {"lpg_consumption_litres": {"value": 52, "unit": "L"}}
         assert payload["lpg"]["emissions"] == {
             "status": "available",
             "reason": None,
-            "value": 0.084,
+            "value": 0.080969,
             "unit": "tCO2e",
         }
-        assert payload["lpg"]["calculations"][0]["factor_unit"] == "kgCO2e/kg"
+        assert payload["lpg"]["calculations"][0]["factor_unit"] == "kgCO2e/L"
+        assert payload["lpg"]["calculations"][0]["activity_metric_code"] == "lpg_consumption_litres"
+        assert payload["lpg"]["calculations"][0]["activity_unit"] == "L"
         assert payload["transport"]["calculations"][0]["factor_code"] == "PETROL"
         assert payload["energy"]["calculations"][0]["calculation_code"] == "grid_electricity_emissions"
         assert payload["indicators"]["total_ghg_tco2e"]["status"] == "unavailable"
@@ -363,7 +365,8 @@ def test_multidomain_release_snapshot_privacy_checksum_and_publish(postgres_engi
             "private",
             "inlet_ph",
             "petrol_vehicle_count",
-            "lpg_consumption_litres",
+            # Reference-only LPG metadata must never reach a public payload.
+            "lpg_weight_kg",
         ):
             assert forbidden not in serialized
 

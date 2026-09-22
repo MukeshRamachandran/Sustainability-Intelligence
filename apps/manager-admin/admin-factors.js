@@ -4,7 +4,10 @@
     { code: 'PETROL', label: 'Petrol', unit: 'L' },
     { code: 'DIESEL', label: 'Diesel', unit: 'L' },
     { code: 'GRID_ELECTRICITY', label: 'Grid Electricity', unit: 'kWh' },
-    { code: 'LPG', label: 'LPG (optional until governed)', unit: 'kg', optional: true }
+    // Optional mirrors the backend: CORE_FACTORS requires only petrol, diesel
+    // and grid, so a set still activates without LPG. The governed LPG unit is
+    // litres (0008_lpg_litre_governance).
+    { code: 'LPG', label: 'LPG (optional)', unit: 'L', optional: true }
   ];
   let sets = [];
   let selected = null;

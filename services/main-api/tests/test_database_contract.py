@@ -1,3 +1,4 @@
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -30,7 +31,7 @@ PUBLIC_METRICS = {
     "transport_petrol_litres",
     "transport_diesel_litres",
     "dg_diesel_litres",
-    "lpg_weight_kg",
+    "lpg_consumption_litres",
     "grid_total_kwh",
     "renewable_total_kwh",
     "water_consumed_kl",
@@ -78,10 +79,32 @@ def test_roles_domains_and_metric_publication_are_seeded(postgres_engine: Engine
             "renewable_total_kwh",
             "water_consumed_kl",
         }
-        lpg_factor_count = connection.scalar(
-            text("select count(*) from sustainability.emission_factors where upper(code)='LPG'")
+        # 0008_lpg_litre_governance places the K-COSMOS baseline LPG factor into
+        # the migration-seeded DRAFT set, on litres, exactly once.
+        seeded = (
+            connection.execute(
+                text("""
+                select f.code, f.factor_value, f.activity_unit, f.result_unit, f.source_reference,
+                       s.status, s.effective_from
+                  from sustainability.emission_factors f
+                  join sustainability.emission_factor_sets s on s.id = f.factor_set_id
+                 where s.id = '20000000-0000-0000-0000-000000000001'
+                 order by f.code
+                """)
+            )
+            .mappings()
+            .all()
         )
-        assert lpg_factor_count == 0
+        assert [row["code"] for row in seeded] == ["DIESEL", "GRID_ELECTRICITY", "LPG", "PETROL"]
+        lpg = next(row for row in seeded if row["code"] == "LPG")
+        assert lpg["factor_value"] == Decimal("1.5571000000")
+        assert lpg["activity_unit"] == "L"
+        assert lpg["result_unit"] == "kgCO2e"
+        # Every factor carries the baseline provenance, but the set stays a
+        # draft with no effective date, so it cannot be activated accidentally.
+        assert all(row["source_reference"] for row in seeded)
+        assert lpg["status"] == "draft"
+        assert lpg["effective_from"] is None
 
 
 def _insert_manager(connection: object, domain: str) -> str:

@@ -20,7 +20,7 @@ test('index loads the public adapter before its API data loader and app', () => 
   assert.doesNotMatch(html, /<script[^>]+src="data-loader\.js/);
 });
 
-test('adapter normalizes the active immutable release and preserves governed LPG kg state', async () => {
+test('adapter normalizes the active immutable release and preserves governed LPG litre state', async () => {
   let requested;
   const api = adapterContext(async (url, options) => {
     requested = { url, options };
@@ -30,10 +30,10 @@ test('adapter normalizes the active immutable release and preserves governed LPG
         release: { version: '2026-09-v1', published_at: '2026-09-22T10:00:00Z' },
         schema_version: '1.1', period: { id: 'period', year: 2026, month: 9 },
         lpg: {
-          metrics: { lpg_weight_kg: { value: 28, unit: 'kg' } },
+          metrics: { lpg_consumption_litres: { value: 52, unit: 'L' } },
           calculations: [{
             calculation_code: 'lpg_emissions', status: 'unavailable', reason: 'factor_not_configured',
-            activity_value: 28, activity_unit: 'kg', result_value: null
+            activity_value: 52, activity_unit: 'L', result_value: null
           }]
         }
       })
@@ -43,14 +43,16 @@ test('adapter normalizes the active immutable release and preserves governed LPG
   assert.equal(requested.url, '/api/public/dashboard');
   assert.equal(requested.options.credentials, 'omit');
   assert.equal(result.state, 'published');
-  assert.equal(api.metric(result.domains.lpg, 'lpg_weight_kg').value, 28);
+  assert.equal(api.metric(result.domains.lpg, 'lpg_consumption_litres').value, 52);
+  // The superseded kg metric is not published and must read as unavailable.
+  assert.equal(api.metric(result.domains.lpg, 'lpg_weight_kg').status, 'unavailable');
   const lpgEmission = api.calculation(result.domains.lpg, 'lpg_emissions');
   assert.equal(lpgEmission.code, 'lpg_emissions');
   assert.equal(lpgEmission.status, 'unavailable');
   assert.equal(lpgEmission.value, null);
   assert.equal(lpgEmission.reason, 'factor_not_configured');
-  assert.equal(lpgEmission.activityValue, 28);
-  assert.equal(lpgEmission.activityUnit, 'kg');
+  assert.equal(lpgEmission.activityValue, 52);
+  assert.equal(lpgEmission.activityUnit, 'L');
 });
 
 test('adapter loads published history only from the public history contract', async () => {
@@ -87,8 +89,12 @@ test('active loader has no governed CSV, JSON overlay, or emission-factor calcul
   assert.doesNotMatch(loader, /transport_master|dg_master|lpg_master|energy_master|water_master|outreach_master|emission_factors|dashboard_master/);
   assert.doesNotMatch(loader, /Calculations\.(co2e|renewableAvoidedEmissions)/);
   assert.doesNotMatch(loader, /2\.388|2\.701|0\.727|0\.71|1\.5571|2\.939/);
-  assert.match(loader, /lpg_weight_kg/);
-  assert.doesNotMatch(loader, /lpg_consumption_litres/);
+  assert.match(loader, /lpg_consumption_litres/);
+  assert.doesNotMatch(loader, /lpg_weight_kg/);
+  // No file on the loaded governed path may carry a factor constant.
+  for (const file of ['public-api.js', 'public-data-loader.js', 'app.js']) {
+    assert.doesNotMatch(read(file), /2\.388|2\.701|0\.727|0\.71|1\.5571|2\.939/, file);
+  }
   assert.match(loader, /waste_master\.csv/);
   assert.match(loader, /green_master\.csv/);
 });
@@ -116,5 +122,8 @@ test('active display marks full GHG and unresolved methodology values unavailabl
   assert.match(app, /Not published/);
   assert.doesNotMatch(app, /2\.388|2\.701|0\.727|0\.71|1\.5571|2\.939/);
   assert.doesNotMatch(app, /Calculations\.(?:grossEmissions|netCarbonIndicator|scopeContributionPct)/);
-  assert.doesNotMatch(app, /lpgL|LPG consumption',[^\n]*'L'/);
+  // LPG is displayed on its governed litre basis; the superseded kg series is gone.
+  assert.match(app, /lpgL/);
+  assert.doesNotMatch(app, /lpgKg/);
+  assert.match(app, /'LPG consumption', valFor\(d, d\.lpgL, month\), 'L'/);
 });

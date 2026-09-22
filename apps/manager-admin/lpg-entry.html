@@ -66,14 +66,21 @@
                 </div>
               </div>
 
+              <div class="form-group mb-2">
+                <label class="form-label" for="lpg-litres">LPG Consumption (litres)</label>
+                <input type="number" class="form-control" id="lpg-litres" min="0" step="0.01" required>
+                <p style="margin:6px 0 0;font-size:12px;color:var(--text-muted,#6b7280);">Governed emissions activity. Emissions are calculated by the backend using the active emission factor set.</p>
+              </div>
+
               <div class="grid-2 mb-2">
                 <div class="form-group">
-                  <label class="form-label">No. of Cylinders Used</label>
+                  <label class="form-label" for="lpg-cylinders">No. of Cylinders Used <span style="font-weight:400;color:var(--text-muted,#6b7280);">(optional, reference)</span></label>
                   <input type="number" class="form-control" id="lpg-cylinders" min="0">
                 </div>
                 <div class="form-group">
-                  <label class="form-label">LPG Consumed (Kg)</label>
+                  <label class="form-label" for="lpg-kg">LPG Weight (kg) <span style="font-weight:400;color:var(--text-muted,#6b7280);">(optional, reference)</span></label>
                   <input type="number" class="form-control" id="lpg-kg" min="0" step="0.01">
+                  <p style="margin:6px 0 0;font-size:12px;color:var(--text-muted,#6b7280);">Reference metadata only — does not affect emissions.</p>
                 </div>
               </div>
               <div class="form-group mb-2">
@@ -103,7 +110,7 @@
             
             <div class="d-flex justify-between mb-2 mt-3">
               <span class="text-muted">Consumed:</span>
-              <span id="prev-consumed">0.00 Kg</span>
+              <span id="prev-consumed">—</span>
             </div>
             <div class="d-flex justify-between mb-2">
               <span class="text-muted">Emission Factor:</span>
@@ -132,16 +139,16 @@
   <script src="app.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      const kgInput = document.getElementById('lpg-kg');
+      const litreInput = document.getElementById('lpg-litres');
       const pConsumed = document.getElementById('prev-consumed');
 
-      /* This page echoes the typed kg only.  The emission factor and the LPG
-         emission are owned exclusively by calculation-preview.js, which renders
-         the server's governed result - typing must never overwrite it with
-         hardcoded text. */
+      /* This page echoes the typed governed activity (litres) only.  The
+         emission factor and the LPG emission are owned exclusively by
+         calculation-preview.js, which renders the server's governed result -
+         typing must never overwrite it with hardcoded text. */
       function echoConsumed() {
-        const kg = parseFloat(kgInput.value);
-        pConsumed.textContent = Number.isFinite(kg) ? kg.toFixed(2) + ' kg' : '—';
+        const litres = parseFloat(litreInput.value);
+        pConsumed.textContent = Number.isFinite(litres) ? litres.toFixed(2) + ' L' : '—';
       }
 
       function onEdit() {
@@ -149,8 +156,9 @@
         window.KCosmosPreview?.markStale();
       }
 
-      kgInput.addEventListener('input', onEdit);
-      document.getElementById('lpg-cylinders').addEventListener('input', onEdit);
+      for (const id of ['lpg-litres', 'lpg-kg', 'lpg-cylinders']) {
+        document.getElementById(id).addEventListener('input', onEdit);
+      }
       echoConsumed();
 
       document.getElementById('reset-btn').addEventListener('click', () => {

@@ -8,7 +8,7 @@
       <header class="topbar"><div class="topbar-left"><div class="current-period"><span>K-COSMOS</span><span>|</span><span>Administration</span></div></div><div class="topbar-right"><span class="user-badge">Admin</span><button class="btn btn-outline" id="logout-btn">Logout</button></div></header>
       <div class="content-area">
         <div class="mb-3 d-flex justify-between align-center"><div><h1>Emission Factor Management</h1><p>Govern versioned institutional emission factors.</p></div><button class="btn btn-primary" id="btn-new-factor">Create Draft Factor Set</button></div>
-        <div class="card mb-3" style="border-left:4px solid var(--warning);"><p style="margin:0;color:var(--text-dark);font-size:14px;"><strong>LPG:</strong> Optional in a factor set until an institutionally sourced kgCO₂e/kg factor is configured and intentionally activated. Existing active sets are never changed.</p></div>
+        <div class="card mb-3" style="border-left:4px solid var(--warning);"><p style="margin:0;color:var(--text-dark);font-size:14px;"><strong>LPG:</strong> Governed on a litre basis (kgCO₂e/L) against <em>LPG consumption (litres)</em>. It stays optional in a factor set until a value is configured and intentionally activated. Existing active sets are never changed.</p></div>
         <div class="glass-card"><div class="table-responsive"><table class="table"><thead><tr><th>Version</th><th>Status</th><th>Effective From</th><th>Factors</th><th>Created</th><th>Activated</th><th>Action</th></tr></thead><tbody id="factor-sets-body"><tr><td colspan="7">Loading…</td></tr></tbody></table></div></div>
       </div>
     </main>

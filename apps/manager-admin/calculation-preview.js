@@ -72,7 +72,7 @@
     if (domain === 'lpg') {
       const item = results.get('lpg_emissions');
       document.getElementById('prev-factor').textContent = item?.factor_value != null
-        ? `${item.factor_value} ${item.factor_unit || 'kgCO2e/kg'} · ${item.factor_set_version || 'governed set'}`
+        ? `${item.factor_value} ${item.factor_unit || 'kgCO2e/L'} · ${item.factor_set_version || 'governed set'}`
         : 'Not configured';
       document.getElementById('prev-emission').textContent = display(item);
     }

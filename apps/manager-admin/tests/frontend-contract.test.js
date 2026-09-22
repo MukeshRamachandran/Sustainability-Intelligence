@@ -19,7 +19,7 @@ const loginContracts = {
 const managerContracts = {
   'transport-entry.html': ['transport', 'petrol', 'diesel-transport', 'active-vehicles-petrol', 'active-vehicles-diesel', 'ev-consumption', 'diesel-dg', 'active-dg'],
   'energy-entry.html': ['energy', 'grid-ht', 'grid-comm', 'grid-temp', 'ren-campus', 'ren-procured', 'ren-solar', 'grid-total', 'ren-total'],
-  'lpg-entry.html': ['lpg', 'lpg-cylinders', 'lpg-kg'],
+  'lpg-entry.html': ['lpg', 'lpg-litres', 'lpg-cylinders', 'lpg-kg'],
   'water-entry.html': ['water', 'water-twad', 'water-borewell', 'water-priv', 'water-waste', 'water-recycled', 'water-consumed']
 };
 const evidenceInputs = {
@@ -189,8 +189,18 @@ test('emission factor governance uses backend data and authoritative calculation
   // preview renderer rather than duplicated into the entry page.
   assert.match(calculations, /Methodology review required/);
   assert.match(factors, /code: 'LPG'/);
-  assert.match(factors, /unit: 'kg'/);
-  assert.doesNotMatch(`${read('lpg-entry.html')}\n${read('manager-submissions-api.js')}`, /lpg_consumption_litres|lpg-litres|Litres\/Kg/);
+  // LPG is governed on litres (0008_lpg_litre_governance).
+  assert.match(factors, /code: 'LPG'[^}]*unit: 'L'/);
+  assert.doesNotMatch(factors, /unit: 'kg'/);
+  const lpgPage = read('lpg-entry.html');
+  const submissions = read('manager-submissions-api.js');
+  // lpg_consumption_litres is the governed activity; kg is reference only.
+  assert.match(submissions, /'lpg-litres': 'lpg_consumption_litres'/);
+  assert.match(lpgPage, /id="lpg-litres"/);
+  assert.match(lpgPage, /LPG Consumption \(litres\)/);
+  assert.doesNotMatch(lpgPage, /LPG Consumed \(Kg\)/);
+  // The kg field must be present but clearly marked non-authoritative.
+  assert.match(lpgPage, /LPG Weight \(kg\)[\s\S]{0,200}optional, reference/);
 });
 
 test('calculation-preview.js is the only writer of governed emission preview nodes', () => {
