@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 from uuid import uuid4
 
 from sqlalchemy import Engine, func, select
@@ -32,12 +33,20 @@ def _domain_submissions(
     for domain, status in statuses.items():
         manager = _account(db, RoleCode.MANAGER, domain)
         initial_status = SubmissionStatus.DRAFT if domain == OperationalDomain.OUTREACH else status
+        # Waste needs its wet value so the database trigger derives dry/total;
+        # a payload missing them is correctly refused at prepare.
+        values = (
+            {"wet_waste_generated_kg": Decimal("40")}
+            if domain == OperationalDomain.WASTE
+            else None
+        )
         submission = _submission(
             db,
             period,
             manager,
             domain,
             initial_status,
+            values,
             approved_by=admin if initial_status == SubmissionStatus.APPROVED else None,
         )
         if domain == OperationalDomain.OUTREACH:
@@ -79,7 +88,7 @@ def test_readiness_auth_zero_approved_and_partial_prepare_block(
         empty = client.get(endpoint)
         assert empty.status_code == 200
         assert empty.json()["approved_domains"] == 0
-        assert empty.json()["required_domains"] == 5
+        assert empty.json()["required_domains"] == 6
         assert empty.json()["ready_to_publish"] is False
         assert set(empty.json()["domains"]) == {domain.value for domain in OperationalDomain}
         assert all(item["status"] == "missing" for item in empty.json()["domains"].values())
@@ -97,8 +106,8 @@ def test_readiness_auth_zero_approved_and_partial_prepare_block(
         assert blocked.status_code == 409
         error = blocked.json()["error"]
         assert error["code"] == "publication_not_ready"
-        assert error["approved_domains"] == 4
-        assert error["required_domains"] == 5
+        assert error["approved_domains"] == 5
+        assert error["required_domains"] == 6
         assert error["blockers"] == [
             {"domain": "lpg", "reason": "not_approved", "status": "under_review"}
         ]
@@ -106,7 +115,7 @@ def test_readiness_auth_zero_approved_and_partial_prepare_block(
             assert db.scalar(select(func.count()).select_from(PublicRelease)) == before
 
 
-def test_five_of_five_prepare_is_explicit_and_frozen_candidate_remains_publishable(
+def test_six_of_six_prepare_is_explicit_and_frozen_candidate_remains_publishable(
     postgres_engine: Engine,
 ) -> None:
     with Session(postgres_engine) as db:
@@ -128,7 +137,7 @@ def test_five_of_five_prepare_is_explicit_and_frozen_candidate_remains_publishab
         before_approval = client.get(
             f"/api/admin/reporting-periods/{period_id}/publication-readiness"
         ).json()
-        assert before_approval["approved_domains"] == 4
+        assert before_approval["approved_domains"] == 5
         assert before_approval["ready_to_publish"] is False
         assert client.post(
             f"/api/admin/submissions/{transport_id}/approve",
@@ -137,7 +146,7 @@ def test_five_of_five_prepare_is_explicit_and_frozen_candidate_remains_publishab
         readiness = client.get(
             f"/api/admin/reporting-periods/{period_id}/publication-readiness"
         ).json()
-        assert readiness["approved_domains"] == 5
+        assert readiness["approved_domains"] == 6
         assert readiness["ready_to_publish"] is True
         assert readiness["blockers"] == []
         with Session(postgres_engine) as db:
@@ -168,7 +177,7 @@ def test_five_of_five_prepare_is_explicit_and_frozen_candidate_remains_publishab
         changed = client.get(
             f"/api/admin/reporting-periods/{period_id}/publication-readiness"
         ).json()
-        assert changed["approved_domains"] == 4
+        assert changed["approved_domains"] == 5
         assert changed["domains"]["transport"]["status"] == "correction_requested"
         assert changed["domains"]["transport"]["revision_number"] == 2
         assert changed["ready_to_publish"] is False
@@ -223,7 +232,7 @@ def test_period_isolation_and_legacy_partial_candidate_cannot_publish(
         ).json()
         assert ready["ready_to_publish"] is True
         assert blocked["ready_to_publish"] is False
-        assert blocked["approved_domains"] == 4
+        assert blocked["approved_domains"] == 5
         assert blocked["domains"]["outreach"]["status"] == "submitted"
         response = client.post(
             f"/api/admin/releases/{legacy_id}/publish",

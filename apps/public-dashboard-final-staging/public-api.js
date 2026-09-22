@@ -86,7 +86,10 @@
         energy: payload?.energy || null,
         lpg: payload?.lpg || null,
         water: payload?.water || null,
-        outreach: payload?.outreach || null
+        outreach: payload?.outreach || null,
+        // Present from schema 1.2 onward; null on older published releases,
+        // which is reported as unavailable rather than fabricated.
+        waste: payload?.waste || null
       },
       raw: payload
     };
@@ -101,7 +104,7 @@
     } catch (error) {
       return {
         state: 'error', release: null, period: null, publicationStatus: {},
-        domains: { transport: null, energy: null, lpg: null, water: null, outreach: null },
+        domains: { transport: null, energy: null, lpg: null, water: null, outreach: null, waste: null },
         raw: null, url, error: error instanceof Error ? error.message : String(error)
       };
     }

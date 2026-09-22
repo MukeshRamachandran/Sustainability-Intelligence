@@ -115,6 +115,72 @@ test('staging helper proxies both public routes and nothing else', () => {
   assert.match(server, /PUBLIC_ROUTES/);
 });
 
+test('governed waste comes from the published release, never waste_master.csv', () => {
+  const loader = read('public-data-loader.js');
+  // Waste is a governed Manager domain now: the loader neither fetches the CSV
+  // nor keeps a parser for it. (Comments may still explain why it is gone.)
+  const code = loader.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+  assert.doesNotMatch(code, /waste_master\.csv/);
+  assert.doesNotMatch(code, /staticWaste/);
+  assert.match(loader, /wet_waste_generated_kg/);
+  assert.match(loader, /dry_waste_generated_kg/);
+  assert.match(loader, /total_waste_generated_kg/);
+  assert.match(loader, /publication\.domains\.waste/);
+  // Green cover remains legitimately static.
+  assert.match(loader, /green_master\.csv/);
+
+  const app = read('app.js');
+  // No browser-side authoritative waste totals: the published total is used
+  // as-is, and a missing month is not coerced to zero.
+  assert.doesNotMatch(app, /d\.wetWaste \|\| 0/);
+  assert.doesNotMatch(app, /d\.dryWaste \|\| 0/);
+  assert.match(app, /d\.totalWaste != null \? d\.totalWaste/);
+});
+
+test('waste adapter reads published metrics, categories and materials', async () => {
+  const api = adapterContext(async () => ({
+    ok: true,
+    json: async () => ({
+      release: { version: '2026-09-v1', published_at: '2026-09-22T10:00:00Z' },
+      schema_version: '1.2', period: { id: 'period', year: 2026, month: 9 },
+      waste: {
+        metrics: {
+          wet_waste_generated_kg: { value: 300, unit: 'kg' },
+          dry_waste_generated_kg: { value: 176, unit: 'kg' },
+          total_waste_generated_kg: { value: 476, unit: 'kg' }
+        },
+        categories: [{ code: 'PLASTIC', display_name: 'Plastic', quantity_kg: 50.5 }],
+        materials: [{
+          code: 'PET', display_name: 'PET', category_code: 'PLASTIC',
+          category_display_name: 'Plastic', quantity_kg: 50.5
+        }]
+      }
+    })
+  }));
+  const result = await api.load();
+  assert.equal(result.release.schemaVersion, '1.2');
+  assert.equal(api.metric(result.domains.waste, 'wet_waste_generated_kg').value, 300);
+  assert.equal(api.metric(result.domains.waste, 'dry_waste_generated_kg').value, 176);
+  assert.equal(api.metric(result.domains.waste, 'total_waste_generated_kg').value, 476);
+  assert.equal(result.domains.waste.categories[0].quantity_kg, 50.5);
+  assert.equal(result.domains.waste.materials[0].category_display_name, 'Plastic');
+});
+
+test('an unpublished waste period reports unavailable rather than zero', async () => {
+  const api = adapterContext(async () => ({
+    ok: true,
+    json: async () => ({
+      release: { version: 'v1', published_at: '2026-09-22T10:00:00Z' },
+      schema_version: '1.2', period: { id: 'p', year: 2026, month: 9 }, waste: null
+    })
+  }));
+  const result = await api.load();
+  assert.equal(result.domains.waste, null);
+  const metric = api.metric(result.domains.waste, 'total_waste_generated_kg');
+  assert.equal(metric.status, 'unavailable');
+  assert.equal(metric.value, null);
+});
+
 test('active display marks full GHG and unresolved methodology values unavailable', () => {
   const app = read('app.js');
   assert.match(app, /Complete GHG not published/);

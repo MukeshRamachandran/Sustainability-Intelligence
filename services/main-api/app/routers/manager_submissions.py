@@ -15,7 +15,9 @@ from app.schemas.submissions import (
     SubmissionCreate,
     SubmissionUpdate,
 )
+from app.schemas.waste import WasteCatalogResponse
 from app.security.dependencies import CsrfUser, DbSession, ManagerUser, enforce_manager_domain
+from app.services import waste as waste_service
 from app.services.audit import add_audit_log
 from app.services.emission_factors import freeze_calculations
 from app.services.evidence import commit_temporary_evidence
@@ -116,6 +118,17 @@ def list_metrics(domain: OperationalDomain, current: ManagerUser, db: DbSession)
     ]
 
 
+@router.get("/waste/catalog", response_model=WasteCatalogResponse)
+def waste_catalog(current: ManagerUser, db: DbSession) -> WasteCatalogResponse:
+    """Controlled waste categories and materials for the Manager dropdowns.
+
+    The catalog is never hardcoded in the browser: the page renders whatever
+    this returns, and only active entries are returned.
+    """
+    enforce_manager_domain(current, OperationalDomain.WASTE)
+    return waste_service.catalog(db)
+
+
 @router.get("/{domain}/submissions/current", response_model=GenericSubmissionResponse | None)
 def current_submission(
     domain: OperationalDomain,
@@ -197,7 +210,7 @@ def create_or_save_draft(
     if not created:
         _require_current_version(submission, payload.expected_row_version)
     require_manager_mutation(submission, period)
-    save_values(db, submission, payload.values, payload.remarks)
+    save_values(db, submission, payload.values, payload.remarks, payload.waste_items)
     add_audit_log(
         db,
         actor_user_id=current.user_id,
@@ -229,7 +242,7 @@ def update_draft(
         db, request.app.state.settings, request.app.state.institutional_clock
     )
     require_manager_mutation(submission, period)
-    save_values(db, submission, payload.values, payload.remarks)
+    save_values(db, submission, payload.values, payload.remarks, payload.waste_items)
     add_audit_log(
         db,
         actor_user_id=current.user_id,

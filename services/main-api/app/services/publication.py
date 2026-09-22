@@ -11,16 +11,20 @@ from sqlalchemy.orm import Session
 from app.models.enums import OperationalDomain, PublicationClass, SubmissionStatus
 from app.models.sustainability import MetricDefinition, ReportingPeriod, Submission, SubmissionValue
 from app.schemas.emission_factors import CalculationResponse
+from app.services import waste as waste_service
 from app.services.emission_factors import calculation_responses
 from app.services.outreach import aggregate_approved_outreach
 from app.services.publication_readiness import REQUIRED_PUBLICATION_DOMAINS
 
-RELEASE_SCHEMA_VERSION = "1.1"
+# 1.2 adds the governed waste payload (metrics, backend category totals and
+# material rows). 1.0 and 1.1 payloads stay readable and are never rewritten.
+RELEASE_SCHEMA_VERSION = "1.2"
 GENERIC_PUBLICATION_DOMAINS = (
     OperationalDomain.TRANSPORT,
     OperationalDomain.ENERGY,
     OperationalDomain.LPG,
     OperationalDomain.WATER,
+    OperationalDomain.WASTE,
 )
 
 
@@ -64,6 +68,75 @@ def _public_calculation(item: CalculationResponse) -> dict[str, object]:
     }
 
 
+def _waste_payload(db: Session, submission: Submission) -> dict[str, object]:
+    """Freeze the waste inventory. Category totals are summed here, in the
+    backend, so the browser is never the authoritative aggregator."""
+    item = waste_service.summary(db, submission)
+    return {
+        "categories": [
+            {
+                "code": category.code,
+                "display_name": category.display_name,
+                "quantity_kg": _json_number(category.quantity_kg),
+            }
+            for category in sorted(item.categories, key=lambda entry: entry.code)
+        ],
+        "materials": [
+            {
+                "code": material.material_code,
+                "display_name": material.material_display_name,
+                "category_code": material.category_code,
+                "category_display_name": material.category_display_name,
+                "quantity_kg": _json_number(material.quantity_kg),
+            }
+            for material in item.items
+        ],
+    }
+
+
+def waste_payload_blockers(payload: dict[str, object]) -> list[dict[str, str]]:
+    """Refuse to freeze a waste payload whose parts disagree.
+
+    sum(materials) must equal dry, and wet + dry must equal total. A mismatch
+    means the derived metrics and the item rows have diverged, so the release
+    is stopped rather than published with conflicting numbers.
+    """
+    waste = payload.get(OperationalDomain.WASTE.value)
+    if not isinstance(waste, dict):
+        return []
+    metrics = waste.get("metrics")
+    if not isinstance(metrics, dict):
+        return [{"domain": "waste", "status": "invalid", "reason": "waste_metrics_missing"}]
+
+    def metric(code: str) -> Decimal | None:
+        entry = metrics.get(code)
+        value = entry.get("value") if isinstance(entry, dict) else None
+        return None if value is None else Decimal(str(value))
+
+    wet = metric("wet_waste_generated_kg")
+    dry = metric("dry_waste_generated_kg")
+    total = metric("total_waste_generated_kg")
+    if wet is None or dry is None or total is None:
+        return [{"domain": "waste", "status": "invalid", "reason": "waste_metrics_incomplete"}]
+    materials = waste.get("materials")
+    material_sum = sum(
+        (Decimal(str(row.get("quantity_kg") or 0)) for row in materials if isinstance(row, dict)),
+        Decimal("0"),
+    ) if isinstance(materials, list) else Decimal("0")
+    blockers: list[dict[str, str]] = []
+    if material_sum != dry:
+        blockers.append({
+            "domain": "waste", "status": "inconsistent",
+            "reason": f"material_sum_{material_sum}_does_not_equal_dry_{dry}",
+        })
+    if wet + dry != total:
+        blockers.append({
+            "domain": "waste", "status": "inconsistent",
+            "reason": f"wet_plus_dry_does_not_equal_total_{total}",
+        })
+    return blockers
+
+
 def _generic_domain_payload(db: Session, submission: Submission) -> dict[str, object]:
     rows = db.execute(
         select(MetricDefinition, SubmissionValue)
@@ -89,6 +162,8 @@ def _generic_domain_payload(db: Session, submission: Submission) -> dict[str, ob
     }
     calculations = [_public_calculation(item) for item in calculation_responses(db, submission)]
     result: dict[str, object] = {"metrics": metrics, "calculations": calculations}
+    if submission.domain == OperationalDomain.WASTE:
+        result.update(_waste_payload(db, submission))
     if submission.domain == OperationalDomain.LPG:
         lpg = next(
             (item for item in calculations if item["calculation_code"] == "lpg_emissions"),

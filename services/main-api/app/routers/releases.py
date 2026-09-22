@@ -12,7 +12,12 @@ from app.schemas.outreach import ReleasePrepareRequest, ReleaseResponse
 from app.schemas.publication import PublicationReadinessResponse
 from app.security.dependencies import AdminUser, CsrfUser, DbSession, require_admin
 from app.services.audit import add_audit_log
-from app.services.publication import build_release_payload, empty_public_dashboard, payload_checksum
+from app.services.publication import (
+    build_release_payload,
+    empty_public_dashboard,
+    payload_checksum,
+    waste_payload_blockers,
+)
 from app.services.publication_readiness import (
     REQUIRED_PUBLICATION_DOMAINS,
     evaluate_publication_readiness,
@@ -93,7 +98,7 @@ def prepare_release(
     if db.scalar(select(PublicRelease.id).where(PublicRelease.version == body.version)):
         raise HTTPException(status_code=409, detail="Release version already exists.")
     payload_data = build_release_payload(db, period)
-    frozen_blockers = frozen_payload_blockers(payload_data)
+    frozen_blockers = frozen_payload_blockers(payload_data) + waste_payload_blockers(payload_data)
     if frozen_blockers:
         raise HTTPException(
             status_code=409,
@@ -159,13 +164,15 @@ def publish_release(release_id: UUID, request: Request, current: CsrfUser, db: D
     payload = db.get(PublicReleasePayload, release.id)
     if payload is None or payload_checksum(payload.payload) != release.checksum_sha256:
         raise HTTPException(status_code=409, detail="Release payload checksum validation failed.")
-    frozen_blockers = frozen_payload_blockers(payload.payload)
+    # Re-checked at publish so a candidate prepared before waste became
+    # required cannot be published as if it were a complete six-domain release.
+    frozen_blockers = frozen_payload_blockers(payload.payload) + waste_payload_blockers(payload.payload)
     if frozen_blockers:
         raise HTTPException(
             status_code=409,
             detail={
                 "code": "publication_not_ready",
-                "message": "This frozen release candidate does not contain five approved domains.",
+                "message": "This frozen release candidate does not contain all required approved domains.",
                 "approved_domains": len(REQUIRED_PUBLICATION_DOMAINS) - len(frozen_blockers),
                 "required_domains": len(REQUIRED_PUBLICATION_DOMAINS),
                 "blockers": frozen_blockers,

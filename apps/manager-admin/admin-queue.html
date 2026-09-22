@@ -9,7 +9,7 @@
       <div class="content-area">
         <div class="mb-3"><h1>Admin Review Queue</h1><p>Review manager submissions without modifying manager-provided values.</p></div>
         <div class="glass-card mb-3"><div class="d-flex justify-between align-center"><h3>Submissions awaiting review</h3><button class="btn btn-outline" id="refresh-queue">Refresh</button></div><div class="form-group"><label class="form-label" for="queue-period">Reporting period</label><select id="queue-period" class="form-control"></select></div><div class="table-responsive"><table class="table"><thead><tr><th>Domain</th><th>Submission</th><th>Period</th><th>Manager</th><th>Submitted</th><th>Status</th><th>Action</th></tr></thead><tbody id="queue-body"><tr><td colspan="7">Loading…</td></tr></tbody></table></div></div>
-        <div class="glass-card"><h3>Publication</h3><p class="text-muted">Approval does not publish. Prepare an immutable candidate, review it, then publish explicitly.</p><div class="grid-2"><div class="form-group"><label class="form-label" for="release-period">Approved reporting period</label><select id="release-period" class="form-control"></select></div><div class="form-group"><label class="form-label" for="release-version">Release version</label><input id="release-version" class="form-control" placeholder="sustainability-2026-09-v1"></div></div><div class="card mb-2" id="publication-readiness"><div class="d-flex justify-between align-center"><strong id="readiness-period">Publication readiness</strong><span class="badge badge-draft" id="readiness-state">Loading</span></div><p id="readiness-count" style="margin:8px 0;">— / 5 Approved</p><div class="table-responsive"><table class="table"><thead><tr><th>Domain</th><th>Status</th><th>Revision</th></tr></thead><tbody><tr><td>Transport</td><td id="readiness-transport">—</td><td id="readiness-transport-revision">—</td></tr><tr><td>Energy</td><td id="readiness-energy">—</td><td id="readiness-energy-revision">—</td></tr><tr><td>LPG</td><td id="readiness-lpg">—</td><td id="readiness-lpg-revision">—</td></tr><tr><td>Water</td><td id="readiness-water">—</td><td id="readiness-water-revision">—</td></tr><tr><td>Outreach</td><td id="readiness-outreach">—</td><td id="readiness-outreach-revision">—</td></tr></tbody></table></div><p class="text-muted" id="readiness-blockers" style="margin-bottom:0;">Checking approval status…</p></div><div class="d-flex gap-2"><button class="btn btn-primary" id="prepare-release" disabled>Prepare release</button><button class="btn btn-accent" id="open-release" disabled>Open release preview</button></div><pre id="release-preview" style="white-space:pre-wrap;max-height:360px;overflow:auto;margin-top:16px;"></pre></div>
+        <div class="glass-card"><h3>Publication</h3><p class="text-muted">Approval does not publish. Prepare an immutable candidate, review it, then publish explicitly.</p><div class="grid-2"><div class="form-group"><label class="form-label" for="release-period">Approved reporting period</label><select id="release-period" class="form-control"></select></div><div class="form-group"><label class="form-label" for="release-version">Release version</label><input id="release-version" class="form-control" placeholder="sustainability-2026-09-v1"></div></div><div class="card mb-2" id="publication-readiness"><div class="d-flex justify-between align-center"><strong id="readiness-period">Publication readiness</strong><span class="badge badge-draft" id="readiness-state">Loading</span></div><p id="readiness-count" style="margin:8px 0;">— / 6 Approved</p><div class="table-responsive"><table class="table"><thead><tr><th>Domain</th><th>Status</th><th>Revision</th></tr></thead><tbody><tr><td>Transport</td><td id="readiness-transport">—</td><td id="readiness-transport-revision">—</td></tr><tr><td>Energy</td><td id="readiness-energy">—</td><td id="readiness-energy-revision">—</td></tr><tr><td>LPG</td><td id="readiness-lpg">—</td><td id="readiness-lpg-revision">—</td></tr><tr><td>Water</td><td id="readiness-water">—</td><td id="readiness-water-revision">—</td></tr><tr><td>Outreach</td><td id="readiness-outreach">—</td><td id="readiness-outreach-revision">—</td></tr><tr><td>Waste</td><td id="readiness-waste">—</td><td id="readiness-waste-revision">—</td></tr></tbody></table></div><p class="text-muted" id="readiness-blockers" style="margin-bottom:0;">Checking approval status…</p></div><div class="d-flex gap-2"><button class="btn btn-primary" id="prepare-release" disabled>Prepare release</button><button class="btn btn-accent" id="open-release" disabled>Open release preview</button></div><pre id="release-preview" style="white-space:pre-wrap;max-height:360px;overflow:auto;margin-top:16px;"></pre></div>
       </div>
     </main>
   </div>
@@ -17,7 +17,7 @@
   <script src="auth-client.js"></script><script src="role-auth.js"></script><script src="outreach-api.js"></script><script src="evidence-api.js"></script><script src="app.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', async () => {
-      const domains = ['transport', 'energy', 'lpg', 'water', 'outreach'];
+      const domains = ['transport', 'energy', 'lpg', 'water', 'outreach', 'waste'];
       const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[character]));
       let currentSubmission = null;
       let preparedRelease = null;
@@ -39,6 +39,28 @@
         if (!items.length) return '';
         const rows = items.map(item => `<tr><td>${escapeHtml(item.calculation_code.replaceAll('_',' '))}</td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.result_value ?? 'Unavailable')} ${escapeHtml(item.result_unit || '')}</td><td>${escapeHtml(item.factor_set_version || '—')}</td><td>${escapeHtml(item.factor_value ?? '—')} ${escapeHtml(item.factor_unit || '')}</td><td>${escapeHtml(item.reason ? item.reason.replaceAll('_',' ') : '—')}</td></tr>`).join('');
         return `<div class="card mb-3"><h3>Authoritative calculations</h3><div class="table-responsive"><table class="table"><thead><tr><th>Calculation</th><th>Status</th><th>Result</th><th>Factor set</th><th>Factor used</th><th>Reason</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+      }
+
+      function wasteHtml(waste) {
+        if (!waste) return '';
+        const kg = value => value === null || value === undefined ? 'Not submitted' : `${Number(value).toFixed(2)} kg`;
+        const summary = `<div class="grid-3 mb-3"><div><span class="text-muted">Wet Waste Generated</span><br><strong>${escapeHtml(kg(waste.wet_waste_generated_kg))}</strong></div><div><span class="text-muted">Dry Waste Generated</span><br><strong>${escapeHtml(kg(waste.dry_waste_generated_kg))}</strong></div><div><span class="text-muted">Total Waste Generated</span><br><strong>${escapeHtml(kg(waste.total_waste_generated_kg))}</strong></div></div>`;
+        const items = waste.items || [];
+        if (!items.length) {
+          return `<div class="card mb-3"><h3>Waste inventory</h3>${summary}<p class="text-muted">No dry waste materials recorded for this month.</p></div>`;
+        }
+        // Grouped by the category the backend derived from each material.
+        const grouped = new Map();
+        for (const item of items) {
+          if (!grouped.has(item.category_display_name)) grouped.set(item.category_display_name, []);
+          grouped.get(item.category_display_name).push(item);
+        }
+        const totals = new Map((waste.categories || []).map(c => [c.display_name, c.quantity_kg]));
+        const rows = [...grouped.entries()].map(([category, materials]) =>
+          `<tr><td colspan="2" style="background:#f4f7f4;"><strong>${escapeHtml(category)}</strong></td><td style="background:#f4f7f4;text-align:right;"><strong>${escapeHtml(kg(totals.get(category)))}</strong></td></tr>`
+          + materials.map(item => `<tr><td></td><td>${escapeHtml(item.material_display_name)}</td><td style="text-align:right;">${escapeHtml(kg(item.quantity_kg))}</td></tr>`).join('')
+        ).join('');
+        return `<div class="card mb-3"><h3>Waste inventory</h3>${summary}<div class="table-responsive"><table class="table"><thead><tr><th style="width:24px;"></th><th>Category / Material</th><th style="text-align:right;">Quantity</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
       }
 
       function evidenceHtml(items) {
@@ -73,7 +95,7 @@
           const detail = Array.isArray(currentSubmission.programmes)
             ? currentSubmission.programmes.map(programmeHtml).join('')
             : metricsHtml(currentSubmission.values || []);
-          document.getElementById('modal-data-container').innerHTML = `<p><strong>Domain:</strong> ${escapeHtml(currentSubmission.domain)} &nbsp; <strong>Period:</strong> ${escapeHtml(currentSubmission.reporting_period_label)} &nbsp; <strong>Revision:</strong> ${escapeHtml(currentSubmission.revision_number)} &nbsp; <strong>Status:</strong> ${escapeHtml(currentSubmission.status)}</p>${detail}${calculationsHtml(currentSubmission.calculations || [])}`;
+          document.getElementById('modal-data-container').innerHTML = `<p><strong>Domain:</strong> ${escapeHtml(currentSubmission.domain)} &nbsp; <strong>Period:</strong> ${escapeHtml(currentSubmission.reporting_period_label)} &nbsp; <strong>Revision:</strong> ${escapeHtml(currentSubmission.revision_number)} &nbsp; <strong>Status:</strong> ${escapeHtml(currentSubmission.status)}</p>${detail}${wasteHtml(currentSubmission.waste)}${calculationsHtml(currentSubmission.calculations || [])}`;
           document.getElementById('modal-evidence-container').innerHTML = evidenceHtml(evidence);
           document.getElementById('admin-comment').value = '';
           modal.classList.add('active');
@@ -126,7 +148,7 @@
             document.getElementById(`readiness-${domain}-revision`).textContent = item?.revision_number ? `Revision ${item.revision_number}` : '—';
           });
           document.getElementById('readiness-blockers').textContent = currentReadiness.ready_to_publish
-            ? 'All five required domains are approved. Preparation is available.'
+            ? `All ${currentReadiness.required_domains} required domains are approved. Preparation is available.`
             : `Blockers: ${currentReadiness.blockers.map(item => `${item.domain} — ${item.status.replaceAll('_', ' ')}`).join('; ')}`;
           prepareButton.disabled = !currentReadiness.ready_to_publish;
         } catch (error) {

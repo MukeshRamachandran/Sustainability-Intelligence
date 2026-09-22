@@ -203,6 +203,37 @@ test('emission factor governance uses backend data and authoritative calculation
   assert.match(lpgPage, /LPG Weight \(kg\)[\s\S]{0,200}optional, reference/);
 });
 
+test('waste manager page is governed, catalog-driven and backend-authoritative', () => {
+  const page = read('waste-entry.html');
+  const inventory = read('waste-inventory.js');
+  const submissions = read('manager-submissions-api.js');
+
+  // Same portal shell and evidence component as the other domains.
+  assert.match(page, /data-auth-role="manager"/);
+  assert.match(page, /data-auth-domain="waste"/);
+  assert.match(page, /data-login-page="waste-login.html"/);
+  assert.ok(hasId(page, 'wet-waste'));
+  assert.ok(hasId(page, 'evidence-waste'));
+  assert.match(page, /data-evidence-input/);
+  assert.match(page, /src="evidence-manager.js"/);
+
+  // Only wet waste is manager-entered; derived totals are never sent.
+  assert.match(submissions, /'wet-waste': 'wet_waste_generated_kg'/);
+  assert.doesNotMatch(submissions, /'dry_waste_generated_kg'|'total_waste_generated_kg'/);
+  assert.match(submissions, /body\.waste_items = window\.KCosmosWasteInventory\.items\(\)/);
+
+  // The catalog comes from the backend, never hardcoded in the browser.
+  assert.match(inventory, /\/api\/manager\/waste\/catalog/);
+  assert.doesNotMatch(inventory, /PAPER_CARDBOARD|COLOUR_PAPER|MIXED_PLASTICS|STAINLESS_STEEL/);
+  // Cascading material list filtered by the selected category.
+  assert.match(inventory, /item\.category_code === categoryCode/);
+  // Duplicates are refused with a clear message, not silently added.
+  assert.match(inventory, /has already been added\. Edit the existing quantity instead/);
+  // Client arithmetic is never stored: the server's saved items replace the buffer.
+  assert.match(inventory, /kcosmos:submission-loaded/);
+  assert.match(inventory, /applyServerItems/);
+});
+
 test('calculation-preview.js is the only writer of governed emission preview nodes', () => {
   const calculations = read('calculation-preview.js');
   // The renderer labels every figure with the backend's own result unit and

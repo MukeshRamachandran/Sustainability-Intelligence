@@ -36,6 +36,9 @@ PUBLIC_METRICS = {
     "renewable_total_kwh",
     "water_consumed_kl",
     "water_recycled_kl",
+    "wet_waste_generated_kg",
+    "dry_waste_generated_kg",
+    "total_waste_generated_kg",
 }
 
 
@@ -62,7 +65,7 @@ def test_roles_domains_and_metric_publication_are_seeded(postgres_engine: Engine
                 text("select unnest(enum_range(null::sustainability.operational_domain))::text")
             ).scalars()
         )
-        assert domains == {"transport", "energy", "lpg", "water", "outreach"}
+        assert domains == {"transport", "energy", "lpg", "water", "outreach", "waste"}
         metrics = (
             connection.execute(
                 text("select code,publication_class::text,manager_editable from sustainability.metric_definitions")
@@ -70,14 +73,19 @@ def test_roles_domains_and_metric_publication_are_seeded(postgres_engine: Engine
             .mappings()
             .all()
         )
-        assert len(metrics) == 46
+        # 46 original + 3 waste metrics (0009_waste_domain).
+        assert len(metrics) == 49
         assert {row["code"] for row in metrics if row["publication_class"] == "public_aggregate"} == PUBLIC_METRICS
         internal = {row["code"] for row in metrics if row["publication_class"] == "internal_verification"}
         assert all(code.startswith(("inlet_", "outlet_", "stp_")) for code in internal)
+        # Derived metrics are written by database trigger only; the
+        # submission_value_guard rejects any direct application write.
         assert {row["code"] for row in metrics if not row["manager_editable"]} == {
             "grid_total_kwh",
             "renewable_total_kwh",
             "water_consumed_kl",
+            "dry_waste_generated_kg",
+            "total_waste_generated_kg",
         }
         # 0008_lpg_litre_governance places the K-COSMOS baseline LPG factor into
         # the migration-seeded DRAFT set, on litres, exactly once.

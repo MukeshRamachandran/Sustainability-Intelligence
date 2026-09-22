@@ -123,7 +123,11 @@ function makeKpis() {
   /* Shared with the Waste/Water KPI blocks further down - computed once
      here so the Overview strip and those pages can't drift apart. */
   const wasteHasData = d.totalWaste != null || d.wetWaste != null || d.dryWaste != null;
-  const wasteTot = wasteHasData ? (d.totalWaste || (n(d.wetWaste) + n(d.dryWaste))) / 1000 : null;
+  /* total_waste_generated_kg is published by the backend, so it is used as-is
+     when present - including a legitimate zero. */
+  const wasteTot = wasteHasData
+    ? (d.totalWaste != null ? d.totalWaste : (n(d.wetWaste) + n(d.dryWaste))) / 1000
+    : null;
   // Diverted = the itemised dry-waste stream - see the Waste block below for why.
   const wasteDiverted = d.dryWaste == null ? null : d.dryWaste / 1000;
   const waterMonths = monthsWithData(d.waterKL);
@@ -1041,9 +1045,11 @@ function drawCharts() {
   mk('s2VsRE', { type: 'doughnut', data: { labels: ['Electricity CO₂ emitted', 'RE CO₂ avoided'], datasets: [{ data: [sum(sl(d.elecEm)), d.avoided], backgroundColor: [colors.cyan, colors.emerald], borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '64%', plugins: { legend: { position: 'bottom' } } } });
 
 
-  const wWet = d.wetWaste || 0;
-  const wDry = d.dryWaste || 0;
-  mk('wastePieChartCanvas', { type: 'pie', data: { labels: ['Wet waste', 'Dry waste'], datasets: [{ data: [wWet / 1000, wDry / 1000], backgroundColor: [colors.blue, colors.gold], borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: function (context) { return ' ' + context.label + ': ' + context.raw.toFixed(1) + ' tons'; } } } } } });
+  /* Unpublished waste stays absent rather than being coerced to zero, so the
+     chart cannot imply a measured 0 kg for a month that was never published. */
+  const wWet = d.wetWaste == null ? null : d.wetWaste / 1000;
+  const wDry = d.dryWaste == null ? null : d.dryWaste / 1000;
+  mk('wastePieChartCanvas', { type: 'pie', data: { labels: ['Wet waste', 'Dry waste'], datasets: [{ data: [wWet, wDry], backgroundColor: [colors.blue, colors.gold], borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: function (context) { return ' ' + context.label + ': ' + (context.raw == null ? 'Not published' : context.raw.toFixed(1) + ' tons'); } } } } } });
 
   // Link to the main top bar year selection
   const tmD = d || { wasteBreakdown: [] };

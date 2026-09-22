@@ -5,7 +5,8 @@
         energy: "energy-entry.html",
         lpg: "lpg-entry.html",
         water: "water-entry.html",
-        outreach: "community-outreach-entry.html"
+        outreach: "community-outreach-entry.html",
+        waste: "waste-entry.html"
     };
 
     const loginPages = {
@@ -14,7 +15,8 @@
         energy: "energy-login.html",
         lpg: "lpg-login.html",
         water: "water-login.html",
-        outreach: "outreach-login.html"
+        outreach: "outreach-login.html",
+        waste: "waste-login.html"
     };
 
     let currentUser = null;

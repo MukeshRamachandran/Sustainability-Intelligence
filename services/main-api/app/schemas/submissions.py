@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.models.enums import OperationalDomain, ReviewActionType, SubmissionStatus
 from app.schemas.emission_factors import CalculationResponse
+from app.schemas.waste import WasteItemWrite, WasteSummaryResponse
 
 
 class MetricValueWrite(BaseModel):
@@ -29,12 +30,19 @@ class SubmissionWrite(BaseModel):
     reporting_period_id: UUID | None = None
     remarks: str | None = Field(default=None, max_length=4000)
     values: list[MetricValueWrite]
+    # Waste only. An empty list is a legitimate "no dry waste this month"; the
+    # backend then derives dry_waste_generated_kg = 0.
+    waste_items: list[WasteItemWrite] | None = None
 
     @model_validator(mode="after")
     def unique_metrics(self) -> "SubmissionWrite":
         codes = [item.metric_code for item in self.values]
         if len(codes) != len(set(codes)):
             raise ValueError("metric_code values must be unique")
+        if self.waste_items is not None:
+            materials = [item.material_code for item in self.waste_items]
+            if len(materials) != len(set(materials)):
+                raise ValueError("waste material_code values must be unique")
         return self
 
 
@@ -92,3 +100,6 @@ class GenericSubmissionResponse(BaseModel):
     values: list[MetricValueResponse]
     review_actions: list[ReviewActionResponse] = []
     calculations: list[CalculationResponse] = []
+    # Populated for waste submissions only; the authoritative dry and total
+    # quantities always come from here, never from client arithmetic.
+    waste: WasteSummaryResponse | None = None

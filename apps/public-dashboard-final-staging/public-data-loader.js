@@ -59,7 +59,8 @@
       htKwh: empty(), commKwh: empty(), tempKwh: empty(), elecKwh: empty(),
       htEm: empty(), commEm: empty(), tempEm: empty(), elecEm: empty(),
       reKwh: empty(), reOnCampusKwh: empty(), reProcuredKwh: empty(), avoidEm: empty(),
-      solarWaterHeaterKwh: null, wetWaste: null, dryWaste: null, totalWaste: null, wasteBreakdown: [],
+      solarWaterHeaterKwh: null, wetWaste: null, dryWaste: null, totalWaste: null,
+      wasteBreakdown: [], wasteCategories: [], wastePublished: false,
       waterKL: empty(), waterTWAD: empty(), waterBorewell: empty(), waterProcured: empty(),
       waterRecycledKL: null, waterTWADAnnual: null, waterBorewellAnnual: null, waterTotalAnnual: null,
       grossSelected: empty(), grossFull: empty(), petrolVehicleCount: null, dieselVehicleCount: null,
@@ -114,6 +115,25 @@
     item.reEnergy = item.reKwh[month];
     setMetric(item.lpgL, month, lpg, 'lpg_consumption_litres');
     setCalculation(item.lpgEm, month, lpg, 'lpg_emissions');
+    /* Governed waste comes from the published release only. The static
+       waste_master.csv is historical reference and must never overwrite a
+       published month. */
+    const waste = publication.domains.waste;
+    if (waste) {
+      item.wetWaste = window.KCOSMOSPublicAPI.metric(waste, 'wet_waste_generated_kg').value;
+      item.dryWaste = window.KCOSMOSPublicAPI.metric(waste, 'dry_waste_generated_kg').value;
+      item.totalWaste = window.KCOSMOSPublicAPI.metric(waste, 'total_waste_generated_kg').value;
+      item.wasteBreakdown = (waste.materials || []).map(row => ({
+        name: row.display_name,
+        value: window.KCOSMOSPublicAPI.numberOrNull(row.quantity_kg)
+      })).filter(row => row.value !== null);
+      item.wasteCategories = (waste.categories || []).map(row => ({
+        code: row.code,
+        name: row.display_name,
+        value: window.KCOSMOSPublicAPI.numberOrNull(row.quantity_kg)
+      })).filter(row => row.value !== null);
+      item.wastePublished = true;
+    }
     setMetric(item.waterKL, month, water, 'water_consumed_kl');
     item.waterRecycledKL = window.KCOSMOSPublicAPI.metric(water, 'water_recycled_kl').value;
     item.totalGHG = window.KCOSMOSPublicAPI.indicator(publication.raw, 'total_ghg_tco2e').value;
@@ -121,27 +141,11 @@
     item.reShare = window.KCOSMOSPublicAPI.indicator(publication.raw, 'renewable_share_percent').value;
   }
 
-  function staticWaste(text, data) {
-    const rows = tokenizeCSV(text);
-    const years = rows.find(row => String(row[0]).trim().toLowerCase() === 'year');
-    if (!years) return;
-    for (let column = 1; column < years.length; column++) {
-      const year = String(years[column]).trim();
-      if (!year) continue;
-      const item = ensureYear(data, year);
-      rows.forEach(row => {
-        const key = String(row[0]).trim().toLowerCase();
-        const value = num(row[column]);
-        if (value === null) return;
-        if (key.includes('wet waste')) item.wetWaste = (item.wetWaste || 0) + value;
-        else if (key.includes('dry waste')) item.dryWaste = (item.dryWaste || 0) + value;
-        else if (key.includes('total waste approximate')) item.totalWaste = (item.totalWaste || 0) + value;
-        else if (!['', 'total', 'item', 'year', 'waste inventory'].includes(key)) {
-          item.wasteBreakdown.push({ name: String(row[0]).trim(), value });
-        }
-      });
-    }
-  }
+  /* Waste became a governed Manager domain (0009_waste_domain). Its values now
+     come only from the published release, like the other five domains, so
+     data/waste_master.csv is no longer read here. The file remains on disk as
+     pre-governance historical reference; an unpublished month reports
+     "not published" rather than falling back to it or showing 0 kg. */
 
   function staticGreen(text) {
     const green = {
@@ -190,9 +194,9 @@
   }
 
   async function loadDashboardData() {
-    const [publication, history, populationText, metadataText, wasteText, greenText] = await Promise.all([
+    const [publication, history, populationText, metadataText, greenText] = await Promise.all([
       window.KCOSMOSPublicAPI.load(), window.KCOSMOSPublicAPI.loadHistory(), optionalText('data/population_master.csv'),
-      optionalText('data/dashboard_metadata.csv'), optionalText('data/waste_master.csv'), optionalText('data/green_master.csv')
+      optionalText('data/dashboard_metadata.csv'), optionalText('data/green_master.csv')
     ]);
     const data = {};
     parseCSV(metadataText).forEach(row => {
@@ -201,7 +205,6 @@
       item.label = row.label || item.label;
     });
     parseCSV(populationText).forEach(row => { if (row.year) ensureYear(data, row.year).population = num(row.population); });
-    staticWaste(wasteText, data);
 
     const fallbackYear = publication.period?.year || new Date().getFullYear();
     const item = ensureYear(data, fallbackYear);

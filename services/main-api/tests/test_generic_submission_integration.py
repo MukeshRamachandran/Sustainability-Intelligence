@@ -20,6 +20,7 @@ GENERIC_DOMAINS = [
     OperationalDomain.ENERGY,
     OperationalDomain.LPG,
     OperationalDomain.WATER,
+    OperationalDomain.WASTE,
 ]
 
 

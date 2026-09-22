@@ -37,6 +37,7 @@ DEVELOPMENT_ACCOUNTS = (
     AccountSpec("demo.lpg", "Development LPG Manager", RoleCode.MANAGER, OperationalDomain.LPG),
     AccountSpec("demo.water", "Development Water Manager", RoleCode.MANAGER, OperationalDomain.WATER),
     AccountSpec("demo.outreach", "Development Outreach Manager", RoleCode.MANAGER, OperationalDomain.OUTREACH),
+    AccountSpec("demo.waste", "Development Waste Manager", RoleCode.MANAGER, OperationalDomain.WASTE),
 )
 
 

@@ -23,6 +23,8 @@ from app.schemas.submissions import (
     MetricValueWrite,
     ReviewActionResponse,
 )
+from app.schemas.waste import WasteItemWrite
+from app.services import waste as waste_service
 from app.services.emission_factors import calculation_responses
 
 GENERIC_DOMAINS = {
@@ -30,6 +32,7 @@ GENERIC_DOMAINS = {
     OperationalDomain.ENERGY,
     OperationalDomain.LPG,
     OperationalDomain.WATER,
+    OperationalDomain.WASTE,
 }
 EDITABLE_STATUSES = {SubmissionStatus.DRAFT, SubmissionStatus.CORRECTION_REQUESTED}
 
@@ -162,6 +165,11 @@ def serialize_submission(
             for item in actions
         ],
         calculations=calculation_responses(db, submission),
+        waste=(
+            waste_service.summary(db, submission)
+            if submission.domain is OperationalDomain.WASTE
+            else None
+        ),
     )
 
 
@@ -203,10 +211,20 @@ def save_values(
     submission: Submission,
     values: list[MetricValueWrite],
     remarks: str | None,
+    waste_items: list[WasteItemWrite] | None = None,
 ) -> None:
+    """Save metric values, remarks and (for waste) the dry-material inventory.
+
+    Everything happens in the caller's single transaction, so a waste save can
+    never persist the wet value while the item rows fail, or the reverse.
+    """
     if submission.status not in EDITABLE_STATUSES:
         raise HTTPException(
             status_code=409, detail="Submitted, under-review, or approved submissions cannot be edited."
+        )
+    if waste_items is not None and submission.domain is not OperationalDomain.WASTE:
+        raise HTTPException(
+            status_code=422, detail="waste_items is only valid for a waste submission."
         )
     validated = _validated_values(db, submission.domain, values)
     editable_codes = db.scalars(
@@ -239,6 +257,11 @@ def save_values(
         db.flush()
     except IntegrityError as exc:
         raise HTTPException(status_code=422, detail="One or more metric values are invalid.") from exc
+    if submission.domain is OperationalDomain.WASTE and waste_items is not None:
+        # Items are replaced inside this same transaction, so the wet value,
+        # remarks and inventory move together or not at all. The database
+        # trigger refreshes dry/total from the resulting rows.
+        waste_service.replace_items(db, submission, waste_items)
 
 
 def validate_complete(db: Session, submission: Submission) -> None:
@@ -268,6 +291,9 @@ def validate_complete(db: Session, submission: Submission) -> None:
 def submit(db: Session, submission: Submission, actor_user_id: UUID) -> None:
     if submission.status not in EDITABLE_STATUSES:
         raise HTTPException(status_code=409, detail="Submission is not editable.")
+    # Waste consistency runs first so a stale derived total is corrected before
+    # the required-metric check reads it.
+    waste_service.validate_waste_complete(db, submission)
     validate_complete(db, submission)
     previous = submission.status
     if previous == SubmissionStatus.CORRECTION_REQUESTED:

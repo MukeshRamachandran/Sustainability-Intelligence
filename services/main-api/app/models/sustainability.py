@@ -292,6 +292,63 @@ class OutreachProgramme(Base):
     )
 
 
+class WasteCategory(Base):
+    __tablename__ = "waste_categories"
+    __table_args__ = ({"schema": "sustainability"},)
+
+    code: Mapped[str] = mapped_column(String(60), primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    sort_order: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class WasteMaterial(Base):
+    __tablename__ = "waste_materials"
+    __table_args__ = (
+        Index("ix_waste_materials_category", "category_code"),
+        {"schema": "sustainability"},
+    )
+
+    code: Mapped[str] = mapped_column(String(60), primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    category_code: Mapped[str] = mapped_column(
+        ForeignKey("sustainability.waste_categories.code", ondelete="RESTRICT"), nullable=False
+    )
+    sort_order: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class WasteSubmissionItem(Base):
+    """One dry-waste material row on a Waste submission.
+
+    Category is never stored here: it is derived from the material's catalog
+    entry, so a row cannot claim material Iron under category Plastic.
+    """
+
+    __tablename__ = "waste_submission_items"
+    __table_args__ = (
+        UniqueConstraint("submission_id", "material_code", name="uq_waste_item_submission_material"),
+        CheckConstraint("quantity_kg > 0", name="waste_item_quantity_positive"),
+        Index("ix_waste_items_submission", "submission_id"),
+        {"schema": "sustainability"},
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    submission_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("sustainability.submissions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    material_code: Mapped[str] = mapped_column(
+        ForeignKey("sustainability.waste_materials.code", ondelete="RESTRICT"), nullable=False
+    )
+    quantity_kg: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class EmissionFactorSet(Base):
     __tablename__ = "emission_factor_sets"
     __table_args__ = ({"schema": "sustainability"},)

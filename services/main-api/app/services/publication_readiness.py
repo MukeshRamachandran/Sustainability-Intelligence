@@ -21,6 +21,7 @@ REQUIRED_PUBLICATION_DOMAINS = (
     OperationalDomain.LPG,
     OperationalDomain.WATER,
     OperationalDomain.OUTREACH,
+    OperationalDomain.WASTE,
 )
 
 

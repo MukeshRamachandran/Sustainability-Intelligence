@@ -14,6 +14,7 @@ class OperationalDomain(StrEnum):
     LPG = "lpg"
     WATER = "water"
     OUTREACH = "outreach"
+    WASTE = "waste"
 
 
 class AccountingClassification(StrEnum):

@@ -69,6 +69,17 @@
       document.getElementById('prev-scope2').textContent = display(results.get('grid_electricity_emissions'));
       document.getElementById('prev-avoided').textContent = 'Methodology review required';
     }
+    if (domain === 'waste') {
+      /* Waste has no emission factor. These are the backend-calculated
+         quantities read straight from the saved submission. */
+      const waste = submission?.waste;
+      const kg = value => (value === null || value === undefined
+        ? 'Unavailable'
+        : `${Number(value).toFixed(2)} kg`);
+      document.getElementById('prev-dry').textContent = kg(waste?.dry_waste_generated_kg);
+      document.getElementById('prev-wet').textContent = kg(waste?.wet_waste_generated_kg);
+      document.getElementById('prev-total').textContent = kg(waste?.total_waste_generated_kg);
+    }
     if (domain === 'lpg') {
       const item = results.get('lpg_emissions');
       document.getElementById('prev-factor').textContent = item?.factor_value != null

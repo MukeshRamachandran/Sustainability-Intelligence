@@ -27,6 +27,11 @@
       'lpg-cylinders': 'lpg_cylinder_count',
       'lpg-kg': 'lpg_weight_kg'
     },
+    waste: {
+      // Only wet waste is manager-entered. dry_waste_generated_kg and
+      // total_waste_generated_kg are derived by the backend and are never sent.
+      'wet-waste': 'wet_waste_generated_kg'
+    },
     water: {
       'water-twad': 'water_twad_kl',
       'water-borewell': 'water_borewell_kl',
@@ -154,6 +159,12 @@
       quality_note: null
     }));
     const body = { remarks: document.getElementById('remarks')?.value.trim() || null, values };
+    // Waste sends its dry-material inventory alongside the metric values so
+    // the backend saves both in one transaction. The derived dry and total
+    // quantities are never sent: the server owns them.
+    if (domain === 'waste' && window.KCosmosWasteInventory) {
+      body.waste_items = window.KCosmosWasteInventory.items();
+    }
     if (includePeriod) body.reporting_period_id = document.getElementById('month').value;
     if (currentSubmission) body.expected_row_version = currentSubmission.row_version;
     return body;

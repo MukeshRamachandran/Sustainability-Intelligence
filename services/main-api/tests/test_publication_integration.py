@@ -22,6 +22,7 @@ from app.models.sustainability import (
     ReportingPeriod,
     Submission,
     SubmissionValue,
+    WasteSubmissionItem,
 )
 from app.services.publication import build_release_payload, payload_checksum
 from tests.integration_support import unique_username
@@ -297,6 +298,34 @@ def test_multidomain_release_snapshot_privacy_checksum_and_publish(postgres_engi
             },
             approved_by=admin,
         )
+        # Built as a draft first: guard_frozen_submission correctly refuses to
+        # let the derived-total trigger touch an already-approved submission,
+        # which mirrors the real Manager -> Submit -> Approve order.
+        waste = _submission(
+            db,
+            period,
+            managers[OperationalDomain.WASTE],
+            OperationalDomain.WASTE,
+            SubmissionStatus.DRAFT,
+            {"wet_waste_generated_kg": Decimal("300")},
+        )
+        # Dry inventory: 100.25 + 50.50 + 25.25 = 176.00, so total = 476.00.
+        # The database trigger derives dry/total from these rows.
+        for material_code, quantity in (
+            ("COLOUR_PAPER", "100.25"),
+            ("PET", "50.50"),
+            ("IRON", "25.25"),
+        ):
+            db.add(
+                WasteSubmissionItem(
+                    submission_id=waste.id,
+                    material_code=material_code,
+                    quantity_kg=Decimal(quantity),
+                )
+            )
+        db.flush()
+        _approve(waste, admin)
+        db.flush()
         outreach = _submission(
             db,
             period,
@@ -321,7 +350,7 @@ def test_multidomain_release_snapshot_privacy_checksum_and_publish(postgres_engi
         candidate_same = _prepare(client, csrf, period, f"publication-{uuid4().hex}")
         payload = candidate_one["payload"]
 
-        assert payload["schema_version"] == "1.1"
+        assert payload["schema_version"] == "1.2"
         assert payload["period"] == {"id": str(period_id), "year": period.year, "month": period.month}
         assert payload["publication_status"] == {domain.value: "approved" for domain in OperationalDomain}
         assert set(payload["transport"]["metrics"]) == {
@@ -349,6 +378,32 @@ def test_multidomain_release_snapshot_privacy_checksum_and_publish(postgres_engi
         assert payload["water"]["metrics"]["water_recycled_kl"]["value"] == 4
         assert payload["outreach"]["total_programs"] == 1
         assert payload["outreach"]["total_participants"] == 20
+
+        # Schema 1.2 waste payload: metrics, backend category totals and rows.
+        waste_payload = payload["waste"]
+        assert waste_payload["metrics"] == {
+            "wet_waste_generated_kg": {"value": 300, "unit": "kg"},
+            "dry_waste_generated_kg": {"value": 176, "unit": "kg"},
+            "total_waste_generated_kg": {"value": 476, "unit": "kg"},
+        }
+        assert waste_payload["categories"] == [
+            {"code": "METAL", "display_name": "Metal", "quantity_kg": 25.25},
+            {"code": "PAPER_CARDBOARD", "display_name": "Paper & Cardboard", "quantity_kg": 100.25},
+            {"code": "PLASTIC", "display_name": "Plastic", "quantity_kg": 50.5},
+        ]
+        assert [row["code"] for row in waste_payload["materials"]] == [
+            "COLOUR_PAPER", "PET", "IRON",
+        ]
+        assert waste_payload["materials"][0] == {
+            "code": "COLOUR_PAPER",
+            "display_name": "Colour Paper",
+            "category_code": "PAPER_CARDBOARD",
+            "category_display_name": "Paper & Cardboard",
+            "quantity_kg": 100.25,
+        }
+        # Category totals equal the material rows, and wet + dry equals total.
+        assert sum(row["quantity_kg"] for row in waste_payload["categories"]) == 176.0
+        assert waste_payload["calculations"] == []  # waste has no emissions
 
         serialized = json.dumps(payload, sort_keys=True).casefold()
         for forbidden in (
