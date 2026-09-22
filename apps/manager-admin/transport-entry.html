@@ -144,23 +144,24 @@
 
             <div class="d-flex justify-between mb-2">
               <span class="text-muted">Petrol Emission:</span>
-              <span id="prev-petrol">0.00 kgCO2e</span>
+              <span id="prev-petrol">—</span>
             </div>
             <div class="d-flex justify-between mb-2">
               <span class="text-muted">Transport Diesel:</span>
-              <span id="prev-diesel-t">0.00 kgCO2e</span>
+              <span id="prev-diesel-t">—</span>
             </div>
             <div class="d-flex justify-between mb-3">
               <span class="text-muted">DG Diesel:</span>
-              <span id="prev-diesel-dg">0.00 kgCO2e</span>
+              <span id="prev-diesel-dg">—</span>
             </div>
-            
+
             <hr style="border:none; border-top:1px solid #eee; margin-bottom: 16px;">
-            
+
             <div class="d-flex justify-between align-center">
               <strong style="color: var(--primary-dark);">Total Scope 1:</strong>
-              <strong style="font-size: 18px; color: var(--primary);" id="prev-total">0.00 kgCO2e</strong>
+              <strong style="font-size: 18px; color: var(--primary);" id="prev-total">—</strong>
             </div>
+            <p id="prev-stale" hidden style="margin:12px 0 0;font-size:12px;color:var(--text-muted,#6b7280);">Edited since the last save — save the draft to recalculate.</p>
           </div>
         </div>
       </div>
@@ -172,29 +173,18 @@
   <script src="app.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      const pInput = document.getElementById('petrol');
-      const dtInput = document.getElementById('diesel-transport');
-      const dgInput = document.getElementById('diesel-dg');
-      
-      const pPrev = document.getElementById('prev-petrol');
-      const dtPrev = document.getElementById('prev-diesel-t');
-      const dgPrev = document.getElementById('prev-diesel-dg');
-      const totalPrev = document.getElementById('prev-total');
+      /* The emission figures belong to calculation-preview.js, which renders
+         the backend's governed result.  Editing an input can only flag the
+         preview as stale - it must never overwrite a real server value. */
+      const markStale = () => window.KCosmosPreview?.markStale();
 
-      function calculatePreview() {
-        pPrev.textContent = 'Save draft to calculate';
-        dtPrev.textContent = 'Save draft to calculate';
-        dgPrev.textContent = 'Save draft to calculate';
-        totalPrev.textContent = 'Unavailable until saved';
-      }
-
-      [pInput, dtInput, dgInput].forEach(input => {
-        input.addEventListener('input', calculatePreview);
+      ['petrol', 'diesel-transport', 'diesel-dg'].forEach(id => {
+        document.getElementById(id).addEventListener('input', markStale);
       });
 
       document.getElementById('reset-btn').addEventListener('click', () => {
         document.getElementById('entry-form').reset();
-        calculatePreview();
+        markStale();
       });
     });
   </script>

@@ -93,6 +93,22 @@ test('active loader has no governed CSV, JSON overlay, or emission-factor calcul
   assert.match(loader, /green_master\.csv/);
 });
 
+test('staging helper proxies both public routes and nothing else', () => {
+  const server = read('serve-staging.py');
+  // Both routes the adapter consumes must reach the Main API; the history
+  // route was previously missing, which silently emptied every trend.
+  for (const route of ['/api/public/dashboard', '/api/public/dashboard/history']) {
+    assert.ok(server.includes(`"${route}"`), `serve-staging.py must proxy ${route}`);
+  }
+  const adapter = read('public-api.js');
+  for (const route of ['/api/public/dashboard', '/api/public/dashboard/history']) {
+    assert.ok(adapter.includes(`'${route}'`), `public-api.js must request ${route}`);
+  }
+  // The proxy stays narrow: no authenticated or admin path may pass through.
+  assert.doesNotMatch(server, /\/api\/(auth|admin|manager)/);
+  assert.match(server, /PUBLIC_ROUTES/);
+});
+
 test('active display marks full GHG and unresolved methodology values unavailable', () => {
   const app = read('app.js');
   assert.match(app, /Complete GHG not published/);

@@ -99,8 +99,44 @@
 
   async function load() { sets = await KCosmos.api('/api/admin/emission-factor-sets'); render(); }
 
+  /* A failed initialization must never leave the page sitting on its static
+     "Loading…" placeholder with no explanation. Redirects raised by
+     requireRole are the one exception: the browser is already navigating. */
+  function renderLoadFailure(error) {
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.colSpan = 7;
+    cell.textContent = 'Unable to load emission factors. Please verify session/API connection.';
+    row.append(cell);
+    byId('factor-sets-body').replaceChildren(row);
+    notify('Unable to load emission factors. Please verify session/API connection.', 'error');
+    // Diagnostic only: status, error code and request id. Never session or factor data.
+    console.error('[K-COSMOS] Emission factor initialization failed.', {
+      status: error?.status ?? null,
+      code: error?.code ?? null,
+      requestId: error?.requestId ?? null,
+      message: error?.message || String(error)
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', async () => {
-    try { await KCosmos.requireRole('microcosm_admin'); await load(); } catch (_) { return; }
+    try {
+      await KCosmos.requireRole('microcosm_admin');
+    } catch (error) {
+      // requireRole navigates away before throwing in these three cases, so
+      // the page is already unloading and an error banner would just flicker.
+      const redirecting = error?.status === 401
+        || error?.message === 'Access denied'
+        || error?.message === 'Password change required';
+      if (!redirecting) renderLoadFailure(error);
+      return;
+    }
+    try {
+      await load();
+    } catch (error) {
+      renderLoadFailure(error);
+      // Authorization succeeded, so the admin controls stay wired and usable.
+    }
     byId('btn-new-factor').addEventListener('click', () => openEditor());
     for (const id of ['close-factor-modal', 'close-factor-message']) byId(id).addEventListener('click', () => byId('factor-modal').classList.remove('active'));
     byId('factor-set-form').addEventListener('submit', async event => {

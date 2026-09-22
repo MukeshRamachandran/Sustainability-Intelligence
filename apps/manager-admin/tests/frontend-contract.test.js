@@ -185,10 +185,41 @@ test('emission factor governance uses backend data and authoritative calculation
   assert.doesNotMatch(`${read('transport-entry.html')}\n${read('energy-entry.html')}`, /2\.388|2\.701|0\.727/);
   assert.match(calculations, /submission\?\.calculations/);
   assert.match(calculations, /factor_not_configured|Unavailable/);
-  assert.match(read('energy-entry.html'), /Methodology review required/);
+  // Avoided emissions stay declared-unavailable, now owned by the single
+  // preview renderer rather than duplicated into the entry page.
+  assert.match(calculations, /Methodology review required/);
   assert.match(factors, /code: 'LPG'/);
   assert.match(factors, /unit: 'kg'/);
   assert.doesNotMatch(`${read('lpg-entry.html')}\n${read('manager-submissions-api.js')}`, /lpg_consumption_litres|lpg-litres|Litres\/Kg/);
+});
+
+test('calculation-preview.js is the only writer of governed emission preview nodes', () => {
+  const calculations = read('calculation-preview.js');
+  // The renderer labels every figure with the backend's own result unit and
+  // never rescales a component to fit a hardcoded label.
+  assert.match(calculations, /item\.result_unit/);
+  assert.doesNotMatch(calculations, /toFixed\(2\)\}\s*kgCO2e/);
+
+  // Entry pages may echo typed activity, but must never write the nodes that
+  // hold a governed server result.
+  const owned = ['prev-scope2', 'prev-avoided', 'prev-emission', 'prev-factor', 'prev-total', 'prev-petrol', 'prev-diesel-t', 'prev-diesel-dg'];
+  for (const page of ['transport-entry.html', 'energy-entry.html', 'lpg-entry.html']) {
+    const source = read(page);
+    const inline = source.slice(source.indexOf('<script>'));
+    for (const id of owned) {
+      // The page must not even resolve these nodes: holding a reference is the
+      // first step back to overwriting a governed value.
+      assert.doesNotMatch(
+        inline,
+        new RegExp(`getElementById\\(['"]${id}['"]\\)`),
+        `${page} must not reference ${id}`
+      );
+    }
+    // Staleness is signalled without destroying the last governed result.
+    assert.match(source, /KCosmosPreview\?\.markStale\(\)/, `${page} must flag staleness`);
+    assert.ok(hasId(source, 'prev-stale'), `${page}: prev-stale`);
+  }
+  assert.match(calculations, /window\.KCosmosPreview\s*=/);
 });
 
 test('all manager evidence controls use the shared private evidence integration', () => {

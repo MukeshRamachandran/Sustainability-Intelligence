@@ -116,7 +116,27 @@
   }
 
   document.addEventListener('DOMContentLoaded', async () => {
-    try { await KCosmos.requireRole('microcosm_admin'); } catch (_) { return; }
+    try {
+      await KCosmos.requireRole('microcosm_admin');
+    } catch (error) {
+      // requireRole navigates away before throwing in these three cases; any
+      // other failure must be visible rather than leaving a blank repository.
+      const redirecting = error?.status === 401
+        || error?.message === 'Access denied'
+        || error?.message === 'Password change required';
+      if (!redirecting) {
+        document.getElementById('evidence-repository-status').textContent =
+          'Unable to load the evidence repository. Please verify session/API connection.';
+        // Diagnostic only: no session, filename or evidence content.
+        console.error('[K-COSMOS] Evidence repository initialization failed.', {
+          status: error?.status ?? null,
+          code: error?.code ?? null,
+          requestId: error?.requestId ?? null,
+          message: error?.message || String(error)
+        });
+      }
+      return;
+    }
     applyUrlState();
     controls().addEventListener('submit', event => { event.preventDefault(); void load(1); });
     document.getElementById('clear-evidence-filters').addEventListener('click', () => {
