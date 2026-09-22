@@ -7,8 +7,9 @@ Revises: 0003_outreach_impact
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "0004_submission_evidence"
 down_revision: str | None = "0003_outreach_impact"

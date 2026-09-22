@@ -7,6 +7,7 @@ Revises: 0004_submission_evidence
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "0005_evidence_committed_at"
