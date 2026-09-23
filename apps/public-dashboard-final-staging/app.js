@@ -1434,7 +1434,17 @@ function initChartAnimations() {
 function refresh() {
   // rebuild everything the active page shows
   makeKpis();
-  drawCharts();
+  try {
+    // A chart-dependency failure must not take the rest of the page down
+    // with it: renderTable(), the KPI/chart animation hooks below, and (via
+    // start()/boot()) initGreenMap() and query-string page routing all run
+    // unconditionally after this line, whether or not charts drew. Chart.js
+    // is vendored locally now (see index.html), so this is a last-resort
+    // guard, not the primary fix - chart rendering logic itself is unchanged.
+    drawCharts();
+  } catch (error) {
+    console.error('[K-COSMOS] Chart rendering failed; continuing without charts.', error);
+  }
   renderTable();
   initKpiAnimations();
   initChartAnimations();

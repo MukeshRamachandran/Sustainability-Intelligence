@@ -9,7 +9,7 @@
       <div class="content-area">
         <div class="mb-3"><h1>Admin Review Queue</h1><p>Review manager submissions without modifying manager-provided values.</p></div>
         <div class="glass-card mb-3"><div class="d-flex justify-between align-center"><h3>Submissions awaiting review</h3><button class="btn btn-outline" id="refresh-queue">Refresh</button></div><div class="form-group"><label class="form-label" for="queue-period">Reporting period</label><select id="queue-period" class="form-control"></select></div><div class="table-responsive"><table class="table"><thead><tr><th>Domain</th><th>Submission</th><th>Period</th><th>Manager</th><th>Submitted</th><th>Status</th><th>Action</th></tr></thead><tbody id="queue-body"><tr><td colspan="7">Loading…</td></tr></tbody></table></div></div>
-        <div class="glass-card"><h3>Publication</h3><p class="text-muted">Approval does not publish. Prepare an immutable candidate, review it, then publish explicitly.</p><div class="grid-2"><div class="form-group"><label class="form-label" for="release-period">Approved reporting period</label><select id="release-period" class="form-control"></select></div><div class="form-group"><label class="form-label" for="release-version">Release version</label><input id="release-version" class="form-control" placeholder="sustainability-2026-09-v1"></div></div><div class="card mb-2" id="publication-readiness"><div class="d-flex justify-between align-center"><strong id="readiness-period">Publication readiness</strong><span class="badge badge-draft" id="readiness-state">Loading</span></div><p id="readiness-count" style="margin:8px 0;">— / 6 Approved</p><div class="table-responsive"><table class="table"><thead><tr><th>Domain</th><th>Status</th><th>Revision</th></tr></thead><tbody><tr><td>Transport</td><td id="readiness-transport">—</td><td id="readiness-transport-revision">—</td></tr><tr><td>Energy</td><td id="readiness-energy">—</td><td id="readiness-energy-revision">—</td></tr><tr><td>LPG</td><td id="readiness-lpg">—</td><td id="readiness-lpg-revision">—</td></tr><tr><td>Water</td><td id="readiness-water">—</td><td id="readiness-water-revision">—</td></tr><tr><td>Outreach</td><td id="readiness-outreach">—</td><td id="readiness-outreach-revision">—</td></tr><tr><td>Waste</td><td id="readiness-waste">—</td><td id="readiness-waste-revision">—</td></tr></tbody></table></div><p class="text-muted" id="readiness-blockers" style="margin-bottom:0;">Checking approval status…</p></div><div class="d-flex gap-2"><button class="btn btn-primary" id="prepare-release" disabled>Prepare release</button><button class="btn btn-accent" id="open-release" disabled>Open release preview</button></div><pre id="release-preview" style="white-space:pre-wrap;max-height:360px;overflow:auto;margin-top:16px;"></pre></div>
+        <div class="glass-card"><h3>Publication</h3><p class="text-muted">Approval does not publish. Prepare an immutable candidate, review it, then publish explicitly.</p><div class="grid-2"><div class="form-group"><label class="form-label" for="release-period">Approved reporting period</label><select id="release-period" class="form-control"></select></div><div class="form-group"><label class="form-label" for="release-version">Release version</label><input id="release-version" class="form-control" placeholder="sustainability-2026-09-v1"><p class="text-muted" style="margin:4px 0 0;font-size:12px;">Letters, digits, dots, underscores and hyphens only &mdash; no spaces or colons.</p></div></div><p id="release-error" class="text-danger" style="display:none;margin:0 0 12px;"></p><div class="card mb-2" id="publication-readiness"><div class="d-flex justify-between align-center"><strong id="readiness-period">Publication readiness</strong><span class="badge badge-draft" id="readiness-state">Loading</span></div><p id="readiness-count" style="margin:8px 0;">— / 6 Approved</p><div class="table-responsive"><table class="table"><thead><tr><th>Domain</th><th>Status</th><th>Revision</th></tr></thead><tbody><tr><td>Transport</td><td id="readiness-transport">—</td><td id="readiness-transport-revision">—</td></tr><tr><td>Energy</td><td id="readiness-energy">—</td><td id="readiness-energy-revision">—</td></tr><tr><td>LPG</td><td id="readiness-lpg">—</td><td id="readiness-lpg-revision">—</td></tr><tr><td>Water</td><td id="readiness-water">—</td><td id="readiness-water-revision">—</td></tr><tr><td>Outreach</td><td id="readiness-outreach">—</td><td id="readiness-outreach-revision">—</td></tr><tr><td>Waste</td><td id="readiness-waste">—</td><td id="readiness-waste-revision">—</td></tr></tbody></table></div><p class="text-muted" id="readiness-blockers" style="margin-bottom:0;">Checking approval status…</p></div><div class="d-flex gap-2"><button class="btn btn-primary" id="prepare-release" disabled>Prepare release</button><button class="btn btn-accent" id="open-release" disabled>Open release preview</button></div><pre id="release-preview" style="white-space:pre-wrap;max-height:360px;overflow:auto;margin-top:16px;"></pre></div>
       </div>
     </main>
   </div>
@@ -110,8 +110,32 @@
         } catch (error) { showToast(error.message, 'error'); }
       }
 
+      let releasePeriodsById = new Map();
+
+      // A suggested version only, built from the server's own period fields
+      // (never hardcoded). The admin can freely overwrite it; this exists so
+      // the "Release version" field is never left silently empty behind a
+      // placeholder that looks like a real value - that emptiness is exactly
+      // what the backend's 1-character minimum rejects with a 422.
+      function suggestedReleaseVersion(period) {
+        if (!period) return '';
+        return `sustainability-${period.year}-${String(period.month).padStart(2, '0')}-v1`;
+      }
+
+      function applyReleaseVersionSuggestion(period) {
+        const input = document.getElementById('release-version');
+        const suggestion = suggestedReleaseVersion(period);
+        // Only overwrite when the field is empty or still holds our own
+        // previous suggestion - never clobber something the admin typed.
+        if (!input.value.trim() || input.dataset.autoSuggested === input.value) {
+          input.value = suggestion;
+          input.dataset.autoSuggested = suggestion;
+        }
+      }
+
       async function loadPeriods() {
         const periods = await KCosmos.api('/api/admin/periods');
+        releasePeriodsById = new Map(periods.map(item => [item.id, item]));
         const options = periods.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label || `${item.year}-${String(item.month).padStart(2,'0')}`)}</option>`).join('');
         const queuePeriod = document.getElementById('queue-period');
         const releasePeriod = document.getElementById('release-period');
@@ -125,6 +149,7 @@
         if (selectedPeriod) {
           queuePeriod.value = selectedPeriod.id;
           releasePeriod.value = selectedPeriod.id;
+          applyReleaseVersionSuggestion(selectedPeriod);
         }
         await loadQueue();
         await loadReadiness();
@@ -171,15 +196,71 @@
         history.replaceState(null, '', `${window.location.pathname}?${parameters.toString()}`);
         await loadQueue();
       });
-      document.getElementById('release-period').addEventListener('change', loadReadiness);
+      document.getElementById('release-period').addEventListener('change', event => {
+        applyReleaseVersionSuggestion(releasePeriodsById.get(event.target.value));
+        loadReadiness();
+      });
+
+      const VERSION_PATTERN = /^[A-Za-z0-9._-]+$/;
+
+      function showReleaseError(message) {
+        const node = document.getElementById('release-error');
+        node.textContent = message;
+        node.style.display = message ? '' : 'none';
+      }
+
+      // Renders a persistent, specific message for every case the backend can
+      // return, instead of a single transient "Prepare failed" toast.
+      function renderPrepareFailure(error) {
+        const status = error?.status || 0;
+        let message;
+        if (status === 422) {
+          message = `Release version is invalid. ${error.message || 'Check the value and try again.'}`;
+        } else if (status === 409 && error?.code === 'publication_not_ready') {
+          // error.message already includes "Blocking: domain (status), ..."
+          // from apiRequest's structured-detail enrichment (auth-client.js).
+          message = `This period is no longer ready to publish. ${error.message || ''} Refresh and try again.`;
+        } else if (status === 409) {
+          message = error.message || 'A release with this version already exists. Choose a different version.';
+        } else if (status === 401) {
+          message = 'Your session has expired. Please sign in again.';
+        } else if (status === 403) {
+          message = error.message || 'You are not authorized to prepare a release.';
+        } else if (status >= 500) {
+          message = 'The server could not complete the request.';
+        } else {
+          message = error?.message || 'Prepare failed.';
+        }
+        const reference = error?.requestId ? ` Reference: ${error.requestId}` : '';
+        showReleaseError(`${message}${reference}`);
+        showToast(message, 'error');
+        console.error('[K-COSMOS] Release prepare failed.', {
+          status, code: error?.code ?? null, requestId: error?.requestId ?? null
+        });
+      }
+
       document.getElementById('prepare-release').addEventListener('click', async () => {
-        if (!currentReadiness?.ready_to_publish) return showToast('All five domains must be approved before preparation.', 'error');
+        showReleaseError('');
+        if (!currentReadiness?.ready_to_publish) {
+          return showReleaseError(`All ${currentReadiness?.required_domains ?? 'required'} domains must be approved before preparation.`);
+        }
+        const reportingPeriodId = document.getElementById('release-period').value;
+        const version = document.getElementById('release-version').value.trim();
+        // Mirror the backend's exact contract client-side, so an invalid or
+        // empty version is caught before a network round trip - this is the
+        // condition that previously reached the server as a bare 422.
+        if (!reportingPeriodId) return showReleaseError('Select a reporting period first.');
+        if (!version) return showReleaseError('Release version is required.');
+        if (version.length > 100) return showReleaseError('Release version must be 100 characters or fewer.');
+        if (!VERSION_PATTERN.test(version)) {
+          return showReleaseError('Release version may only contain letters, digits, dots, underscores and hyphens (no spaces or colons).');
+        }
         try {
-          preparedRelease = await KCosmos.api('/api/admin/releases/prepare', {method:'POST', body:JSON.stringify({reporting_period_id:document.getElementById('release-period').value,version:document.getElementById('release-version').value.trim()})});
+          preparedRelease = await KCosmos.api('/api/admin/releases/prepare', {method:'POST', body:JSON.stringify({reporting_period_id: reportingPeriodId, version})});
           document.getElementById('release-preview').textContent = JSON.stringify(preparedRelease, null, 2);
           document.getElementById('open-release').disabled = false;
           showToast('Release candidate prepared.', 'success');
-        } catch (error) { showToast(error.message, 'error'); }
+        } catch (error) { renderPrepareFailure(error); }
       });
       document.getElementById('open-release').addEventListener('click', () => { if(preparedRelease) window.location.href=`admin-preview.html?release_id=${encodeURIComponent(preparedRelease.id)}`; });
       await loadPeriods();

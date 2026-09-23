@@ -65,30 +65,41 @@ async function apiRequest(path, options = {}) {
     }
 
     if (!response.ok) {
+        // This backend always wraps errors as {"error": {...}}; it never
+        // returns a top-level "detail" key (see error_payload() in
+        // app/main.py). Structured metadata an HTTPException attaches, such
+        // as "metrics" or "blockers", is merged directly into data.error by
+        // the shared exception handler, not into a "detail" object.
+        const errorBody = data?.error;
+        const enrichment = errorBody && typeof errorBody === "object"
+            ? [
+                Array.isArray(errorBody.metrics) && errorBody.metrics.length
+                    ? `Missing: ${errorBody.metrics.join(", ")}.`
+                    : null,
+                Array.isArray(errorBody.blockers) && errorBody.blockers.length
+                    ? `Blocking: ${errorBody.blockers.map(item => `${item.domain} (${item.status || item.reason || "not approved"})`).join(", ")}.`
+                    : null
+              ].filter(Boolean).join(" ")
+            : "";
         const detail = data?.detail;
-        const structuredDetail = detail && typeof detail === "object" && !Array.isArray(detail)
-            ? [detail.message, Array.isArray(detail.metrics) && detail.metrics.length
-                ? `Missing: ${detail.metrics.join(", ")}.`
-                : null].filter(Boolean).join(" ")
-            : null;
         const validationDetail = Array.isArray(detail)
             ? detail.map(item => {
                 const location = Array.isArray(item?.loc) ? item.loc.slice(1).join(".") : "request";
                 return `${location || "request"}: ${item?.msg || "invalid value"}`;
             }).join("; ")
             : null;
-        const message =
-            data?.error?.message ||
+        const baseMessage =
+            errorBody?.message ||
             (typeof detail === "string" ? detail : null) ||
-            structuredDetail ||
             validationDetail ||
             data?.message ||
             `Request failed with status ${response.status}`;
+        const message = enrichment ? `${baseMessage} ${enrichment}` : baseMessage;
 
         const error = new Error(message);
         error.status = response.status;
-        error.code = data?.error?.code || null;
-        error.requestId = data?.error?.request_id || response.headers.get("X-Request-ID") || null;
+        error.code = errorBody?.code || null;
+        error.requestId = errorBody?.request_id || response.headers.get("X-Request-ID") || null;
         throw error;
     }
 

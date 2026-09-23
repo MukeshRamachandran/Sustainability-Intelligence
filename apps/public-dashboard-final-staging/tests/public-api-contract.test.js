@@ -20,6 +20,35 @@ test('index loads the public adapter before its API data loader and app', () => 
   assert.doesNotMatch(html, /<script[^>]+src="data-loader\.js/);
 });
 
+test('Chart.js and the treemap plugin are vendored locally, loaded before app.js', () => {
+  // An unreachable CDN previously left window.Chart undefined, throwing
+  // "Chart is not defined" at the dashboard script's first chart call and
+  // making the whole page inert. Pinned local copies remove that single
+  // point of failure without changing chart logic or the pinned versions.
+  const html = read('index.html');
+  assert.match(html, /<script src="vendor\/chart\.umd\.min\.js"><\/script>/);
+  assert.match(html, /<script src="vendor\/chartjs-chart-treemap\.min\.js"><\/script>/);
+  assert.doesNotMatch(html, /cdnjs\.cloudflare\.com\/ajax\/libs\/Chart\.js/);
+  assert.doesNotMatch(html, /cdn\.jsdelivr\.net\/npm\/chartjs-chart-treemap/);
+  assert.ok(html.indexOf('vendor/chart.umd.min.js') < html.indexOf('vendor/chartjs-chart-treemap.min.js'));
+  assert.ok(html.indexOf('vendor/chartjs-chart-treemap.min.js') < html.indexOf('app.js'));
+
+  const chartFile = fs.readFileSync(path.join(root, 'vendor/chart.umd.min.js'), 'utf8');
+  const treemapFile = fs.readFileSync(path.join(root, 'vendor/chartjs-chart-treemap.min.js'), 'utf8');
+  assert.ok(chartFile.length > 50000, 'vendored Chart.js should be the full UMD bundle, not a stub');
+  assert.match(treemapFile, /chartjs-chart-treemap v3\.1\.0/, 'must be the pinned 3.1.0 build, not an upgrade');
+});
+
+test('a chart-rendering failure cannot block non-chart content from rendering', () => {
+  const app = read('app.js');
+  const refreshBody = app.slice(app.indexOf('function refresh()'), app.indexOf('function refresh()') + 800);
+  assert.match(refreshBody, /try\s*\{\s*[\s\S]*?drawCharts\(\);\s*[\s\S]*?\}\s*catch/);
+  // renderTable() and the animation hooks must still be reachable after a
+  // chart failure, i.e. outside the try block, not inside it.
+  const afterCatch = refreshBody.slice(refreshBody.indexOf('catch'));
+  assert.match(afterCatch, /renderTable\(\);/);
+});
+
 test('adapter normalizes the active immutable release and preserves governed LPG litre state', async () => {
   let requested;
   const api = adapterContext(async (url, options) => {
