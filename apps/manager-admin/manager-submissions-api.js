@@ -1,6 +1,13 @@
 (function () {
   const domain = document.body.dataset.authDomain;
-  if (!['transport', 'energy', 'lpg', 'water'].includes(domain)) return;
+  // Waste uses this same shared workflow (fieldMaps.waste, the waste_items
+  // payload branch below, and the backend's GENERIC_DOMAINS all already
+  // assumed it). Omitting it here made the whole module return before
+  // initialize() ever ran: no current-period fetch, no Save/Submit wiring,
+  // and no KCosmosSubmissionContext - which is also why evidence upload
+  // failed with "Save the draft before adding evidence.": context() resolved
+  // to undefined instead of a real submission accessor.
+  if (!['transport', 'energy', 'lpg', 'water', 'waste'].includes(domain)) return;
 
   const fieldMaps = {
     transport: {

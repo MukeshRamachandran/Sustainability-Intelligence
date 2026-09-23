@@ -13,21 +13,24 @@ const loginContracts = {
   'energy-login.html': { role: 'manager', domain: 'energy', destination: 'energy-entry.html' },
   'lpg-login.html': { role: 'manager', domain: 'lpg', destination: 'lpg-entry.html' },
   'water-login.html': { role: 'manager', domain: 'water', destination: 'water-entry.html' },
-  'outreach-login.html': { role: 'manager', domain: 'outreach', destination: 'community-outreach-entry.html' }
+  'outreach-login.html': { role: 'manager', domain: 'outreach', destination: 'community-outreach-entry.html' },
+  'waste-login.html': { role: 'manager', domain: 'waste', destination: 'waste-entry.html' }
 };
 
 const managerContracts = {
   'transport-entry.html': ['transport', 'petrol', 'diesel-transport', 'active-vehicles-petrol', 'active-vehicles-diesel', 'ev-consumption', 'diesel-dg', 'active-dg'],
   'energy-entry.html': ['energy', 'grid-ht', 'grid-comm', 'grid-temp', 'ren-campus', 'ren-procured', 'ren-solar', 'grid-total', 'ren-total'],
   'lpg-entry.html': ['lpg', 'lpg-litres', 'lpg-cylinders', 'lpg-kg'],
-  'water-entry.html': ['water', 'water-twad', 'water-borewell', 'water-priv', 'water-waste', 'water-recycled', 'water-consumed']
+  'water-entry.html': ['water', 'water-twad', 'water-borewell', 'water-priv', 'water-waste', 'water-recycled', 'water-consumed'],
+  'waste-entry.html': ['waste', 'wet-waste']
 };
 const evidenceInputs = {
   'transport-entry.html': ['evidence-petrol', 'evidence-diesel', 'evidence-dg'],
   'energy-entry.html': ['evidence-energy'],
   'lpg-entry.html': ['evidence-lpg'],
   'water-entry.html': ['evidence-water'],
-  'community-outreach-entry.html': ['evidence-file']
+  'community-outreach-entry.html': ['evidence-file'],
+  'waste-entry.html': ['evidence-waste']
 };
 
 const adminPages = ['admin-overview.html', 'admin-queue.html', 'admin-evidence.html', 'admin-preview.html', 'admin-factors.html', 'admin-users.html', 'admin-audit.html'];
@@ -216,6 +219,19 @@ test('waste manager page is governed, catalog-driven and backend-authoritative',
   assert.ok(hasId(page, 'evidence-waste'));
   assert.match(page, /data-evidence-input/);
   assert.match(page, /src="evidence-manager.js"/);
+  // The topbar mirrors the server-authoritative reporting month, so the
+  // monthly nature of the page cannot be mistaken for an annual form.
+  assert.ok(hasId(page, 'topbar-period'));
+  assert.match(page, /kcosmos:submission-loaded[\s\S]{0,300}topbar-period/);
+
+  // The module's domain guard must include 'waste', or the entire shared
+  // workflow (current-period fetch, Save/Submit wiring, evidence context)
+  // silently no-ops for this domain - the bug this test was added to catch.
+  assert.match(
+    submissions,
+    /if \(!\[[^\]]*'waste'[^\]]*\]\.includes\(domain\)\) return;/,
+    "manager-submissions-api.js's top-level domain guard must include 'waste'"
+  );
 
   // Only wet waste is manager-entered; derived totals are never sent.
   assert.match(submissions, /'wet-waste': 'wet_waste_generated_kg'/);

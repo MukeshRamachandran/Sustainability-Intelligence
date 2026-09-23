@@ -167,5 +167,19 @@
   <script src="waste-inventory.js"></script>
   <script src="calculation-preview.js"></script>
   <script src="evidence-manager.js"></script>
+  <script>
+    /* Mirrors the server-authoritative reporting month into the topbar, so
+       the monthly nature of Waste entry is visible at a glance and cannot be
+       mistaken for an annual form. #reporting-period-label is populated by
+       manager-submissions-api.js's initialize() from GET
+       /api/manager/waste/current-period, then re-populated on every reload
+       via the kcosmos:submission-loaded event - this listener just mirrors
+       that same value, never invents its own period. */
+    document.addEventListener('kcosmos:submission-loaded', () => {
+      const label = document.getElementById('reporting-period-label')?.value;
+      const topbar = document.getElementById('topbar-period');
+      if (topbar) topbar.textContent = label || 'Reporting month unavailable';
+    });
+  </script>
 </body>
 </html>
