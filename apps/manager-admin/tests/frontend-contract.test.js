@@ -443,7 +443,7 @@ test('generic Manager save and submit wiring is single-owner and persistence-saf
 test('Outreach save/submit restores by programme URL and uses the safe notifier', () => {
   const outreach = read('outreach-integration.js');
   assert.match(outreach, /searchParams\.set\('programme', programmeId\)/);
-  assert.match(outreach, /ensureDraft: \(\) => saveDraft\(false\)/);
+  assert.match(outreach, /ensureDraft: async \(\) => \{/);
   assert.match(outreach, /KCosmosUI\?\.notify/);
   assert.match(outreach, /\/api\/manager\/outreach\/current-period/);
   assert.match(outreach, /expected_row_version = currentRowVersion/);
@@ -452,6 +452,44 @@ test('Outreach save/submit restores by programme URL and uses the safe notifier'
   assert.doesNotMatch(outreach, /parseInt|parseFloat/);
   assert.doesNotMatch(outreach, /new Date/);
   assert.match(outreach, /await KCosmos\.api\(`\/api\/manager\/outreach\/programmes\/\$\{currentProgrammeId\}`\)/);
+});
+
+test('every submission context exposes the SUBMISSION id, which evidence upload requires', () => {
+  // evidence-manager.js posts to /submissions/{submission.id}/evidence, so a
+  // context whose `id` is anything else (outreach returns a programme from
+  // saveDraft, carrying a different id) makes evidence upload 404.
+  const evidence = read('evidence-manager.js');
+  assert.match(evidence, /const submission = await context\(\)\?\.ensureDraft\(\)/);
+  assert.match(evidence, /uploadManager\(domain, submission\.id/);
+  assert.match(evidence, /listManager\(domain, submission\.id\)/);
+  assert.match(evidence, /removeManager\(domain, submission\.id, evidenceId\)/);
+
+  // Execute the real outreach context block with stubbed module state.
+  const outreach = read('outreach-integration.js');
+  const block = outreach.match(/const submissionRef = [\s\S]*?\n  \};/);
+  assert.ok(block, 'outreach must define its submission context');
+
+  const SUBMISSION_ID = 'submission-uuid';
+  const PROGRAMME_ID = 'programme-uuid';
+  let savedCalled = false;
+  const context = vm.runInNewContext(
+    `let currentSubmissionId = ${JSON.stringify(SUBMISSION_ID)};
+     let currentStatus = 'draft';
+     const saveDraft = async () => { savedCalled(); return { id: ${JSON.stringify(PROGRAMME_ID)}, submission_id: ${JSON.stringify(SUBMISSION_ID)} }; };
+     const window = {};
+     ${block[0]}
+     window.KCosmosSubmissionContext;`,
+    { savedCalled: () => { savedCalled = true; } }
+  );
+
+  assert.equal(context.domain, 'outreach');
+  assert.equal(context.getSubmission().id, SUBMISSION_ID);
+  return context.ensureDraft().then(result => {
+    assert.ok(savedCalled, 'ensureDraft must still persist the draft');
+    assert.equal(result.id, SUBMISSION_ID, 'ensureDraft must return the submission id');
+    assert.notEqual(result.id, PROGRAMME_ID, 'ensureDraft must not return the programme id');
+    assert.equal(result.status, 'draft');
+  });
 });
 
 test('active frontend contains no private filesystem evidence URL', () => {

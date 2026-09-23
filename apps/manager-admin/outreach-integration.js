@@ -241,11 +241,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     return saved;
   }
 
+  /* Shared-context contract: `id` is always the SUBMISSION id, because that is
+     what evidence-manager.js posts to /api/manager/{domain}/submissions/{id}/evidence.
+
+     Outreach is the only domain where saveDraft() returns a different entity -
+     the programme - whose `id` is the programme id and which carries the
+     submission id separately as `submission_id`. Returning the programme from
+     ensureDraft() made evidence upload post the programme id and fail with
+     404 "Submission not found". Both accessors now build the same shape so
+     they cannot drift apart again. */
+  const submissionRef = () =>
+    currentSubmissionId ? { id: currentSubmissionId, status: currentStatus } : null;
+
   window.KCosmosSubmissionContext = {
     domain: 'outreach',
-    getSubmission: () => currentSubmissionId ? { id: currentSubmissionId, status: currentStatus } : null,
+    getSubmission: submissionRef,
     getStatus: () => currentStatus,
-    ensureDraft: () => saveDraft(false)
+    ensureDraft: async () => {
+      await saveDraft(false);
+      return submissionRef();
+    }
   };
 
   try {
