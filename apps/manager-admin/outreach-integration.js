@@ -215,7 +215,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
       }
     }
-    form.dispatchEvent(new Event('input', { bubbles: true }));
+    /* The page's own calculators (participant total, gender total, species
+       total, summary preview) listen for `input` on each individual field.
+       An event dispatched on the form bubbles UP and never reaches those
+       children, which left the read-only totals showing 0 after a reload even
+       though the fields were populated. Dispatch per field instead, as the
+       generic manager module does. */
+    form.querySelectorAll('input, select, textarea').forEach(element => {
+      element.dispatchEvent(new Event('input', { bubbles: true }));
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+    });
     setStatus(programme.status);
     if (programme.correction_reason) notify(`Correction requested: ${programme.correction_reason}`, 'warning', 'Load Outreach');
   }

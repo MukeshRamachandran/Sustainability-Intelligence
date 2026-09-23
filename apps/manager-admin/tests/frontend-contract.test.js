@@ -454,6 +454,31 @@ test('Outreach save/submit restores by programme URL and uses the safe notifier'
   assert.match(outreach, /await KCosmos\.api\(`\/api\/manager\/outreach\/programmes\/\$\{currentProgrammeId\}`\)/);
 });
 
+test('reloaded values re-trigger the page calculators on every domain', () => {
+  // Page-level calculators (participant/gender/species totals, energy and water
+  // sums) listen for `input` on each field. An event dispatched on the form
+  // bubbles UP and never reaches those children, which left read-only totals
+  // showing 0 after a reload even though the fields held values.
+  const outreach = read('outreach-integration.js');
+  assert.match(outreach, /form\.querySelectorAll\('input, select, textarea'\)/);
+  assert.doesNotMatch(outreach, /^\s*form\.dispatchEvent\(new Event\('input'/m);
+
+  const generic = read('manager-submissions-api.js');
+  assert.match(generic, /querySelectorAll\('#entry-form input'\)\.forEach\(input => input\.dispatchEvent/);
+});
+
+test('evidence failures report the actual reason, not a bare failure', () => {
+  const evidence = read('evidence-manager.js');
+  // A draft-not-saved problem must not look identical to a rejected file.
+  assert.match(evidence, /status === 404/);
+  assert.match(evidence, /Save the draft before adding evidence/);
+  assert.match(evidence, /status === 413/);
+  assert.match(evidence, /status === 401/);
+  assert.match(evidence, /requestId/);
+  // Still no internals leaked.
+  assert.doesNotMatch(evidence, /error\.stack|Traceback|storage_key/);
+});
+
 test('every submission context exposes the SUBMISSION id, which evidence upload requires', () => {
   // evidence-manager.js posts to /submissions/{submission.id}/evidence, so a
   // context whose `id` is anything else (outreach returns a programme from

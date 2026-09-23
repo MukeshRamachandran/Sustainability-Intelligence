@@ -108,8 +108,22 @@
     }
 
     function mutationErrorMessage(operation, error) {
-      if (error?.status === 409) return 'Evidence cannot be changed after submission.';
-      return operation === 'remove' ? 'Evidence could not be removed.' : 'Evidence upload failed.';
+      /* A bare "Evidence upload failed." hides why, which makes a draft-not-saved
+         problem look identical to a rejected file. Surface the actual reason and
+         the request id, without leaking internals. */
+      const status = error?.status || 0;
+      const noun = operation === 'remove' ? 'Evidence could not be removed.' : 'Evidence upload failed.';
+      if (status === 409) return 'Evidence cannot be changed after submission.';
+      let reason = '';
+      if (!status) reason = error?.message || 'The server could not be reached.';
+      else if (status === 401) reason = 'Your session has expired. Please sign in again.';
+      else if (status === 403) reason = error?.message || 'You are not authorized for this action.';
+      else if (status === 404) reason = 'Save the draft before adding evidence, then try again.';
+      else if (status === 413) reason = 'The file exceeds the 10 MB maximum.';
+      else if (status === 415 || status === 422) reason = error?.message || 'Only PDF, PNG and JPG files are accepted.';
+      else if (status >= 500) reason = 'The server could not complete the request.';
+      const reference = error?.requestId ? ` Reference: ${error.requestId}` : '';
+      return `${noun}${reason ? ` ${reason}` : ''}${reference}`;
     }
 
     function renderSlot(input) {
