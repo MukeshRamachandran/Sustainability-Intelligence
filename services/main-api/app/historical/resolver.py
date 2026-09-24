@@ -79,6 +79,7 @@ RATIO_CODES = {
 }
 NON_ADDITIVE_METRICS = {"population"}
 DISPLAY_PLACES = {
+    "operational_ghg_per_capita_tco2e": 9,
     "renewable_share_pct": 12,
     "estimated_avoided_grid_emissions_tco2e": 12,
     "water_per_capita_l": 12,
@@ -595,6 +596,31 @@ def _aggregate_display(entry: Entry, static: dict[str, Any]) -> dict[str, Any]:
     return display
 
 
+def _with_hero_items(display: dict[str, Any]) -> dict[str, Any]:
+    """Carbon hero figures, derived only from governed display items.
+
+    * ``gross_emissions_tco2e`` is the public name of Operational GHG
+      (Scope 1 + Scope 2; Scope 3 not included; avoided emissions never
+      subtracted).
+    * ``operational_ghg_per_capita_tco2e`` is the governed per-capita result
+      expressed in tonnes (kgCO2e/person / 1000).
+    Both inherit the source item's period, coverage rule and provenance, so a
+    partial or missing Operational GHG yields no hero figure at all.
+    """
+    operational = display.get("operational_ghg_tco2e")
+    if operational is not None:
+        display["gross_emissions_tco2e"] = {**operational}
+    per_capita = display.get("operational_ghg_per_capita_kgco2e")
+    if per_capita is not None and per_capita["value"] is not None:
+        tonnes = Decimal(str(per_capita["value"])) / 1000
+        display["operational_ghg_per_capita_tco2e"] = {
+            **per_capita,
+            "value": _number(tonnes, "operational_ghg_per_capita_tco2e"),
+            "unit": "tCO2e/person",
+        }
+    return display
+
+
 def _domain_status(entry: Entry, aggregates: list[Entry]) -> dict[str, dict[str, Any]]:
     status: dict[str, dict[str, Any]] = {}
     for domain in DOMAINS:
@@ -657,7 +683,7 @@ def build_timeline(db: Session) -> dict[str, Any]:
         options = []
         for aggregate in aggregates:
             periods[aggregate.key] = _entry_json(aggregate, [])
-            periods[aggregate.key]["display"] = _aggregate_display(aggregate, static)
+            periods[aggregate.key]["display"] = _with_hero_items(_aggregate_display(aggregate, static))
             label = "Full Year" if aggregate.key == f"{year}-FY" else aggregate.label.split(" ", 1)[1]
             options.append({"key": aggregate.key, "label": label, "granularity": aggregate.granularity})
         population, source = population_for(db, year)
@@ -671,7 +697,7 @@ def build_timeline(db: Session) -> dict[str, Any]:
                     "source_kind": source.get("kind"),
                 }
             periods[entry.key] = _entry_json(entry, aggregates)
-            periods[entry.key]["display"] = _month_display(entry, aggregates, static)
+            periods[entry.key]["display"] = _with_hero_items(_month_display(entry, aggregates, static))
             options.append({"key": entry.key, "label": calendar.month_abbr[entry.month or 1], "granularity": "MONTHLY"})
         selector.append({"year": year, "options": options})
     latest = max(monthly.values(), key=lambda item: (item.year, item.month or 0), default=None)

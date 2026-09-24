@@ -118,6 +118,16 @@ Items from steps 2–4 are flagged `display_context: true` and carry `source_gra
 - Contextual numbers get no trend comparison.
 - The Carbon Story carries each card's label, and skips an act whose card has no number.
 
+### Carbon hero figures
+
+The Overview hero uses the Vercel layout: **Carbon Footprint per Person** as the headline, with **Per Capita**, **Gross Emissions** and **Reduction by Renewables** beside it. The resolver derives two display items from governed items only:
+- `gross_emissions_tco2e` = `operational_ghg_tco2e` (Scope 1 + Scope 2; Scope 3 not included).
+- `operational_ghg_per_capita_tco2e` = `operational_ghg_per_capita_kgco2e` / 1000.
+
+"Reduction by Renewables" is the public label for `estimated_avoided_grid_emissions_tco2e`. It is a separate memo figure and is never subtracted from Gross.
+
+These items inherit their source's period, fallback and completeness rules. A partial Operational GHG therefore produces no Gross and no per-capita figure; the hero hides that figure instead of showing another metric in its place.
+
 ## Import procedure
 
 ```sh

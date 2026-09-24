@@ -1203,3 +1203,6 @@ body[data-page="weather"] .data-head p {
 .kpi-source.is-context { color: #1c7a4b; background: rgba(28,122,75,.10); }
 /* Keep the badge above the video/particle layer of animated KPI cards. */
 .kpi-fx .kpi-source { position: relative; z-index: 10 !important; opacity: 1 !important; }
+/* Carbon hero: provenance of a secondary figure when it differs from the headline's period. */
+.bal-src { display: block; margin-top: 2px; font-size: 10px; font-weight: 600; color: var(--faint, #8a988f); letter-spacing: .02em; }
+.bal-src:empty { display: none; }
