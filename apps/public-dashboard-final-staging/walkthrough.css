@@ -487,6 +487,75 @@
 }
 .wt-w { display: inline-block; }   /* no will-change: ~450 spans would each get a layer */
 
+/* "in other words" — the live equivalency line */
+.wt-equiv {
+  display: flex;
+  align-items: baseline;
+  gap: 11px;
+  margin-top: 20px;
+  max-width: 640px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 12.5px;
+  letter-spacing: .05em;
+  line-height: 1.6;
+  color: rgba(242, 245, 241, .60);
+  clip-path: inset(0 100% 0 0);
+}
+.wt-equiv .wt-equiv-sign {
+  color: var(--a);
+  filter: brightness(1.5);
+  font-size: 15px;
+}
+.wt-equiv b { color: #fff; font-weight: 500; }
+
+/* the closing arithmetic — Gross − Avoided = Net */
+.wt-ledger {
+  width: min(430px, 100%);
+  margin: 32px auto 6px;
+  display: grid;
+  gap: 13px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+.wt-ledger-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 26px;
+}
+.wt-ledger-row .k {
+  font-size: 10.5px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: rgba(242, 245, 241, .52);
+  white-space: nowrap;
+}
+.wt-ledger-row .n {
+  font-size: 17px;
+  color: rgba(242, 245, 241, .92);
+}
+.wt-ledger-rule {
+  height: 1px;
+  background: linear-gradient(90deg, rgba(242, 245, 241, .05), rgba(242, 245, 241, .28), rgba(242, 245, 241, .05));
+  transform: scaleX(0);
+}
+.wt-ledger-net .k { color: var(--a); filter: brightness(1.45); }
+.wt-ledger-net .n {
+  font-size: clamp(26px, 3vw, 40px);
+  font-weight: 500;
+  letter-spacing: -.02em;
+  color: #fff;
+}
+.wt-ledger-net .n small {
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: .13em;
+  margin-left: 9px;
+  color: var(--a);
+  filter: brightness(1.45);
+}
+
 .wt-chips { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 30px; }
 .wt-chip {
   font-family: "IBM Plex Mono", ui-monospace, monospace;
@@ -911,5 +980,7 @@
 #wt-overlay.wt-reduced .wt-copy { opacity: 1; }
 #wt-overlay.wt-reduced .wt-rule { transform: scaleY(1); }
 #wt-overlay.wt-reduced .wt-eyebrow { clip-path: none; }
+#wt-overlay.wt-reduced .wt-equiv { clip-path: none; }
 #wt-overlay.wt-reduced .wt-hair { width: 100%; }
+#wt-overlay.wt-reduced .wt-ledger-rule { transform: scaleX(1); }
 #wt-overlay.wt-reduced .wt-stage { transition: opacity .25s linear; }
