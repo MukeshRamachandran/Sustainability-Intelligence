@@ -91,6 +91,35 @@ test('adapter normalizes the active immutable release and preserves governed LPG
   assert.equal(lpgEmission.activityUnit, 'L');
 });
 
+test('adapter preserves the schema 1.3 governed population and operational indicators', async () => {
+  const api = adapterContext(async () => ({
+    ok: true,
+    json: async () => ({
+      release: { version: 'sustainability-2026-09-v1' },
+      schema_version: '1.3',
+      period: { id: 'period', year: 2026, month: 9 },
+      population: {
+        status: 'available', value: 6991, unit: 'people', effective_year: 2026,
+        source_reference: 'Project-owner decision for 2026'
+      },
+      indicators: {
+        scope1_tco2e: { status: 'available', value: 3, unit: 'tCO2e' },
+        scope2_tco2e: { status: 'available', value: 2, unit: 'tCO2e' },
+        operational_ghg_tco2e: { status: 'available', value: 5, unit: 'tCO2e' },
+        operational_ghg_per_capita_kgco2e: { status: 'available', value: 0.715, unit: 'kgCO2e/person' },
+        waste_per_capita_kg: { status: 'available', value: 2.5, unit: 'kg/person' }
+      }
+    })
+  }));
+  const result = await api.load();
+  assert.equal(result.release.schemaVersion, '1.3');
+  assert.equal(result.population.value, 6991);
+  assert.equal(result.population.effective_year, 2026);
+  assert.equal(api.indicator(result.raw, 'operational_ghg_tco2e').value, 5);
+  assert.equal(api.indicator(result.raw, 'operational_ghg_per_capita_kgco2e').value, 0.715);
+  assert.equal(api.indicator(result.raw, 'waste_per_capita_kg').value, 2.5);
+});
+
 test('adapter loads published history only from the public history contract', async () => {
   let requested;
   const api = adapterContext(async (url, options) => {
@@ -170,7 +199,7 @@ test('governed waste comes from the published release, never waste_master.csv', 
   // as-is, and a missing month is not coerced to zero.
   assert.doesNotMatch(app, /d\.wetWaste \|\| 0/);
   assert.doesNotMatch(app, /d\.dryWaste \|\| 0/);
-  assert.match(app, /d\.totalWaste != null \? d\.totalWaste/);
+  assert.match(app, /wasteTotalKg != null \? wasteTotalKg/);
 });
 
 test('waste adapter reads published metrics, categories and materials', async () => {
@@ -219,7 +248,7 @@ test('an unpublished waste period reports unavailable rather than zero', async (
 
 test('active display marks full GHG and unresolved methodology values unavailable', () => {
   const app = read('app.js');
-  assert.match(app, /Complete GHG not published/);
+  assert.match(app, /Operational GHG emissions — Scope 1 \+ Scope 2/);
   assert.match(app, /Methodology under review/);
   assert.match(app, /Not published/);
   assert.doesNotMatch(app, /2\.388|2\.701|0\.727|0\.71|1\.5571|2\.939/);
@@ -239,9 +268,15 @@ const calc = (code, value, unit = 'tCO2e') => ({
 function publishedPayload(overrides = {}) {
   return {
     release: { version: 'sustainability-2026-09-v1', published_at: '2026-09-24T05:34:32Z', checksum_sha256: 'f'.repeat(64) },
-    schema_version: '1.2', period: { id: 'p', year: 2026, month: 9 },
+    schema_version: '1.3', period: { id: 'p', year: 2026, month: 9 },
+    population: { status: 'available', value: 6991, unit: 'people', effective_year: 2026 },
     publication_status: {},
     indicators: {
+      scope1_tco2e: { status: 'available', value: 9.189255, unit: 'tCO2e' },
+      scope2_tco2e: { status: 'available', value: 2.569945, unit: 'tCO2e' },
+      operational_ghg_tco2e: { status: 'available', value: 11.7592, unit: 'tCO2e' },
+      operational_ghg_per_capita_kgco2e: { status: 'available', value: 1.682048, unit: 'kgCO2e/person' },
+      waste_per_capita_kg: { status: 'unavailable', value: null, unit: 'kg/person' },
       total_ghg_tco2e: { status: 'unavailable', value: null, unit: 'tCO2e', reason: 'methodology_under_review' },
       avoided_emissions_tco2e: { status: 'unavailable', value: null, unit: 'tCO2e', reason: 'methodology_under_review' },
       renewable_share_percent: { status: 'unavailable', value: null, unit: '%', reason: 'methodology_under_review' }
@@ -300,19 +335,21 @@ test('month-bound scalar release blocks are hidden for unpublished months', () =
   const app = read('app.js');
   assert.match(app, /function selectionHasPublication\(d, month\)/);
   assert.match(app, /published\[\+month\] === true/);
-  assert.match(app, /const wasteHasData = hasPublication &&/);
-  assert.match(app, /hasPublication \? d\.waterRecycledKL : null/);
+  assert.match(app, /const publishedWaste = hasPublication &&/);
+  assert.match(app, /hasPublication \? waterRecycled : null/);
   assert.match(app, /outreach\.month === \+month \+ 1/);
   assert.match(app, /outreachForPeriod \? outreach\.participantsServed : null/);
   assert.match(app, /No published operational release/);
 });
 
-test('Scope 1 and combined diesel are additive displays of published components, never official totals', async () => {
+test('Scope 1 and Operational GHG use backend-published indicators, with component values preserved', async () => {
   const { data } = await loadDashboardWith(publishedPayload());
   const item = data['2026'], sep = 8;
   assert.equal(item.scope1Full[sep], 9.189255);
   assert.equal(item.dieselCombo[sep], 0.964257);
-  // The official inventory indicators stay unavailable: nothing sums into them.
+  assert.equal(item.operationalGHG[sep], 11.7592);
+  assert.equal(item.perCapita[sep], 1.682048);
+  // A broad all-scope total remains unavailable.
   assert.equal(item.totalGHG, null);
   assert.equal(item.avoided, null);
   assert.equal(item.reShare, null);
@@ -321,6 +358,7 @@ test('Scope 1 and combined diesel are additive displays of published components,
 test('a missing component leaves Scope 1 missing instead of treating it as zero', async () => {
   const payload = publishedPayload();
   payload.lpg = { metrics: { lpg_consumption_litres: { value: 2, unit: 'L' } }, calculations: [] };
+  payload.indicators.scope1_tco2e = { status: 'unavailable', value: null, unit: 'tCO2e' };
   const { data } = await loadDashboardWith(payload);
   const item = data['2026'], sep = 8;
   assert.equal(item.lpgEm[sep], null);
@@ -344,11 +382,93 @@ test('the official Total GHG, avoided emissions and renewable share stay unavail
   const app = read('app.js');
   const loader = read('public-data-loader.js');
   assert.match(loader, /item\.totalGHG = window\.KCOSMOSPublicAPI\.indicator\(publication\.raw, 'total_ghg_tco2e'\)\.value/);
-  assert.match(app, /const net = null;/);
+  assert.doesNotMatch(app, /const net = null;/);
   assert.match(app, /Methodology under review/);
   // Nothing in the page derives the official total from Scope 1 + Scope 2.
   assert.doesNotMatch(app, /Calculations\.(?:grossEmissions|netCarbonIndicator|scope1Total|scope2Total)/);
   assert.doesNotMatch(loader, /totalGHG\s*=\s*[^w]*(?:scope1|elecEm)/);
+  assert.doesNotMatch(loader, /population_master\.csv|6991/);
+});
+
+test('schema 1.3 monthly loader maps approved Energy and Water fields without population CSV', async () => {
+  const requestedFiles = [];
+  const transport = { metrics: {}, calculations: [] };
+  const energy = { metrics: {
+    grid_ht_kwh: { value: 100, unit: 'kWh' },
+    grid_commercial_kwh: { value: 20, unit: 'kWh' },
+    grid_temporary_kwh: { value: 5, unit: 'kWh' },
+    grid_total_kwh: { value: 125, unit: 'kWh' },
+    renewable_on_campus_kwh: { value: 40, unit: 'kWh' },
+    renewable_procured_kwh: { value: 10, unit: 'kWh' },
+    solar_water_heater_kwh: { value: 7, unit: 'kWh' },
+    renewable_total_kwh: { value: 50, unit: 'kWh' }
+  }, calculations: [] };
+  const water = { metrics: {
+    water_twad_kl: { value: 10, unit: 'KL' },
+    water_borewell_kl: { value: 5, unit: 'KL' },
+    water_private_kl: { value: 2, unit: 'KL' },
+    water_consumed_kl: { value: 17, unit: 'KL' },
+    wastewater_generated_kl: { value: 3, unit: 'KL' },
+    water_recycled_kl: { value: 1, unit: 'KL' }
+  }, calculations: [] };
+  const release = {
+    state: 'published',
+    release: { version: 'sustainability-2026-09-v2' },
+    period: { year: 2026, month: 9 },
+    population: { status: 'available', value: 6991, unit: 'people', effective_year: 2026 },
+    indicators: {
+      scope1_tco2e: { status: 'available', value: 3 },
+      scope2_tco2e: { status: 'available', value: 2 },
+      operational_ghg_tco2e: { status: 'available', value: 5 },
+      operational_ghg_per_capita_kgco2e: { status: 'available', value: 0.715 },
+      waste_per_capita_kg: { status: 'available', value: 2.5 },
+      total_ghg_tco2e: { status: 'unavailable', value: null },
+      avoided_emissions_tco2e: { status: 'unavailable', value: null },
+      renewable_share_percent: { status: 'unavailable', value: null }
+    },
+    domains: { transport, energy, lpg: { metrics: {}, calculations: [] }, water, outreach: null, waste: null },
+    raw: {}
+  };
+  const metric = (domain, code) => {
+    const value = domain?.metrics?.[code]?.value ?? null;
+    return { status: value == null ? 'unavailable' : 'available', value };
+  };
+  const calculation = (domain, code) => ({ value: null });
+  const api = {
+    load: async () => release,
+    loadHistory: async () => ({ releases: [release] }),
+    metric,
+    calculation,
+    indicator: (_raw, code) => ({ value: release.indicators[code]?.value ?? null }),
+    numberOrNull: value => value == null || value === '' ? null : Number(value)
+  };
+  const window = { KCOSMOSPublicAPI: api };
+  vm.runInNewContext(read('public-data-loader.js'), { window, fetch: async url => {
+    requestedFiles.push(String(url).split('?')[0]);
+    return { ok: true, text: async () => '' };
+  }, Object, Number, String, Date, Promise, Math });
+  const result = await window.loadDashboardData();
+  const year = result.data[2026];
+  assert.equal(year.htKwh[8], 100);
+  assert.equal(year.commKwh[8], 20);
+  assert.equal(year.tempKwh[8], 5);
+  assert.equal(year.elecKwh[8], 125);
+  assert.equal(year.reOnCampusKwh[8], 40);
+  assert.equal(year.reProcuredKwh[8], 10);
+  assert.equal(year.solarWaterHeaterKwh[8], 7);
+  assert.equal(year.reKwh[8], 50);
+  assert.equal(year.waterTWAD[8], 10);
+  assert.equal(year.waterBorewell[8], 5);
+  assert.equal(year.waterProcured[8], 2);
+  assert.equal(year.waterKL[8], 17);
+  assert.equal(year.wastewaterKL[8], 3);
+  assert.equal(year.waterRecycledKL[8], 1);
+  assert.equal(year.scope1Full[8], 3);
+  assert.equal(year.operationalGHG[8], 5);
+  assert.equal(year.perCapita[8], 0.715);
+  assert.equal(year.wastePerCapita[8], 2.5);
+  assert.equal(year.population, 6991);
+  assert.deepEqual(requestedFiles.sort(), ['data/dashboard_metadata.csv', 'data/green_master.csv']);
 });
 
 test('missing values are shown as unavailable and are never coerced to zero', () => {
@@ -392,5 +512,6 @@ test('active dashboard files hold no emission-factor formula or operational CSV 
   }
   // Only static institutional files are still fetched by the loader.
   const fetched = [...read('public-data-loader.js').matchAll(/optionalText\('([^']+)'\)/g)].map(match => match[1]).sort();
-  assert.deepEqual(fetched, ['data/dashboard_metadata.csv', 'data/green_master.csv', 'data/population_master.csv']);
+  assert.deepEqual(fetched, ['data/dashboard_metadata.csv', 'data/green_master.csv']);
+  assert.doesNotMatch(read('index.html'), /<script[^>]+src="walkthrough\.js/);
 });

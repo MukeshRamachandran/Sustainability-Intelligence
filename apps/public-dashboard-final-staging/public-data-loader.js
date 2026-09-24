@@ -1,6 +1,7 @@
 /* API-authoritative staging loader. Governed operational domains come only
-   from public-api.js. Waste, green cover, population and labels remain
-   clearly separated static institutional presentation data. */
+   from public-api.js. Green cover and labels remain clearly separated static
+   institutional presentation data; operational population comes from release
+   schema 1.3, never from the historical CSV. */
 (function () {
   'use strict';
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -52,18 +53,21 @@
     return {
       year: Number(year), label: `${year} Published snapshot`, frequency: 'ytd', population: null,
       publicationState: 'unavailable', publishedMonths: Array(12).fill(false),
-      totalGHG: null, totalEnergy: null, gridEnergy: null,
-      reEnergy: null, reShare: null, avoided: null, perCapita: null,
+      totalGHG: null, operationalGHG: empty(), totalEnergy: null, gridEnergy: null,
+      reEnergy: null, reShare: null, avoided: null, perCapita: empty(),
+      wastePerCapita: empty(),
       petrolL: empty(), trDieselL: empty(), dgL: empty(), lpgL: empty(),
       petrolEm: empty(), trDieselEm: empty(), dgEm: empty(), lpgEm: empty(),
       dieselCombo: empty(), scope1Selected: empty(), scope1Full: empty(),
       htKwh: empty(), commKwh: empty(), tempKwh: empty(), elecKwh: empty(),
       htEm: empty(), commEm: empty(), tempEm: empty(), elecEm: empty(),
       reKwh: empty(), reOnCampusKwh: empty(), reProcuredKwh: empty(), avoidEm: empty(),
-      solarWaterHeaterKwh: null, wetWaste: null, dryWaste: null, totalWaste: null,
-      wasteBreakdown: [], wasteCategories: [], wastePublished: false,
+      solarWaterHeaterKwh: empty(), wetWaste: empty(), dryWaste: empty(), totalWaste: empty(),
+      wasteBreakdownByMonth: Array(12).fill(null), wasteCategoriesByMonth: Array(12).fill(null),
+      wastePublishedMonths: Array(12).fill(false),
       waterKL: empty(), waterTWAD: empty(), waterBorewell: empty(), waterProcured: empty(),
-      waterRecycledKL: null, waterTWADAnnual: null, waterBorewellAnnual: null, waterTotalAnnual: null,
+      wastewaterKL: empty(),
+      waterRecycledKL: empty(), waterTWADAnnual: null, waterBorewellAnnual: null, waterTotalAnnual: null,
       grossSelected: empty(), grossFull: empty(), petrolVehicleCount: null, dieselVehicleCount: null,
       evConsumptionKwh: null, dgCount: null
     };
@@ -113,42 +117,49 @@
     setCalculation(item.elecEm, month, energy, 'grid_electricity_emissions');
     setMetric(item.reOnCampusKwh, month, energy, 'renewable_on_campus_kwh');
     setMetric(item.reProcuredKwh, month, energy, 'renewable_procured_kwh');
+    setMetric(item.solarWaterHeaterKwh, month, energy, 'solar_water_heater_kwh');
     setMetric(item.reKwh, month, energy, 'renewable_total_kwh');
     item.reEnergy = item.reKwh[month];
     setMetric(item.lpgL, month, lpg, 'lpg_consumption_litres');
     setCalculation(item.lpgEm, month, lpg, 'lpg_emissions');
-    /* Additive display of already-published governed component results (the
-       project's existing Scope 1 definition: petrol + fleet diesel + DG + LPG).
-       It needs every component: one missing result leaves the subtotal missing
-       rather than treating that component as zero. It is NOT the official
-       total GHG, which stays unavailable while its methodology is under review. */
-    const sumAll = values => values.every(value => value != null)
-      ? Number(values.reduce((total, value) => total + value, 0).toFixed(6)) : null;
-    item.scope1Full[month] = sumAll([item.petrolEm[month], item.trDieselEm[month], item.dgEm[month], item.lpgEm[month]]);
+    /* Headline Scope 1/2 and operational indicators are backend-produced in
+       schema 1.3 from the frozen component calculations. */
+    item.scope1Full[month] = window.KCOSMOSPublicAPI.indicator(publication.raw, 'scope1_tco2e').value;
     item.scope1Selected[month] = item.scope1Full[month];
-    item.dieselCombo[month] = sumAll([item.trDieselEm[month], item.dgEm[month]]);
+    item.dieselCombo[month] = item.trDieselEm[month] == null || item.dgEm[month] == null
+      ? null : Number((item.trDieselEm[month] + item.dgEm[month]).toFixed(6));
     /* Governed waste comes from the published release only. The static
        waste_master.csv is historical reference and must never overwrite a
        published month. */
     const waste = publication.domains.waste;
     if (waste) {
-      item.wetWaste = window.KCOSMOSPublicAPI.metric(waste, 'wet_waste_generated_kg').value;
-      item.dryWaste = window.KCOSMOSPublicAPI.metric(waste, 'dry_waste_generated_kg').value;
-      item.totalWaste = window.KCOSMOSPublicAPI.metric(waste, 'total_waste_generated_kg').value;
-      item.wasteBreakdown = (waste.materials || []).map(row => ({
+      setMetric(item.wetWaste, month, waste, 'wet_waste_generated_kg');
+      setMetric(item.dryWaste, month, waste, 'dry_waste_generated_kg');
+      setMetric(item.totalWaste, month, waste, 'total_waste_generated_kg');
+      item.wasteBreakdownByMonth[month] = (waste.materials || []).map(row => ({
         name: row.display_name,
         value: window.KCOSMOSPublicAPI.numberOrNull(row.quantity_kg)
       })).filter(row => row.value !== null);
-      item.wasteCategories = (waste.categories || []).map(row => ({
+      item.wasteCategoriesByMonth[month] = (waste.categories || []).map(row => ({
         code: row.code,
         name: row.display_name,
         value: window.KCOSMOSPublicAPI.numberOrNull(row.quantity_kg)
       })).filter(row => row.value !== null);
-      item.wastePublished = true;
+      item.wastePublishedMonths[month] = true;
     }
     setMetric(item.waterKL, month, water, 'water_consumed_kl');
-    item.waterRecycledKL = window.KCOSMOSPublicAPI.metric(water, 'water_recycled_kl').value;
+    setMetric(item.waterTWAD, month, water, 'water_twad_kl');
+    setMetric(item.waterBorewell, month, water, 'water_borewell_kl');
+    setMetric(item.waterProcured, month, water, 'water_private_kl');
+    setMetric(item.wastewaterKL, month, water, 'wastewater_generated_kl');
+    setMetric(item.waterRecycledKL, month, water, 'water_recycled_kl');
     item.totalGHG = window.KCOSMOSPublicAPI.indicator(publication.raw, 'total_ghg_tco2e').value;
+    item.operationalGHG[month] = window.KCOSMOSPublicAPI.indicator(publication.raw, 'operational_ghg_tco2e').value;
+    item.elecEm[month] = window.KCOSMOSPublicAPI.indicator(publication.raw, 'scope2_tco2e').value;
+    item.perCapita[month] = window.KCOSMOSPublicAPI.indicator(publication.raw, 'operational_ghg_per_capita_kgco2e').value;
+    item.wastePerCapita[month] = window.KCOSMOSPublicAPI.indicator(publication.raw, 'waste_per_capita_kg').value;
+    const population = publication.population;
+    item.population = population?.status === 'available' ? num(population.value) : null;
     item.avoided = window.KCOSMOSPublicAPI.indicator(publication.raw, 'avoided_emissions_tco2e').value;
     item.reShare = window.KCOSMOSPublicAPI.indicator(publication.raw, 'renewable_share_percent').value;
   }
@@ -206,8 +217,8 @@
   }
 
   async function loadDashboardData() {
-    const [publication, history, populationText, metadataText, greenText] = await Promise.all([
-      window.KCOSMOSPublicAPI.load(), window.KCOSMOSPublicAPI.loadHistory(), optionalText('data/population_master.csv'),
+    const [publication, history, metadataText, greenText] = await Promise.all([
+      window.KCOSMOSPublicAPI.load(), window.KCOSMOSPublicAPI.loadHistory(),
       optionalText('data/dashboard_metadata.csv'), optionalText('data/green_master.csv')
     ]);
     const data = {};
@@ -216,7 +227,6 @@
       const item = ensureYear(data, row.year);
       item.label = row.label || item.label;
     });
-    parseCSV(populationText).forEach(row => { if (row.year) ensureYear(data, row.year).population = num(row.population); });
 
     const fallbackYear = publication.period?.year || new Date().getFullYear();
     const item = ensureYear(data, fallbackYear);

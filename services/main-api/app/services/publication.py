@@ -9,16 +9,23 @@ from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from app.models.enums import OperationalDomain, PublicationClass, SubmissionStatus
-from app.models.sustainability import MetricDefinition, ReportingPeriod, Submission, SubmissionValue
+from app.models.sustainability import (
+    InstitutionalPopulationReference,
+    MetricDefinition,
+    ReportingPeriod,
+    Submission,
+    SubmissionValue,
+)
 from app.schemas.emission_factors import CalculationResponse
 from app.services import waste as waste_service
 from app.services.emission_factors import calculation_responses
 from app.services.outreach import aggregate_approved_outreach
 from app.services.publication_readiness import REQUIRED_PUBLICATION_DOMAINS
 
-# 1.2 adds the governed waste payload (metrics, backend category totals and
-# material rows). 1.0 and 1.1 payloads stay readable and are never rewritten.
-RELEASE_SCHEMA_VERSION = "1.2"
+# 1.3 adds approved Energy/Water aggregates, a safe population reference, and
+# backend-derived Scope 1/2 and operational indicators. Frozen older payloads
+# remain immutable and are served with the schema version stored in each one.
+RELEASE_SCHEMA_VERSION = "1.3"
 GENERIC_PUBLICATION_DOMAINS = (
     OperationalDomain.TRANSPORT,
     OperationalDomain.ENERGY,
@@ -178,6 +185,127 @@ def _generic_domain_payload(db: Session, submission: Submission) -> dict[str, ob
     return result
 
 
+def _decimal_metric(domain_payload: object, code: str) -> Decimal | None:
+    if not isinstance(domain_payload, dict):
+        return None
+    metrics = domain_payload.get("metrics")
+    entry = metrics.get(code) if isinstance(metrics, dict) else None
+    value = entry.get("value") if isinstance(entry, dict) else None
+    return None if value is None else Decimal(str(value))
+
+
+def _decimal_calculation(domain_payload: object, code: str) -> Decimal | None:
+    if not isinstance(domain_payload, dict):
+        return None
+    calculations = domain_payload.get("calculations")
+    if not isinstance(calculations, list):
+        return None
+    for item in calculations:
+        if not isinstance(item, dict) or item.get("calculation_code") != code:
+            continue
+        value = item.get("result_value")
+        if item.get("status") != "available" or value is None:
+            return None
+        return Decimal(str(value))
+    return None
+
+
+def _indicator(value: Decimal | None, unit: str, reason: str) -> dict[str, object]:
+    if value is None:
+        return {"status": "unavailable", "reason": reason, "value": None, "unit": unit}
+    rounded = value.quantize(Decimal("0.000001"))
+    return {"status": "available", "reason": None, "value": _json_number(rounded), "unit": unit}
+
+
+def _schema_1_3_indicators(
+    db: Session, period: ReportingPeriod, payload: dict[str, object]
+) -> tuple[dict[str, object], dict[str, object]]:
+    transport = payload.get("transport")
+    lpg = payload.get("lpg")
+    energy = payload.get("energy")
+    waste = payload.get("waste")
+
+    scope1_parts = [
+        _decimal_calculation(transport, "transport_petrol_emissions"),
+        _decimal_calculation(transport, "transport_diesel_emissions"),
+        _decimal_calculation(transport, "dg_diesel_emissions"),
+        _decimal_calculation(lpg, "lpg_emissions"),
+    ]
+    scope1 = (
+        sum((part for part in scope1_parts if isinstance(part, Decimal)), Decimal("0"))
+        if all(part is not None for part in scope1_parts)
+        else None
+    )
+    scope2 = _decimal_calculation(energy, "grid_electricity_emissions")
+    operational = scope1 + scope2 if scope1 is not None and scope2 is not None else None
+
+    reference = db.get(InstitutionalPopulationReference, period.year)
+    population_is_usable = reference is not None and reference.population > 0
+    population = reference.population if population_is_usable and reference is not None else None
+    population_payload: dict[str, object] = {
+        "status": "available" if population is not None else "unavailable",
+        "reason": None if population is not None else (
+            "population_is_zero" if reference is not None else "population_not_configured"
+        ),
+        "value": population,
+        "unit": reference.unit if reference is not None else "people",
+        "effective_year": period.year,
+        "source_reference": reference.source_reference if reference is not None else None,
+    }
+
+    waste_total = _decimal_metric(waste, "total_waste_generated_kg")
+    per_capita_ghg = (
+        operational * Decimal("1000") / Decimal(population)
+        if operational is not None and population is not None
+        else None
+    )
+    waste_per_capita = (
+        waste_total / Decimal(population)
+        if waste_total is not None and population is not None
+        else None
+    )
+    indicators: dict[str, object] = {
+        "scope1_tco2e": _indicator(scope1, "tCO2e", "required_scope1_component_unavailable"),
+        "scope2_tco2e": _indicator(scope2, "tCO2e", "grid_electricity_unavailable"),
+        "operational_ghg_tco2e": _indicator(
+            operational,
+            "tCO2e",
+            "scope1_or_scope2_unavailable",
+        ),
+        "operational_ghg_per_capita_kgco2e": _indicator(
+            per_capita_ghg,
+            "kgCO2e/person",
+            "operational_ghg_or_population_unavailable",
+        ),
+        "waste_per_capita_kg": _indicator(
+            waste_per_capita,
+            "kg/person",
+            "waste_or_population_unavailable",
+        ),
+        # Retain the legacy broad-total key honestly; Operational GHG is the
+        # explicitly bounded Scope 1 + Scope 2 indicator, not an all-scope total.
+        "total_ghg_tco2e": {
+            "status": "unavailable",
+            "reason": "methodology_under_review",
+            "value": None,
+            "unit": "tCO2e",
+        },
+        "avoided_emissions_tco2e": {
+            "status": "unavailable",
+            "reason": "methodology_under_review",
+            "value": None,
+            "unit": "tCO2e",
+        },
+        "renewable_share_percent": {
+            "status": "unavailable",
+            "reason": "methodology_under_review",
+            "value": None,
+            "unit": "%",
+        },
+    }
+    return indicators, population_payload
+
+
 def build_release_payload(db: Session, period: ReportingPeriod) -> dict[str, object]:
     approved = {
         domain: _approved_submission(db, period.id, domain)
@@ -200,26 +328,9 @@ def build_release_payload(db: Session, period: ReportingPeriod) -> dict[str, obj
         domain.value: "approved" if approved[domain] is not None else "missing_approved_submission"
         for domain in REQUIRED_PUBLICATION_DOMAINS
     }
-    payload["indicators"] = {
-        "total_ghg_tco2e": {
-            "status": "unavailable",
-            "reason": "methodology_under_review",
-            "value": None,
-            "unit": "tCO2e",
-        },
-        "avoided_emissions_tco2e": {
-            "status": "unavailable",
-            "reason": "methodology_under_review",
-            "value": None,
-            "unit": "tCO2e",
-        },
-        "renewable_share_percent": {
-            "status": "unavailable",
-            "reason": "methodology_under_review",
-            "value": None,
-            "unit": "%",
-        },
-    }
+    indicators, population = _schema_1_3_indicators(db, period, payload)
+    payload["indicators"] = indicators
+    payload["population"] = population
     return payload
 
 
@@ -236,10 +347,23 @@ def empty_public_dashboard(*, year: int | None = None, month: int | None = None)
     payload["indicators"] = {
         code: {"status": "unavailable", "reason": "not_published", "value": None, "unit": unit}
         for code, unit in (
+            ("scope1_tco2e", "tCO2e"),
+            ("scope2_tco2e", "tCO2e"),
+            ("operational_ghg_tco2e", "tCO2e"),
+            ("operational_ghg_per_capita_kgco2e", "kgCO2e/person"),
+            ("waste_per_capita_kg", "kg/person"),
             ("total_ghg_tco2e", "tCO2e"),
             ("avoided_emissions_tco2e", "tCO2e"),
             ("renewable_share_percent", "%"),
         )
+    }
+    payload["population"] = {
+        "status": "unavailable",
+        "reason": "not_published",
+        "value": None,
+        "unit": "people",
+        "effective_year": year,
+        "source_reference": None,
     }
     return payload
 

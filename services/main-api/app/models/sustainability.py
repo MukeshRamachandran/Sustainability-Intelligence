@@ -57,6 +57,24 @@ class ReportingPeriod(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class InstitutionalPopulationReference(Base):
+    """Owner-approved population reference selected by reporting year."""
+
+    __tablename__ = "institutional_population_references"
+    __table_args__ = (
+        CheckConstraint("population >= 0", name="population_non_negative"),
+        CheckConstraint("unit = 'people'", name="population_unit_people"),
+        CheckConstraint("length(trim(source_reference)) > 0", name="population_source_required"),
+        {"schema": "sustainability"},
+    )
+
+    effective_year: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    population: Mapped[int] = mapped_column(Integer, nullable=False)
+    unit: Mapped[str] = mapped_column(String(40), nullable=False, default="people")
+    source_reference: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class MetricDefinition(Base):
     __tablename__ = "metric_definitions"
     __table_args__ = (

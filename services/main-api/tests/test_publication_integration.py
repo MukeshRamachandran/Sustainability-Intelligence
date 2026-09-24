@@ -17,6 +17,7 @@ from app.models.identity import User
 from app.models.publication import PublicRelease
 from app.models.sustainability import (
     CalculationResult,
+    InstitutionalPopulationReference,
     MetricDefinition,
     OutreachProgramme,
     ReportingPeriod,
@@ -350,7 +351,7 @@ def test_multidomain_release_snapshot_privacy_checksum_and_publish(postgres_engi
         candidate_same = _prepare(client, csrf, period, f"publication-{uuid4().hex}")
         payload = candidate_one["payload"]
 
-        assert payload["schema_version"] == "1.2"
+        assert payload["schema_version"] == "1.3"
         assert payload["period"] == {"id": str(period_id), "year": period.year, "month": period.month}
         assert payload["publication_status"] == {domain.value: "approved" for domain in OperationalDomain}
         assert set(payload["transport"]["metrics"]) == {
@@ -373,6 +374,8 @@ def test_multidomain_release_snapshot_privacy_checksum_and_publish(postgres_engi
         assert payload["transport"]["calculations"][0]["factor_code"] == "PETROL"
         assert payload["energy"]["calculations"][0]["calculation_code"] == "grid_electricity_emissions"
         assert payload["indicators"]["total_ghg_tco2e"]["status"] == "unavailable"
+        assert payload["indicators"]["scope1_tco2e"]["status"] == "unavailable"
+        assert payload["indicators"]["operational_ghg_tco2e"]["status"] == "unavailable"
         assert payload["indicators"]["avoided_emissions_tco2e"]["reason"] == "methodology_under_review"
         assert payload["water"]["metrics"]["water_consumed_kl"]["value"] == 11
         assert payload["water"]["metrics"]["water_recycled_kl"]["value"] == 4
@@ -417,7 +420,8 @@ def test_multidomain_release_snapshot_privacy_checksum_and_publish(postgres_engi
             "evidence",
             "species_details",
             "verification",
-            "private",
+            "private_note",
+            "private_data",
             "inlet_ph",
             "petrol_vehicle_count",
             # Reference-only LPG metadata must never reach a public payload.
@@ -589,3 +593,193 @@ def test_release_listing_is_admin_only_metadata(postgres_engine: Engine) -> None
         assert client.get(f"/api/admin/releases?reporting_period_id={other_period_id}").json() == []
         assert client.get(f"/api/admin/releases?reporting_period_id={uuid4()}").status_code == 404
         assert client.get("/api/admin/releases").status_code == 422
+
+
+def _frozen_calculation(
+    submission: Submission,
+    calculation_code: str,
+    metric_code: str,
+    activity: Decimal,
+    activity_unit: str,
+    result_tco2e: Decimal,
+) -> CalculationResult:
+    factor_code = {
+        "transport_petrol_emissions": "PETROL",
+        "transport_diesel_emissions": "DIESEL",
+        "dg_diesel_emissions": "DIESEL",
+        "lpg_emissions": "LPG",
+        "grid_electricity_emissions": "GRID_ELECTRICITY",
+    }[calculation_code]
+    return CalculationResult(
+        submission_id=submission.id,
+        submission_revision=submission.revision_number,
+        calculation_code=calculation_code,
+        calculation_status="available",
+        metric_code=metric_code,
+        activity_value=activity,
+        activity_unit=activity_unit,
+        factor_set_version="publication-contract-test",
+        factor_code=factor_code,
+        factor_value=result_tco2e * Decimal("1000") / activity,
+        factor_unit=f"kgCO2e/{activity_unit}",
+        result_kgco2e=result_tco2e * Decimal("1000"),
+        result_value=result_tco2e,
+        result_unit="tCO2e",
+        formula_version="publication-contract-test",
+    )
+
+
+def test_schema_1_3_publishes_governed_aggregates_and_backend_indicators(postgres_engine: Engine) -> None:
+    with Session(postgres_engine) as db:
+        period = _period(db, 2190, 9)
+        admin = _account(db, RoleCode.ADMIN)
+        managers = {domain: _account(db, RoleCode.MANAGER, domain) for domain in OperationalDomain}
+        db.add(
+            InstitutionalPopulationReference(
+                effective_year=period.year,
+                population=1000,
+                unit="people",
+                source_reference="Owner-approved integration-test population reference",
+            )
+        )
+
+        transport = _submission(
+            db,
+            period,
+            managers[OperationalDomain.TRANSPORT],
+            OperationalDomain.TRANSPORT,
+            SubmissionStatus.APPROVED,
+            {
+                "transport_petrol_litres": 1,
+                "transport_diesel_litres": 2,
+                "dg_diesel_litres": 3,
+            },
+            approved_by=admin,
+        )
+        lpg = _submission(
+            db,
+            period,
+            managers[OperationalDomain.LPG],
+            OperationalDomain.LPG,
+            SubmissionStatus.APPROVED,
+            {"lpg_consumption_litres": 4},
+            approved_by=admin,
+        )
+        energy = _submission(
+            db,
+            period,
+            managers[OperationalDomain.ENERGY],
+            OperationalDomain.ENERGY,
+            SubmissionStatus.APPROVED,
+            {
+                "grid_ht_kwh": 10,
+                "grid_commercial_kwh": 20,
+                "grid_temporary_kwh": 0,
+                "renewable_on_campus_kwh": 50,
+                "renewable_procured_kwh": 60,
+                "solar_water_heater_kwh": 70,
+            },
+            approved_by=admin,
+        )
+        _submission(
+            db,
+            period,
+            managers[OperationalDomain.WATER],
+            OperationalDomain.WATER,
+            SubmissionStatus.APPROVED,
+            {
+                "water_twad_kl": 5,
+                "water_borewell_kl": 6,
+                "water_private_kl": 0,
+                "wastewater_generated_kl": 2,
+                "water_recycled_kl": 4,
+            },
+            approved_by=admin,
+        )
+        waste = _submission(
+            db,
+            period,
+            managers[OperationalDomain.WASTE],
+            OperationalDomain.WASTE,
+            SubmissionStatus.DRAFT,
+            {"wet_waste_generated_kg": 100},
+        )
+        db.add(
+            WasteSubmissionItem(
+                submission_id=waste.id,
+                material_code="PET",
+                quantity_kg=Decimal("50"),
+            )
+        )
+        db.flush()
+        _approve(waste, admin)
+
+        db.add_all(
+            [
+                _frozen_calculation(
+                    transport, "transport_petrol_emissions", "transport_petrol_litres",
+                    Decimal("1"), "L", Decimal("0.1"),
+                ),
+                _frozen_calculation(
+                    transport, "transport_diesel_emissions", "transport_diesel_litres",
+                    Decimal("2"), "L", Decimal("0.2"),
+                ),
+                _frozen_calculation(
+                    transport, "dg_diesel_emissions", "dg_diesel_litres",
+                    Decimal("3"), "L", Decimal("0.3"),
+                ),
+                _frozen_calculation(
+                    lpg, "lpg_emissions", "lpg_consumption_litres",
+                    Decimal("4"), "L", Decimal("0.4"),
+                ),
+                _frozen_calculation(
+                    energy, "grid_electricity_emissions", "grid_total_kwh",
+                    Decimal("30"), "kWh", Decimal("0.5"),
+                ),
+            ]
+        )
+        db.flush()
+
+        payload = build_release_payload(db, period)
+        assert payload["schema_version"] == "1.3"
+        assert payload["energy"]["metrics"]["grid_ht_kwh"] == {"value": 10, "unit": "kWh"}  # type: ignore[index]
+        assert payload["energy"]["metrics"]["grid_total_kwh"] == {"value": 30, "unit": "kWh"}  # type: ignore[index]
+        assert payload["energy"]["metrics"]["renewable_on_campus_kwh"]["value"] == 50  # type: ignore[index]
+        assert payload["energy"]["metrics"]["renewable_total_kwh"]["value"] == 180  # type: ignore[index]
+        assert payload["water"]["metrics"]["water_twad_kl"]["value"] == 5  # type: ignore[index]
+        assert payload["water"]["metrics"]["water_borewell_kl"]["value"] == 6  # type: ignore[index]
+        assert payload["water"]["metrics"]["water_private_kl"]["value"] == 0  # type: ignore[index]
+        assert payload["water"]["metrics"]["wastewater_generated_kl"]["value"] == 2  # type: ignore[index]
+        assert payload["population"] == {
+            "status": "available",
+            "reason": None,
+            "value": 1000,
+            "unit": "people",
+            "effective_year": period.year,
+            "source_reference": "Owner-approved integration-test population reference",
+        }
+        assert payload["indicators"]["scope1_tco2e"]["value"] == 1.0  # type: ignore[index]
+        assert payload["indicators"]["scope2_tco2e"]["value"] == 0.5  # type: ignore[index]
+        assert payload["indicators"]["operational_ghg_tco2e"]["value"] == 1.5  # type: ignore[index]
+        assert payload["indicators"]["operational_ghg_per_capita_kgco2e"]["value"] == 1.5  # type: ignore[index]
+        assert payload["indicators"]["waste_per_capita_kg"]["value"] == 0.15  # type: ignore[index]
+        assert payload["indicators"]["avoided_emissions_tco2e"]["reason"] == "methodology_under_review"  # type: ignore[index]
+        assert payload["indicators"]["renewable_share_percent"]["reason"] == "methodology_under_review"  # type: ignore[index]
+        serialized = json.dumps(payload, sort_keys=True).casefold()
+        assert "username" not in serialized
+        assert "created_by" not in serialized
+
+        zero_period = _period(db, period.year + 1, 9)
+        db.add(
+            InstitutionalPopulationReference(
+                effective_year=zero_period.year,
+                population=0,
+                unit="people",
+                source_reference="Owner-approved zero-population boundary test",
+            )
+        )
+        db.flush()
+        zero_payload = build_release_payload(db, zero_period)
+        assert zero_payload["population"]["reason"] == "population_is_zero"  # type: ignore[index]
+        assert zero_payload["indicators"]["operational_ghg_per_capita_kgco2e"]["status"] == "unavailable"  # type: ignore[index]
+        assert zero_payload["indicators"]["waste_per_capita_kg"]["status"] == "unavailable"  # type: ignore[index]

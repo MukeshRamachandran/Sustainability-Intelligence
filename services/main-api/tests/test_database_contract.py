@@ -15,6 +15,7 @@ REQUIRED_TABLES = {
     },
     "sustainability": {
         "reporting_periods",
+        "institutional_population_references",
         "metric_definitions",
         "submissions",
         "submission_values",
@@ -33,8 +34,18 @@ PUBLIC_METRICS = {
     "dg_diesel_litres",
     "lpg_consumption_litres",
     "grid_total_kwh",
+    "grid_ht_kwh",
+    "grid_commercial_kwh",
+    "grid_temporary_kwh",
+    "renewable_on_campus_kwh",
+    "renewable_procured_kwh",
+    "solar_water_heater_kwh",
     "renewable_total_kwh",
+    "water_twad_kl",
+    "water_borewell_kl",
+    "water_private_kl",
     "water_consumed_kl",
+    "wastewater_generated_kl",
     "water_recycled_kl",
     "wet_waste_generated_kg",
     "dry_waste_generated_kg",
@@ -113,6 +124,24 @@ def test_roles_domains_and_metric_publication_are_seeded(postgres_engine: Engine
         assert all(row["source_reference"] for row in seeded)
         assert lpg["status"] == "draft"
         assert lpg["effective_from"] is None
+
+
+def test_owner_approved_population_reference_is_seeded_and_governed(postgres_engine: Engine) -> None:
+    with postgres_engine.connect() as connection:
+        rows = connection.execute(
+            text(
+                "select effective_year, population, unit, source_reference "
+                "from sustainability.institutional_population_references"
+            )
+        ).mappings().all()
+    assert rows == [
+        {
+            "effective_year": 2026,
+            "population": 6991,
+            "unit": "people",
+            "source_reference": "K-COSMOS Phase 1.3 project-owner decision: 6,991 people for 2026",
+        }
+    ]
 
 
 def _insert_manager(connection: object, domain: str) -> str:

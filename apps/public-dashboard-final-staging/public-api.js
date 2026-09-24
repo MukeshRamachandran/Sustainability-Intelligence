@@ -81,6 +81,7 @@
       } : null,
       publicationStatus: payload?.publication_status || {},
       indicators: payload?.indicators || {},
+      population: payload?.population || null,
       domains: {
         transport: payload?.transport || null,
         energy: payload?.energy || null,
@@ -103,7 +104,7 @@
       return { ...normalize(await response.json()), url };
     } catch (error) {
       return {
-        state: 'error', release: null, period: null, publicationStatus: {},
+        state: 'error', release: null, period: null, publicationStatus: {}, population: null,
         domains: { transport: null, energy: null, lpg: null, water: null, outreach: null, waste: null },
         raw: null, url, error: error instanceof Error ? error.message : String(error)
       };

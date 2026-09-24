@@ -101,7 +101,7 @@
     <div class="hero-row">
       <section class="balance square-kpi" style="flex: 1; max-width: 50%;">
         <div class="bal-top">
-          <span id="balLabel">Carbon Footprint per Person</span>
+          <span id="balLabel">Operational GHG Emissions — Scope 1 + Scope 2</span>
           <span id="balPeriod">—</span>
         </div>
 
@@ -109,28 +109,28 @@
           <div class="bal-left">
             <div class="bal-gross">
               <span id="hero-ghg">--</span>
-              <em id="hero-unit">tCO2/Individual</em>
+              <em id="hero-unit">tCO₂e</em>
             </div>
           </div>
 
           <div class="bal-legend" role="tablist">
             <div class="bal-item active" id="tab-net" style="cursor: pointer;">
-              <span class="k"><i class="dot" style="background:var(--blue)"></i>Per Capita</span>
+              <span class="k"><i class="dot" style="background:var(--blue)"></i>Per Capita Operational GHG</span>
               <span class="v" id="balNetVal">--</span>
             </div>
             <div class="bal-item" id="tab-gross" style="cursor: pointer;">
-              <span class="k"><i class="dot" style="background:var(--orange)"></i>Gross Emissions</span>
+              <span class="k"><i class="dot" style="background:var(--orange)"></i>Operational GHG · Scope 1 + 2</span>
               <span class="v" id="balGrossVal">--</span>
             </div>
             <div class="bal-item" id="tab-avoid" style="cursor: pointer;">
-              <span class="k"><i class="dot" style="background:var(--green)"></i>Reduction by Renewables</span>
+              <span class="k"><i class="dot" style="background:var(--green)"></i>Avoided emissions · under review</span>
               <span class="v" id="balAvoidVal">--</span>
             </div>
           </div>
         </div>
         <div class="bal-footer"
           style="font-size: 11px; color: var(--muted, #8a988f); margin-top: auto; padding-top: 12px;">
-          *Scope 3 emissions not included in this footprint
+          *This operational indicator includes Scope 1 + Scope 2 only; Scope 3 is not included.
         </div>
       </section>
 
@@ -556,13 +556,14 @@
 
     <section class="row">
       <div class="card about-card">
-        <h2>Carbon Footprint Calculation</h2>
-        <p>The Greenhouse Gas (GHG) emissions inventory for Kumaraguru Institutions has been developed in accordance
-          with <strong>ISO 14064-1:2018</strong> and the <strong>GHG Protocol</strong>, using an
-          <strong>activity-based quantification approach</strong>. Emissions are calculated by multiplying
-          activity-based data with appropriate emission factors derived from national and international sources.
-        </p>
-        <div class="formula-box">CO₂ Emissions = Σ (Activity Data × Emission Factor)</div>
+        <h2>Operational GHG Calculation</h2>
+        <p>A Phase 1.3 public release reports a bounded operational indicator derived by the backend from frozen, governed
+          calculation results. Scope 1 includes Petrol, Transport Diesel, DG Diesel and LPG CO₂e; Scope 2 is grid
+          electricity CO₂e. The combined value is not a complete Scope 3 or universal institutional GHG inventory.
+          Avoided emissions, renewable share, Waste CO₂e and Green Cover sequestration remain unavailable while their
+          methodologies are under review. Earlier immutable releases may not contain the Phase 1.3 indicators and will
+          show those values as unavailable.</p>
+        <div class="formula-box">Operational GHG = Scope 1 + Scope 2</div>
       </div>
     </section>
 
@@ -582,18 +583,12 @@
             <tbody>
               <tr>
                 <td><strong>Scope 1 Emissions</strong></td>
-                <td>Direct emissions produced by activities controlled by the institution. In this dashboard, Scope 1
-                  mainly includes fuel used for campus Fleet and diesel used in generators. For example, petrol
-                  and diesel consumed by college vehicles and diesel used in DG sets are converted into CO₂e emissions
-                  using standard emission factors — helping identify the direct carbon impact created by Fleet and
-                  backup power systems.</td>
+                <td>In this public contract, Scope 1 is the published sum of Petrol CO₂e, Transport Diesel CO₂e,
+                  DG Diesel CO₂e and LPG CO₂e. If any required frozen component result is missing, Scope 1 is unavailable.</td>
               </tr>
               <tr>
                 <td><strong>Scope 2 Emissions</strong></td>
-                <td>Indirect emissions from purchased electricity. The college uses electricity from the grid for
-                  academic blocks, administrative buildings, labs, and other facilities. Even though these emissions
-                  are not produced directly on campus, grid electricity carries an associated carbon impact because it
-                  is generated from various energy sources, including coal.</td>
+                <td>In this public contract, Scope 2 is the frozen published CO₂e result for grid electricity.</td>
               </tr>
             </tbody>
           </table>
@@ -622,20 +617,16 @@
                 </td>
               </tr>
               <tr>
-                <td><strong>Gross GHG Emissions</strong></td>
-                <td>The total amount of greenhouse gases released into the atmosphere from all sources within defined
-                  boundaries, calculated <strong>before</strong> accounting for any GHG removals, carbon offsets, or
-                  credits.</td>
+                <td><strong>Operational GHG Emissions</strong></td>
+                <td>The published Scope 1 + Scope 2 result for the reporting period. It is not presented as a complete institutional footprint.</td>
               </tr>
               <tr>
-                <td><strong>Net GHG Emissions</strong></td>
-                <td>The net sum of total gross GHG emissions <strong>minus</strong> any verified GHG removals or
-                  reductions.</td>
+                <td><strong>Operational GHG per capita</strong></td>
+                <td>The backend-published Operational GHG result converted to kilograms and divided by the governed population reference for that reporting year.</td>
               </tr>
             </tbody>
           </table>
         </div>
-        <div class="formula-box">Net Emissions = Gross Emissions − GHG Removals/Reductions</div>
       </div>
     </section>
 
@@ -697,12 +688,12 @@
   </aside>
 
   <script src="calculations.js?v=2"></script>
-  <script src="public-api.js?v=1"></script>
-  <script src="public-data-loader.js?v=3"></script>
-  <script src="app.js?v=23"></script>
+  <script src="public-api.js?v=2"></script>
+  <script src="public-data-loader.js?v=4"></script>
+  <script src="app.js?v=24"></script>
   <script src="weather.js?v=6"></script>
   <script src="vendor/gsap-scrolltrigger.min.js"></script>
-  <script src="walkthrough.js?v=13"></script>
+  <!-- Carbon Story is disabled for this production staging contract until its illustrative equivalents are governed. -->
   <script src="mobile.js?v=1"></script>
 </body>
 
