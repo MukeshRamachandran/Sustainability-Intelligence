@@ -3,8 +3,9 @@
 The importer reconciles every source copy before anything is stored (rules R0–R5, see `HISTORICAL_DATA_ARCHITECTURE.md`). Only RESOLVED or uncontested values become AUTHORITATIVE. Contested values are stored with full provenance and status `CONFLICT`, and are **not published**. Nothing was chosen silently.
 
 State in `microcosm_clean_20260922`: **27 conflicts**.
-- 24 UNRESOLVED.
+- 23 UNRESOLVED.
 - 1 RESOLVED by rule R1 (rounding only).
+- 1 RESOLVED by owner approval (2025 annual water total).
 - 2 REJECTED_SOURCE (the source declares itself superseded).
 
 Batch abbreviations: **S** = `energy_staging` (final-staging copy), **L** = `energy_legacy_public` (older public copy), **M** = `energy_manager_electricity` (Manager prototype copy).
@@ -33,13 +34,15 @@ Batch abbreviations: **S** = `energy_staging` (final-staging copy), **L** = `ene
 - 2025: two copies (L, M) agree against S. L's printed "Total Grid Consumption" column equals its own HT + Commercial + Temporary in every month (18/18 checks pass), so L is internally consistent. S's Aug/Sep 2025 HT (1,347 / 22,965) are close to the adjacent months (May 1,321; Jun 690; Jul 5,934; Oct 76,958). L/M's 424,410 / 450,216 would be the two largest HT months of the year; the next highest is Mar at 261,397.
 - 2026: S and L agree. M's Jan–Apr 2026 values are round-number estimates (Commercial 3,100 / 3,042 / 3,200 / 3,185; Temporary 0) and M stops at April, matching the older Manager prototype snapshot.
 
-## 2. Water 2025 – annual total vs monthly column (1 conflict, UNRESOLVED)
+## 2. Water 2025 – annual total vs monthly column (1 conflict, RESOLVED 2026-09-25)
 
 | Period | Metric | Reported | Computed | Status |
 |---|---|---|---|---|
-| 2025 Full Year | water_consumed_kl | 195,708 (annual "Total Consumption" = TWAD 39,708 + Borewell 156,000) | 39,835 (sum of the monthly "Water Consumption (KL)" column; the column's own printed total is also 39,835) | UNRESOLVED |
+| 2025 Full Year | water_consumed_kl | 195,708 (annual "Total Consumption" = TWAD 39,708 + Borewell 156,000) | 39,835 (sum of the monthly "Water Consumption (KL)" column; the column's own printed total is also 39,835) | RESOLVED |
 
-**Effect:** neither 2025 monthly water consumption nor the 2025 annual total is published. Annual TWAD (39,708 KL), Borewell (156,000 KL) and recycled (169,404 KL) are uncontested and published in 2025 Full Year.
+**Resolution (project owner, 2026-09-25):** 195,708 KL is the authoritative 2025 ANNUAL Total Water Usage. It is recorded in `resolutions.json` and applied through the importer: the annual value got a new VERIFIED/AUTHORITATIVE version, and the 12 monthly values got new REJECTED versions. Earlier versions are kept. The annual total is shown in 2025 Full Year and, as labelled "2025 Annual Data" context, in 2025 month views. It is never stored, plotted or summed as a month. 2025 water per person = 195,708 × 1000 / 6,991 = 27,994.28 L/person/year.
+
+**Previous effect (before resolution):** neither 2025 monthly water consumption nor the 2025 annual total was published. Annual TWAD (39,708 KL), Borewell (156,000 KL) and recycled (169,404 KL) are uncontested and published in 2025 Full Year.
 
 **Evidence:**
 - The monthly column sums to 39,835, which is within 127 KL of the annual TWAD figure (39,708). That suggests the monthly column may be TWAD only, not total consumption.
@@ -85,4 +88,4 @@ No source reports emissions, so there is nothing to compare against the governed
 
 3. Run the importer with `--dry-run`, review the result, then run it with `--commit`. The chosen value gets a new AUTHORITATIVE version, and the others get REJECTED versions. The previous CONFLICT versions stay in the database via `supersedes_id`. The conflict row records the resolution. Calculations for that month are recalculated, and the replaced results are retired, not deleted.
 
-For water 2025, the resolution is either to accept the annual total or to re-map the monthly column as TWAD. The second option is a new mapping version, because it changes what the column means.
+The same mechanism resolves an aggregate-vs-monthly conflict: selecting the aggregate's source makes the reported total authoritative and rejects the monthly values it contradicts. This is how the 2025 water total was resolved.

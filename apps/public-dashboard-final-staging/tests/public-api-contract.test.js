@@ -873,3 +873,11 @@ test('Carbon Story carries provenance labels and skips acts without a number', (
   assert.match(story, /if \(!ledgerRows\.length\) return;/);
   assert.doesNotMatch(story, /Gross − avoided|Net impact|netVal|ledgerReady/);
 });
+
+test('the 2025 annual water total is backend data, never a frontend constant', () => {
+  for (const file of ['app.js', 'public-data-loader.js', 'public-api.js', 'walkthrough.js', 'index.html']) {
+    assert.doesNotMatch(read(file), /195[,_]?708|27994/, file);
+  }
+  // Total water usage is a backend display item like every other KPI.
+  assert.match(read('app.js'), /'Total water usage': \{ code: 'water_consumed_kl' \}/);
+});

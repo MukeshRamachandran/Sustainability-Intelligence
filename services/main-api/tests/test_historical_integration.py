@@ -756,3 +756,82 @@ def test_no_partial_official_ghg_and_missing_is_omitted(postgres_engine: Engine,
     assert ytd["grid_total_kwh"]["value"] == 125
     assert ytd["grid_total_kwh"]["display_label"] == f"{year} · 1 of 2 months"
     assert ytd["renewable_electricity_kwh"]["display_label"] == f"{year} YTD · Jan–Feb"
+
+
+def test_owner_approved_annual_water_total_is_annual_only(postgres_engine: Engine, tmp_path: Path, year: int) -> None:
+    suffix = uuid4().hex[:8]
+    water, energy, population = (
+        _mapping(name, suffix) for name in ("water_staging", "energy_staging", "population_staging")
+    )
+    annual_rule = {"granularity": "ANNUAL", "coverage_start": f"{year}-01-01", "coverage_end": f"{year}-12-31"}
+    water["year_rules"] = {
+        str(year): {"recycled_period": annual_rule, "annual_period": annual_rule},
+        str(year + 1): {
+            "recycled_period": {
+                "granularity": "YTD",
+                "coverage_start": f"{year + 1}-01-01",
+                "coverage_end": f"{year + 1}-06-30",
+                "coverage_confirmed": False,
+            },
+            "annual_period": {
+                "granularity": "YTD",
+                "coverage_start": f"{year + 1}-01-01",
+                "coverage_end": f"{year + 1}-06-30",
+                "coverage_confirmed": False,
+            },
+        },
+    }
+    months = "".join(
+        f"{name},10,,,\n"
+        for name in ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+    )
+    _write(
+        tmp_path,
+        water,
+        f"Water Consumption {year},,,,\nMonth,Water Consumption (KL),,,\n{months}Total,120,,,\n,,,,\n"
+        "TWAD Consumption KL,Borewell Consumption (KL):,Total Consumption,,\n400,600,1000,,\n,,,,\n"
+        f"Water Consumption {year + 1},,,,\n"
+        "Month,TWAD Consumption KL,Borewell Consumption (KL):,Quantity of Water Procured KL,Total Consumption\n"
+        "January,3,5,2,10\n",
+    )
+    _write(tmp_path, energy, _energy_csv(year, [("March", "1", "1", "1", "1", "1", "1")]))
+    _write(tmp_path, population, f"year,population\n{year},500\n")
+    resolution = {
+        "granularity": "ANNUAL",
+        "coverage_start": f"{year}-01-01",
+        "coverage_end": f"{year}-12-31",
+        "domain": "water",
+        "metric_code": "water_consumed_kl",
+        "chosen_mapping_code": water["code"],
+        "reason": "Owner-approved annual total",
+        "approved_by": "Project owner",
+        "approved_at": "2026-09-25",
+    }
+    _, plan = _import(postgres_engine, tmp_path, [water, energy, population], [resolution])
+    conflict = next(item for item in plan.conflicts if item.conflict_type == "aggregate_vs_monthly")
+    assert conflict.resolution_status == "RESOLVED" and conflict.chosen_source == water["code"]
+
+    timeline = _timeline(postgres_engine)
+    full_year = timeline["periods"][f"{year}-FY"]
+    assert full_year["values"]["water_consumed_kl"]["value"] == 1000
+    assert full_year["values"]["water_consumed_kl"]["granularity"] == "ANNUAL"
+    assert full_year["display"]["water_consumed_kl"]["display_label"] == f"{year} Annual Data"
+    assert full_year["display"]["water_per_capita_l"]["value"] == pytest.approx(1000 * 1000 / 500)
+    march = timeline["periods"][f"{year}-03"]
+    assert "water_consumed_kl" not in march["values"]  # never a March value
+    shown = march["display"]["water_consumed_kl"]
+    assert (shown["value"], shown["display_label"], shown["display_context"]) == (1000, f"{year} Annual Data", True)
+    with Session(postgres_engine) as db:
+        monthly = db.scalars(
+            select(HistoricalMetricValue)
+            .join(HistoricalPeriod, HistoricalPeriod.id == HistoricalMetricValue.period_id)
+            .where(
+                HistoricalPeriod.year == year,
+                HistoricalPeriod.granularity == "MONTHLY",
+                HistoricalMetricValue.metric_code == "water_consumed_kl",
+            )
+        ).all()
+        assert len(monthly) == 12 and {row.verification_status for row in monthly} == {"REJECTED"}
+        assert all(row.value_numeric == 10 for row in monthly)  # the annual total was never split
+    # The next year's monthly total is still TWAD + Borewell + Private.
+    assert _value(timeline, f"{year + 1}-01", "water_consumed_kl") == 10

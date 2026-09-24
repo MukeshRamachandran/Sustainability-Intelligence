@@ -1,4 +1,16 @@
 {
   "_comment": "Owner-approved conflict resolutions. Each entry selects the source batch (mapping code) whose value becomes AUTHORITATIVE for one conflicted (period, domain, metric). Only the project owner may add entries; every entry must carry a reason, approver and approval date.",
-  "resolutions": []
+  "resolutions": [
+    {
+      "granularity": "ANNUAL",
+      "coverage_start": "2025-01-01",
+      "coverage_end": "2025-12-31",
+      "domain": "water",
+      "metric_code": "water_consumed_kl",
+      "chosen_mapping_code": "water_staging",
+      "reason": "Project-owner approved 2025 institutional annual Total Water Usage reference (195,708 KL = TWAD 39,708 + Borewell 156,000). The 2025 monthly 'Water Consumption (KL)' column (sum 39,835 KL) is not used as total water usage.",
+      "approved_by": "Project owner",
+      "approved_at": "2026-09-25"
+    }
+  ]
 }

@@ -293,11 +293,38 @@ def reconcile(sources: list[LoadedSource], resolutions: list[dict[str, Any]]) ->
             total,
             detail,
         )
+        resolution = resolved.get(
+            (
+                period.granularity,
+                period.coverage_start.isoformat(),
+                period.coverage_end.isoformat(),
+                value.observation.domain,
+                value.observation.metric_code,
+            )
+        )
         if superseded:
             value.verification_status = "REJECTED"
             value.notes.append(f"rejected: {superseded}")
             conflict.resolution_status = "REJECTED_SOURCE"
             conflict.resolution_reason = superseded
+            conflict.resolved_at = now
+        elif resolution is not None and resolution["chosen_mapping_code"] == value.source.code:
+            # Owner-approved: the reported aggregate is the authoritative figure.
+            # The monthly values it contradicts are rejected for this metric -
+            # never published, never summed; the aggregate is never split.
+            value.notes.append("selected by owner-approved resolution")
+            if tuple(against) == (value.observation.metric_code,):
+                for year, month in period.months():
+                    for monthly in by_key.get(
+                        (PeriodKey.monthly(year, month), value.observation.domain, value.observation.metric_code), []
+                    ):
+                        monthly.verification_status = "REJECTED"
+                        monthly.notes.append(f"rejected by owner-approved {period.label} resolution")
+            conflict.resolution_status = "RESOLVED"
+            conflict.chosen_source = value.source.code
+            conflict.resolution_reason = (
+                f"{resolution['reason']} (approved by {resolution['approved_by']} on {resolution['approved_at']})"
+            )
             conflict.resolved_at = now
         else:
             mark(value, "reported aggregate does not equal the sum of its monthly values")
