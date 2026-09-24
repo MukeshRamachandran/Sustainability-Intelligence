@@ -191,7 +191,7 @@ const CARD_DISPLAY = {
   'DG diesel emissions': { code: 'dg_diesel_emissions' },
   'LPG emissions': { code: 'lpg_emissions', transform: v => ({ value: v, dec: emissionDecimals(v) }) },
   'Grid electricity emissions': { code: 'scope2_tco2e' },
-  'Operational GHG per capita': { code: 'operational_ghg_per_capita_tco2e' },
+  'Operational GHG per capita': { code: 'operational_ghg_per_capita_kgco2e' },
   'Estimated avoided grid emissions': { code: 'estimated_avoided_grid_emissions_tco2e' },
   'Total electricity consumption': { code: 'total_electricity_consumption_kwh' },
   'Total grid electricity consumption': { code: 'grid_total_kwh' },
@@ -350,7 +350,7 @@ function makeKpis() {
   const waterKL = valFor(d, d.waterKL, month);
 
   periodText.textContent = describeSelection(year, month, d);
-  heroGHG(year, month);
+  heroGHG(gross, year, month, d, avoid, operationalPerCapita);
   const hsSolar = document.getElementById('hs-solar-val'), hsAdmin = document.getElementById('hs-admin-val'), hsDg = document.getElementById('hs-dg-val');
   if (hsSolar) hsSolar.textContent = fmt(re, 0) + ' kWh';
   if (hsAdmin) hsAdmin.textContent = fmt(elec, 0) + ' kWh';
@@ -403,7 +403,7 @@ function makeKpis() {
     inDomain('transport', () => kpi('DG diesel emissions', valFor(d, d.dgEm, month), 'tCO₂e', colors.orange, 'factory', previousValue('dgEm'), true)),
     inDomain('lpg', () => kpi('LPG emissions', valFor(d, d.lpgEm, month), 'tCO₂e', colors.violet, 'flame', previousValue('lpgEm'), true, emissionDecimals(valFor(d, d.lpgEm, month)))),
     inDomain('energy', () => kpi('Grid electricity emissions', scope2, 'tCO₂e', colors.cyan, 'bolt', previousValue('elecEm'), true)),
-    kpi('Operational GHG per capita', operationalPerCapita, 'tCO₂e/person', colors.blue, 'users', null, true, 3),
+    kpi('Operational GHG per capita', operationalPerCapita, 'kgCO₂e/person', colors.blue, 'users', null, true, 3),
     kpi('Estimated avoided grid emissions', avoid, 'tCO₂e', colors.emerald, 'leaf', previousValue('avoidEm'), true, 3)
   ].join('');
 
@@ -891,48 +891,86 @@ function makeKpis() {
   }
 
 }
-/* Overview carbon hero (Vercel layout). The headline is always Carbon
-   Footprint per Person; Gross Emissions and Reduction by Renewables sit beside
-   it as separate figures. All three are backend display items (period,
-   fallback and coverage decided by the resolver); a figure without one is
-   hidden and never replaced by another metric. Nothing is derived here: no
-   gross-minus-reduction, no net figure. */
-const HERO_FIGURES = {
-  net: { code: 'operational_ghg_per_capita_tco2e', value: 'balNetVal', source: 'balNetSrc', tab: 'tab-net', dec: 2 },
-  gross: { code: 'gross_emissions_tco2e', value: 'balGrossVal', source: 'balGrossSrc', tab: 'tab-gross', dec: 1 },
-  avoid: { code: 'estimated_avoided_grid_emissions_tco2e', value: 'balAvoidVal', source: 'balAvoidSrc', tab: 'tab-avoid', dec: 3 }
-};
-function heroGHG(year, month) {
-  const figures = Object.fromEntries(Object.entries(HERO_FIGURES).map(([key, spec]) => [key, shownValue(spec.code)]));
-  const headline = figures.net;
-  Object.entries(HERO_FIGURES).forEach(([key, spec]) => {
-    const figure = figures[key];
-    const tab = document.getElementById(spec.tab);
-    tab.style.display = figure ? '' : 'none';
-    tab.onclick = null;
-    document.getElementById(spec.value).textContent = figure ? fmt(figure.value, spec.dec) : '';
-    // A secondary figure names its own period when it differs from the headline's.
-    const ownLabel = figure && (!headline || figure.label !== headline.label) ? figure.label : '';
-    document.getElementById(spec.source).textContent = key === 'net' ? '' : ownLabel;
+/* Which figure the hero balance card is showing: gross / net / avoid. */
+let currentHeroView = 'net';
+
+/* Fill the hero balance card and wire its three tabs; every call replays
+   the count-up and the indicator-line sweep for the active tab. */
+function heroGHG(gross, year, month, d, avoid, operationalPerCapita) {
+  // static figures on the card
+  const figures = {
+    net: shownValue('operational_ghg_per_capita_kgco2e'),
+    gross: shownValue('operational_ghg_tco2e'),
+    avoid: shownValue('estimated_avoided_grid_emissions_tco2e')
+  };
+  const tabs = { net: 'tab-net', gross: 'tab-gross', avoid: 'tab-avoid' };
+  const values = { net: 'balNetVal', gross: 'balGrossVal', avoid: 'balAvoidVal' };
+  Object.keys(tabs).forEach(view => {
+    document.getElementById(tabs[view]).style.display = figures[view] ? '' : 'none';
+    document.getElementById(values[view]).textContent = figures[view] ? fmt(figures[view].value, 3) : '';
   });
   const balance = document.getElementById('tab-net').closest('section');
-  if (balance) balance.style.display = Object.values(figures).some(Boolean) ? '' : 'none';
-  document.getElementById('balHeadline').style.display = headline ? '' : 'none';
-  document.getElementById('balLabel').style.visibility = headline ? '' : 'hidden';
-  // The badge states where the headline number comes from.
-  document.getElementById('balPeriod').textContent = headline ? headline.label : '';
-  const mainValueEl = document.getElementById('hero-ghg');
-  if (!headline) { mainValueEl.textContent = ''; return; }
-  if (typeof reduceMotion !== 'undefined' && !reduceMotion) {
-    const obj = { val: 0 };
-    gsap.to(obj, {
-      val: headline.value, duration: 1.5, ease: 'power2.out',
-      onUpdate: () => { mainValueEl.textContent = fmt(obj.val, 2); },
-      onComplete: () => { mainValueEl.textContent = fmt(headline.value, 2); }
-    });
-  } else {
-    mainValueEl.textContent = fmt(headline.value, 2);
+  const available = Object.keys(figures).filter(view => figures[view]);
+  if (balance) balance.style.display = available.length ? '' : 'none';
+  if (!available.length) return;
+  if (!figures[currentHeroView]) currentHeroView = available[0];
+  gross = figures.gross && figures.gross.value;
+  operationalPerCapita = figures.net && figures.net.value;
+  avoid = figures.avoid && figures.avoid.value;
+
+  // repaint the big number for the selected tab
+  function updateDisplayView() {
+    const mainValueEl = document.getElementById('hero-ghg');
+    const labelEl = document.getElementById('balLabel');
+    const unitEl = document.getElementById('hero-unit');
+
+    // clear tab highlights
+    document.querySelectorAll('.bal-item').forEach(item => item.classList.remove('active'));
+
+    let targetValue = 0;
+
+    // pick the figure for the active view; the bar's fill never changes, only which slice is emphasized (via CSS)
+    if (currentHeroView === 'net') {
+      targetValue = operationalPerCapita;
+      labelEl.textContent = "Operational GHG per person";
+      unitEl.textContent = "kgCO₂e/person";
+      document.getElementById('tab-net').classList.add('active');
+    } else if (currentHeroView === 'avoid') {
+      targetValue = avoid;
+      labelEl.textContent = "Estimated Avoided Grid Emissions";
+      unitEl.textContent = "tCO₂e";
+      document.getElementById('tab-avoid').classList.add('active');
+    } else {
+      targetValue = gross;
+      labelEl.textContent = "Operational GHG";
+      unitEl.textContent = "tCO₂e";
+      document.getElementById('tab-gross').classList.add('active');
+    }
+
+    document.getElementById('balPeriod').textContent = figures[currentHeroView]?.label || periodLabel(year, month);
+    if (targetValue == null) {
+      mainValueEl.textContent = '';
+    } else if (typeof reduceMotion !== 'undefined' && !reduceMotion) {
+      let obj = { val: 0 };
+      gsap.to(obj, {
+        val: targetValue,
+        duration: 1.5,
+        ease: 'power2.out',
+        onUpdate: () => { mainValueEl.textContent = fmt(obj.val, 3); },
+        onComplete: () => { mainValueEl.textContent = fmt(targetValue, 3); }
+      });
+    } else {
+      mainValueEl.textContent = fmt(targetValue, 3);
+    }
   }
+
+  // tab clicks re-render in place
+  document.getElementById('tab-gross').onclick = () => { currentHeroView = 'gross'; updateDisplayView(); };
+  document.getElementById('tab-net').onclick = () => { currentHeroView = 'net'; updateDisplayView(); };
+  document.getElementById('tab-avoid').onclick = () => { currentHeroView = 'avoid'; updateDisplayView(); };
+
+  // initial paint for the current selection
+  updateDisplayView();
 }
 
 /* ---- charts ---- */

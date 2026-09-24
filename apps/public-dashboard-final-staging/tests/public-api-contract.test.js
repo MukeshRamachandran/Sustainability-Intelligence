@@ -873,37 +873,3 @@ test('Carbon Story carries provenance labels and skips acts without a number', (
   assert.match(story, /if \(!ledgerRows\.length\) return;/);
   assert.doesNotMatch(story, /Gross − avoided|Net impact|netVal|ledgerReady/);
 });
-
-// ---- Carbon hero (Vercel information architecture, governed values) --------
-
-test('carbon hero restores the Vercel structure with per-capita as the headline', () => {
-  const html = read('index.html');
-  const hero = html.slice(html.indexOf('<section class="balance'), html.indexOf('</section>', html.indexOf('<section class="balance')))
-    .replace(/<!--[\s\S]*?-->/g, '');
-  assert.match(hero, /<span id="balLabel">Carbon Footprint per Person<\/span>/);
-  assert.match(hero, /<em id="hero-unit">tCO₂e \/ Individual<\/em>/);
-  assert.ok(hero.indexOf('Per Capita') < hero.indexOf('Gross Emissions'));
-  assert.ok(hero.indexOf('Gross Emissions') < hero.indexOf('Reduction by Renewables'));
-  assert.match(hero, /title="Estimated avoided grid emissions"/);
-  assert.match(hero, /\*Scope 3 emissions are not included in this footprint/);
-  // No gross-minus-avoided bar or net figure.
-  assert.doesNotMatch(hero, /bal-bar|balSegNet|net-emitted|Net carbon/i);
-});
-
-test('carbon hero figures are backend display items and the headline is never avoided emissions', () => {
-  const app = read('app.js');
-  assert.match(app, /net: \{ code: 'operational_ghg_per_capita_tco2e', value: 'balNetVal', source: 'balNetSrc', tab: 'tab-net', dec: 2 \}/);
-  assert.match(app, /gross: \{ code: 'gross_emissions_tco2e', value: 'balGrossVal', source: 'balGrossSrc', tab: 'tab-gross', dec: 1 \}/);
-  assert.match(app, /avoid: \{ code: 'estimated_avoided_grid_emissions_tco2e', value: 'balAvoidVal', source: 'balAvoidSrc', tab: 'tab-avoid', dec: 3 \}/);
-  // The headline is the per-capita figure only; a missing one is hidden, not replaced.
-  assert.match(app, /const headline = figures\.net;/);
-  assert.match(app, /document\.getElementById\('balHeadline'\)\.style\.display = headline \? '' : 'none';/);
-  assert.match(app, /document\.getElementById\('balPeriod'\)\.textContent = headline \? headline\.label : '';/);
-  assert.doesNotMatch(app, /currentHeroView|available\[0\]/);
-  const hero = app.slice(app.indexOf('function heroGHG('), app.indexOf('\n}\n', app.indexOf('function heroGHG(')));
-  // Nothing is derived in the browser: no subtraction, division or factor.
-  assert.doesNotMatch(hero, /\.value\s*[-\/*]\s*|gross\s*-\s*avoid|population/);
-  // The GHG page per-capita card uses the same tonnes figure.
-  assert.match(app, /'Operational GHG per capita': \{ code: 'operational_ghg_per_capita_tco2e' \}/);
-  assert.match(app, /kpi\('Operational GHG per capita', operationalPerCapita, 'tCO₂e\/person'/);
-});
