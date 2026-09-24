@@ -544,3 +544,131 @@ test('active code has no browser-storage authentication or submission persistenc
   assert.doesNotMatch(sources, /localStorage\.(?:getItem|setItem|removeItem)\(["'](?:currentUser|submissions)["']|sessionStorage\.(?:getItem|setItem|removeItem|clear)/);
   assert.doesNotMatch(sources, /transport-login\.broken-backup|broken-login-backup/);
 });
+
+// --- Release candidate rehydration --------------------------------------
+// Runs the real inline script of admin-queue.html against a minimal DOM and a
+// stubbed backend, simulating a fresh page load (i.e. a refresh or
+// back-navigation: nothing survives in memory, only the database does).
+
+const PERIOD_ID = 'f0810f03-bb61-4ac9-a803-395c5ffca4b6';
+const RELEASE_ID = 'b5579654-50c1-47da-9e91-a2ae8aaa0cb6';
+const REQUEST_ID = '11111111-2222-3333-4444-555555555555';
+const CANDIDATE = {
+  id: RELEASE_ID, version: 'sustainability-2026-09-v1', status: 'candidate',
+  checksum_sha256: 'f'.repeat(64), reporting_period_id: PERIOD_ID,
+  created_at: '2026-09-23T14:02:18Z', published_at: null
+};
+const READY = {
+  reporting_period: { label: 'September 2026' }, approved_domains: 6, required_domains: 6,
+  ready_to_publish: true, blockers: [],
+  domains: Object.fromEntries(['transport', 'energy', 'lpg', 'water', 'outreach', 'waste'].map(d => [d, { status: 'approved', revision_number: 1 }]))
+};
+
+function fakeElement(id) {
+  const listeners = {};
+  return {
+    id, textContent: '', innerHTML: '', value: '', className: '', disabled: false,
+    dataset: {}, style: {}, classList: { add() {}, remove() {} },
+    addEventListener(type, fn) { (listeners[type] ||= []).push(fn); },
+    async fire(type, event = {}) { for (const fn of listeners[type] || []) await fn({ target: this, ...event }); }
+  };
+}
+
+async function loadAdminQueue({ releases, prepare }) {
+  const html = read('admin-queue.html');
+  const inline = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).join('\n');
+  const elements = new Map();
+  for (const [, id] of html.matchAll(/id="([^"]+)"/g)) elements.set(id, fakeElement(id));
+  elements.get('prepare-release').disabled = true;
+  elements.get('open-release').disabled = true;
+  const calls = [];
+  let ready;
+  const document = {
+    getElementById: id => elements.get(id) || null,
+    querySelectorAll: () => [],
+    addEventListener: (type, fn) => { if (type === 'DOMContentLoaded') ready = fn; }
+  };
+  const window = { location: { search: '', pathname: '/admin-queue.html', href: 'admin-queue.html' } };
+  const api = async (url, options = {}) => {
+    calls.push({ url, method: options.method || 'GET' });
+    if (url === '/api/admin/periods') return [{ id: PERIOD_ID, year: 2026, month: 9, label: 'September 2026' }];
+    if (url.startsWith('/api/admin/review-queue')) return [];
+    if (url.includes('/publication-readiness')) return READY;
+    if (url === `/api/admin/releases?reporting_period_id=${PERIOD_ID}`) return releases();
+    if (url === '/api/admin/releases/prepare') return prepare();
+    throw new Error(`unexpected request ${url}`);
+  };
+  vm.runInNewContext(inline, {
+    document, window, history: { replaceState() {} }, URLSearchParams, Intl, Date, JSON, Map, Set, Promise, String, Number, Array, Object, Math,
+    console: { error() {} }, KCosmos: { requireRole: async () => {}, api },
+    showToast: () => {}
+  });
+  await ready();
+  return { el: id => elements.get(id), calls, window };
+}
+
+test('a prepared candidate is rediscovered from the backend on a fresh page load', async () => {
+  const page = await loadAdminQueue({ releases: () => [CANDIDATE], prepare: () => { throw new Error('must not prepare'); } });
+  assert.ok(page.calls.some(c => c.url === `/api/admin/releases?reporting_period_id=${PERIOD_ID}`));
+  assert.equal(page.el('release-state-version').textContent, 'sustainability-2026-09-v1');
+  assert.equal(page.el('release-state-badge').textContent, 'CANDIDATE');
+  assert.equal(page.el('prepare-release').disabled, true, 'Prepare must be disabled while a candidate waits');
+  assert.equal(page.el('open-release').disabled, false, 'Open release preview must be enabled');
+  await page.el('open-release').fire('click');
+  assert.equal(page.window.location.href, `admin-preview.html?release_id=${RELEASE_ID}`);
+  assert.ok(!page.calls.some(c => c.method === 'POST'), 'loading the page must never prepare a release');
+});
+
+test('an active release shows as published and its version is not offered again', async () => {
+  const active = { ...CANDIDATE, status: 'active', published_at: '2026-09-24T09:00:00Z' };
+  const page = await loadAdminQueue({ releases: () => [active], prepare: () => { throw new Error('must not prepare'); } });
+  assert.equal(page.el('release-state-badge').textContent, 'ACTIVE / PUBLISHED');
+  assert.equal(page.el('release-version').value, 'sustainability-2026-09-v1');
+  assert.equal(page.el('prepare-release').disabled, true, 'the published version must not be prepared again');
+  page.el('release-version').value = 'sustainability-2026-09-v2';
+  await page.el('release-version').fire('input');
+  assert.equal(page.el('prepare-release').disabled, false, 'a new version stays possible for a later correction');
+});
+
+test('a duplicate Prepare recovers the existing candidate instead of dead-ending', async () => {
+  // The list is empty at first (a stale view); then the backend reports the
+  // version exists. The page must rediscover it, not show a bare error.
+  let listed = [];
+  const page = await loadAdminQueue({
+    releases: () => listed,
+    prepare: () => {
+      listed = [CANDIDATE];
+      throw Object.assign(new Error('Release version already exists.'), { status: 409, code: 'http_error', requestId: REQUEST_ID });
+    }
+  });
+  assert.equal(page.el('prepare-release').disabled, false);
+  await page.el('prepare-release').fire('click');
+  assert.equal(page.calls.filter(c => c.url === '/api/admin/releases/prepare').length, 1);
+  assert.match(page.el('release-state-message').textContent, /^Candidate already prepared\./);
+  assert.equal(page.el('release-error').textContent, '', 'no red dead-end error');
+  assert.equal(page.el('release-state-badge').textContent, 'CANDIDATE');
+  assert.equal(page.el('prepare-release').disabled, true);
+  await page.el('open-release').fire('click');
+  assert.equal(page.window.location.href, `admin-preview.html?release_id=${RELEASE_ID}`);
+  assert.doesNotMatch(page.window.location.href, new RegExp(REQUEST_ID), 'a request id is never a release id');
+});
+
+test('a request reference is labelled as diagnostic and never opens a preview', async () => {
+  const page = await loadAdminQueue({
+    releases: () => [],
+    prepare: () => { throw Object.assign(new Error('Server error'), { status: 500, requestId: REQUEST_ID }); }
+  });
+  await page.el('prepare-release').fire('click');
+  assert.match(page.el('release-error').textContent, new RegExp(`Request reference: ${REQUEST_ID}`));
+  assert.equal(page.el('open-release').disabled, true);
+  await page.el('open-release').fire('click');
+  assert.equal(page.window.location.href, 'admin-queue.html', 'no navigation without a real release id');
+});
+
+test('release rehydration reads the backend, never browser storage', () => {
+  const html = read('admin-queue.html');
+  assert.match(html, /\/api\/admin\/releases\?reporting_period_id=\$\{encodeURIComponent\(periodId\)\}/);
+  assert.doesNotMatch(html, /localStorage|sessionStorage|indexedDB/);
+  assert.match(html, /release_id=\$\{encodeURIComponent\(preparedRelease\.id\)\}/);
+  assert.doesNotMatch(html, /release_id=\$\{[^}]*requestId/);
+});

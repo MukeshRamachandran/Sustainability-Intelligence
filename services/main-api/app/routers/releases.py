@@ -8,7 +8,7 @@ from app.models.enums import ReleaseStatus
 from app.models.publication import PublicRelease, PublicReleasePayload
 from app.models.sustainability import ReportingPeriod
 from app.schemas.auth import MessageResponse
-from app.schemas.outreach import ReleasePrepareRequest, ReleaseResponse
+from app.schemas.outreach import ReleasePrepareRequest, ReleaseResponse, ReleaseSummary
 from app.schemas.publication import PublicationReadinessResponse
 from app.security.dependencies import AdminUser, CsrfUser, DbSession, require_admin
 from app.services.audit import add_audit_log
@@ -139,6 +139,31 @@ def prepare_release(
     )
     db.commit()
     return _response(release, payload)
+
+
+@admin_router.get("", response_model=list[ReleaseSummary])
+def list_releases(reporting_period_id: UUID, current: AdminUser, db: DbSession) -> list[ReleaseSummary]:
+    # Lets the Admin page rediscover an already-prepared candidate from the
+    # database after a reload, instead of relying on in-page memory.
+    if db.get(ReportingPeriod, reporting_period_id) is None:
+        raise HTTPException(status_code=404, detail="Reporting period not found.")
+    releases = db.scalars(
+        select(PublicRelease)
+        .where(PublicRelease.reporting_period_id == reporting_period_id)
+        .order_by(PublicRelease.created_at.desc(), PublicRelease.id.desc())
+    ).all()
+    return [
+        ReleaseSummary(
+            id=release.id,
+            version=release.version,
+            status=release.status.value,
+            checksum_sha256=release.checksum_sha256,
+            reporting_period_id=release.reporting_period_id,
+            created_at=release.created_at,
+            published_at=release.published_at,
+        )
+        for release in releases
+    ]
 
 
 @admin_router.get("/{release_id}/preview", response_model=ReleaseResponse)

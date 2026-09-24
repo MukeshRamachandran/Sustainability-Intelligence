@@ -9,7 +9,7 @@
       <div class="content-area">
         <div class="mb-3"><h1>Admin Review Queue</h1><p>Review manager submissions without modifying manager-provided values.</p></div>
         <div class="glass-card mb-3"><div class="d-flex justify-between align-center"><h3>Submissions awaiting review</h3><button class="btn btn-outline" id="refresh-queue">Refresh</button></div><div class="form-group"><label class="form-label" for="queue-period">Reporting period</label><select id="queue-period" class="form-control"></select></div><div class="table-responsive"><table class="table"><thead><tr><th>Domain</th><th>Submission</th><th>Period</th><th>Manager</th><th>Submitted</th><th>Status</th><th>Action</th></tr></thead><tbody id="queue-body"><tr><td colspan="7">Loading…</td></tr></tbody></table></div></div>
-        <div class="glass-card"><h3>Publication</h3><p class="text-muted">Approval does not publish. Prepare an immutable candidate, review it, then publish explicitly.</p><div class="grid-2"><div class="form-group"><label class="form-label" for="release-period">Approved reporting period</label><select id="release-period" class="form-control"></select></div><div class="form-group"><label class="form-label" for="release-version">Release version</label><input id="release-version" class="form-control" placeholder="sustainability-2026-09-v1"><p class="text-muted" style="margin:4px 0 0;font-size:12px;">Letters, digits, dots, underscores and hyphens only &mdash; no spaces or colons.</p></div></div><p id="release-error" class="text-danger" style="display:none;margin:0 0 12px;"></p><div class="card mb-2" id="publication-readiness"><div class="d-flex justify-between align-center"><strong id="readiness-period">Publication readiness</strong><span class="badge badge-draft" id="readiness-state">Loading</span></div><p id="readiness-count" style="margin:8px 0;">— / 6 Approved</p><div class="table-responsive"><table class="table"><thead><tr><th>Domain</th><th>Status</th><th>Revision</th></tr></thead><tbody><tr><td>Transport</td><td id="readiness-transport">—</td><td id="readiness-transport-revision">—</td></tr><tr><td>Energy</td><td id="readiness-energy">—</td><td id="readiness-energy-revision">—</td></tr><tr><td>LPG</td><td id="readiness-lpg">—</td><td id="readiness-lpg-revision">—</td></tr><tr><td>Water</td><td id="readiness-water">—</td><td id="readiness-water-revision">—</td></tr><tr><td>Outreach</td><td id="readiness-outreach">—</td><td id="readiness-outreach-revision">—</td></tr><tr><td>Waste</td><td id="readiness-waste">—</td><td id="readiness-waste-revision">—</td></tr></tbody></table></div><p class="text-muted" id="readiness-blockers" style="margin-bottom:0;">Checking approval status…</p></div><div class="d-flex gap-2"><button class="btn btn-primary" id="prepare-release" disabled>Prepare release</button><button class="btn btn-accent" id="open-release" disabled>Open release preview</button></div><pre id="release-preview" style="white-space:pre-wrap;max-height:360px;overflow:auto;margin-top:16px;"></pre></div>
+        <div class="glass-card"><h3>Publication</h3><p class="text-muted">Approval does not publish. Prepare an immutable candidate, review it, then publish explicitly.</p><div class="grid-2"><div class="form-group"><label class="form-label" for="release-period">Approved reporting period</label><select id="release-period" class="form-control"></select></div><div class="form-group"><label class="form-label" for="release-version">Release version</label><input id="release-version" class="form-control" placeholder="sustainability-2026-09-v1"><p class="text-muted" style="margin:4px 0 0;font-size:12px;">Letters, digits, dots, underscores and hyphens only &mdash; no spaces or colons.</p></div></div><p id="release-error" class="text-danger" style="display:none;margin:0 0 12px;"></p><div class="card mb-2" id="publication-readiness"><div class="d-flex justify-between align-center"><strong id="readiness-period">Publication readiness</strong><span class="badge badge-draft" id="readiness-state">Loading</span></div><p id="readiness-count" style="margin:8px 0;">— / 6 Approved</p><div class="table-responsive"><table class="table"><thead><tr><th>Domain</th><th>Status</th><th>Revision</th></tr></thead><tbody><tr><td>Transport</td><td id="readiness-transport">—</td><td id="readiness-transport-revision">—</td></tr><tr><td>Energy</td><td id="readiness-energy">—</td><td id="readiness-energy-revision">—</td></tr><tr><td>LPG</td><td id="readiness-lpg">—</td><td id="readiness-lpg-revision">—</td></tr><tr><td>Water</td><td id="readiness-water">—</td><td id="readiness-water-revision">—</td></tr><tr><td>Outreach</td><td id="readiness-outreach">—</td><td id="readiness-outreach-revision">—</td></tr><tr><td>Waste</td><td id="readiness-waste">—</td><td id="readiness-waste-revision">—</td></tr></tbody></table></div><p class="text-muted" id="readiness-blockers" style="margin-bottom:0;">Checking approval status…</p></div><div class="card mb-2" id="release-state"><div class="d-flex justify-between align-center"><strong>Release for this period: <span id="release-state-version">—</span></strong><span class="badge badge-draft" id="release-state-badge">Checking</span></div><p class="text-muted" id="release-state-message" style="margin:8px 0 0;">Checking for an existing release…</p></div><div class="d-flex gap-2"><button class="btn btn-primary" id="prepare-release" disabled>Prepare release</button><button class="btn btn-accent" id="open-release" disabled>Open release preview</button></div><pre id="release-preview" style="white-space:pre-wrap;max-height:360px;overflow:auto;margin-top:16px;"></pre></div>
       </div>
     </main>
   </div>
@@ -20,7 +20,11 @@
       const domains = ['transport', 'energy', 'lpg', 'water', 'outreach', 'waste'];
       const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[character]));
       let currentSubmission = null;
+      // Both are re-read from the backend on every load and period change;
+      // neither is ever persisted in the browser. The database is the authority.
       let preparedRelease = null;
+      let periodReleases = [];
+      let releasesKnown = false;
       let currentReadiness = null;
       const modal = document.getElementById('details-modal');
       try { await KCosmos.requireRole('microcosm_admin'); } catch (_) { return; }
@@ -152,7 +156,7 @@
           applyReleaseVersionSuggestion(selectedPeriod);
         }
         await loadQueue();
-        await loadReadiness();
+        await loadPublicationState();
       }
 
       async function loadReadiness() {
@@ -175,13 +179,90 @@
           document.getElementById('readiness-blockers').textContent = currentReadiness.ready_to_publish
             ? `All ${currentReadiness.required_domains} required domains are approved. Preparation is available.`
             : `Blockers: ${currentReadiness.blockers.map(item => `${item.domain} — ${item.status.replaceAll('_', ' ')}`).join('; ')}`;
-          prepareButton.disabled = !currentReadiness.ready_to_publish;
         } catch (error) {
           currentReadiness = null;
           document.getElementById('readiness-state').textContent = 'UNAVAILABLE';
           document.getElementById('readiness-blockers').textContent = error.message;
           showToast(error.message, 'error');
         }
+        applyPrepareAvailability();
+      }
+
+      // Prepare is offered only when the period is ready, no candidate is
+      // already waiting for review, and the typed version is not already taken.
+      function applyPrepareAvailability() {
+        const version = document.getElementById('release-version').value.trim();
+        const versionTaken = periodReleases.some(item => item.version === version);
+        const candidateWaiting = periodReleases.some(item => item.status === 'candidate');
+        document.getElementById('prepare-release').disabled =
+          !releasesKnown || !currentReadiness?.ready_to_publish || candidateWaiting || versionTaken;
+      }
+
+      function renderReleaseState() {
+        const badge = document.getElementById('release-state-badge');
+        const versionNode = document.getElementById('release-state-version');
+        const message = document.getElementById('release-state-message');
+        const openButton = document.getElementById('open-release');
+        const preview = document.getElementById('release-preview');
+        // A waiting candidate takes precedence over the live release: it is
+        // the one that still needs a review and an explicit publish decision.
+        const candidate = periodReleases.find(item => item.status === 'candidate');
+        const active = periodReleases.find(item => item.status === 'active');
+        preparedRelease = candidate || active || null;
+        openButton.disabled = !preparedRelease;
+        if (!preparedRelease) {
+          versionNode.textContent = '—';
+          badge.textContent = 'NONE';
+          badge.className = 'badge badge-draft';
+          message.textContent = 'No release has been prepared for this period.';
+          preview.textContent = '';
+        } else {
+          const isCandidate = preparedRelease.status === 'candidate';
+          versionNode.textContent = preparedRelease.version;
+          badge.textContent = isCandidate ? 'CANDIDATE' : 'ACTIVE / PUBLISHED';
+          badge.className = `badge ${isCandidate ? 'badge-review' : 'badge-approved'}`;
+          message.textContent = isCandidate
+            ? `Candidate prepared ${new Date(preparedRelease.created_at).toLocaleString()}. Open the release preview to review it, then publish explicitly.`
+            : `Published ${new Date(preparedRelease.published_at).toLocaleString()}. This version is live on the public dashboard.`;
+          preview.textContent = JSON.stringify({
+            id: preparedRelease.id,
+            version: preparedRelease.version,
+            status: preparedRelease.status,
+            checksum_sha256: preparedRelease.checksum_sha256,
+          }, null, 2);
+        }
+        applyPrepareAvailability();
+      }
+
+      // Rediscovers releases for the selected period from the database, so a
+      // prepared candidate survives reloads and back-navigation.
+      async function loadReleases() {
+        const periodId = document.getElementById('release-period').value;
+        periodReleases = [];
+        releasesKnown = false;
+        preparedRelease = null;
+        document.getElementById('open-release').disabled = true;
+        if (!periodId) return renderReleaseState();
+        try {
+          const releases = await KCosmos.api(`/api/admin/releases?reporting_period_id=${encodeURIComponent(periodId)}`);
+          // Ignore a response that arrives after the admin switched periods.
+          if (document.getElementById('release-period').value !== periodId) return;
+          periodReleases = Array.isArray(releases) ? releases : [];
+          releasesKnown = true;
+          renderReleaseState();
+        } catch (error) {
+          renderReleaseState();
+          document.getElementById('release-state-badge').textContent = 'UNAVAILABLE';
+          document.getElementById('release-state-message').textContent = `Existing releases could not be checked: ${error.message}`;
+          document.getElementById('prepare-release').disabled = true;
+        }
+      }
+
+      async function loadPublicationState() {
+        periodReleases = [];
+        releasesKnown = false;
+        await loadReadiness();
+        await loadReleases();
       }
 
       document.getElementById('close-modal').addEventListener('click', () => modal.classList.remove('active'));
@@ -198,7 +279,7 @@
       });
       document.getElementById('release-period').addEventListener('change', event => {
         applyReleaseVersionSuggestion(releasePeriodsById.get(event.target.value));
-        loadReadiness();
+        loadPublicationState();
       });
 
       const VERSION_PATTERN = /^[A-Za-z0-9._-]+$/;
@@ -231,7 +312,9 @@
         } else {
           message = error?.message || 'Prepare failed.';
         }
-        const reference = error?.requestId ? ` Reference: ${error.requestId}` : '';
+        // Diagnostic HTTP request id for support/log correlation only. It is
+        // NOT a release id and must never be used to open a preview.
+        const reference = error?.requestId ? ` Request reference: ${error.requestId}` : '';
         showReleaseError(`${message}${reference}`);
         showToast(message, 'error');
         console.error('[K-COSMOS] Release prepare failed.', {
@@ -255,14 +338,34 @@
         if (!VERSION_PATTERN.test(version)) {
           return showReleaseError('Release version may only contain letters, digits, dots, underscores and hyphens (no spaces or colons).');
         }
+        document.getElementById('prepare-release').disabled = true;
         try {
-          preparedRelease = await KCosmos.api('/api/admin/releases/prepare', {method:'POST', body:JSON.stringify({reporting_period_id: reportingPeriodId, version})});
-          document.getElementById('release-preview').textContent = JSON.stringify(preparedRelease, null, 2);
-          document.getElementById('open-release').disabled = false;
+          await KCosmos.api('/api/admin/releases/prepare', {method:'POST', body:JSON.stringify({reporting_period_id: reportingPeriodId, version})});
+          // Re-read from the database rather than trusting the response alone,
+          // so the page shows exactly what a reload would show.
+          await loadReleases();
           showToast('Release candidate prepared.', 'success');
-        } catch (error) { renderPrepareFailure(error); }
+        } catch (error) {
+          if (error?.status === 409 && error?.code !== 'publication_not_ready') {
+            // The version already exists. If it belongs to this period, that is
+            // not a dead end: rediscover it and offer its preview.
+            await loadReleases();
+            const existing = periodReleases.find(item => item.version === version);
+            if (existing) {
+              const note = existing.status === 'candidate' ? 'Candidate already prepared.' : 'This version is already published.';
+              document.getElementById('release-state-message').textContent = `${note} ${document.getElementById('release-state-message').textContent}`;
+              showToast(note, 'info');
+              return;
+            }
+          }
+          renderPrepareFailure(error);
+          applyPrepareAvailability();
+        }
       });
-      document.getElementById('open-release').addEventListener('click', () => { if(preparedRelease) window.location.href=`admin-preview.html?release_id=${encodeURIComponent(preparedRelease.id)}`; });
+      document.getElementById('release-version').addEventListener('input', applyPrepareAvailability);
+      // Only ever navigates with a release id returned by the releases API -
+      // never a request/reference id from an error response.
+      document.getElementById('open-release').addEventListener('click', () => { if(preparedRelease?.id) window.location.href=`admin-preview.html?release_id=${encodeURIComponent(preparedRelease.id)}`; });
       await loadPeriods();
     });
   </script>

@@ -429,6 +429,35 @@ def test_multidomain_release_snapshot_privacy_checksum_and_publish(postgres_engi
         assert candidate_same["checksum_sha256"] == candidate_one["checksum_sha256"]
         assert payload_checksum(payload) == candidate_one["checksum_sha256"]
 
+        # After a page reload the Admin UI rediscovers candidates from the
+        # database: metadata only, real release ids, no payload.
+        listed = client.get(f"/api/admin/releases?reporting_period_id={period_id}")
+        assert listed.status_code == 200
+        listed_by_version = {item["version"]: item for item in listed.json()}
+        assert set(listed_by_version) == {version_one, candidate_same["version"]}
+        rediscovered = listed_by_version[version_one]
+        assert rediscovered["id"] == candidate_one["id"]
+        assert rediscovered["status"] == "candidate"
+        assert rediscovered["checksum_sha256"] == candidate_one["checksum_sha256"]
+        assert rediscovered["reporting_period_id"] == str(period_id)
+        assert rediscovered["published_at"] is None
+        assert set(rediscovered) == {
+            "id", "version", "status", "checksum_sha256", "reporting_period_id", "created_at", "published_at",
+        }
+
+        # A duplicate Prepare is still refused and creates nothing; the
+        # existing candidate stays discoverable and previewable by its real id.
+        duplicate = client.post(
+            "/api/admin/releases/prepare",
+            json={"reporting_period_id": str(period_id), "version": version_one},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert duplicate.status_code == 409
+        assert duplicate.json()["error"]["message"] == "Release version already exists."
+        assert duplicate.json()["error"]["request_id"] != candidate_one["id"]
+        assert len(client.get(f"/api/admin/releases?reporting_period_id={period_id}").json()) == 2
+        assert client.get(f"/api/admin/releases/{rediscovered['id']}/preview").json()["payload"] == payload
+
         before_publish = client.get(f"/api/public/dashboard?year={period.year}&month={period.month}").json()
         assert before_publish["release"] is None
         assert client.post(
@@ -437,6 +466,12 @@ def test_multidomain_release_snapshot_privacy_checksum_and_publish(postgres_engi
         first_published = client.get(f"/api/public/dashboard?year={period.year}&month={period.month}").json()
         assert first_published["release"]["version"] == version_one
         assert first_published["transport"] == payload["transport"]
+        after_publish = {
+            item["version"]: item
+            for item in client.get(f"/api/admin/releases?reporting_period_id={period_id}").json()
+        }
+        assert after_publish[version_one]["status"] == "active"
+        assert after_publish[version_one]["published_at"] is not None
 
         with Session(postgres_engine) as db:
             old_transport = db.get(Submission, transport_id)
@@ -518,3 +553,39 @@ def test_missing_approved_domains_are_null_not_zero(postgres_engine: Engine) -> 
         ):
             assert payload[domain.value] is None
             assert payload["publication_status"][domain.value] == "missing_approved_submission"  # type: ignore[index]
+
+
+def test_release_listing_is_admin_only_metadata(postgres_engine: Engine) -> None:
+    with Session(postgres_engine) as db:
+        period = _period(db, 2180)
+        other_period = _period(db, 2181)
+        admin = _account(db, RoleCode.ADMIN)
+        manager = _account(db, RoleCode.MANAGER, OperationalDomain.WASTE)
+        release = PublicRelease(
+            version=f"listing-{uuid4().hex}",
+            status=ReleaseStatus.CANDIDATE,
+            checksum_sha256="0" * 64,
+            prepared_by=admin.id,
+            reporting_period_id=period.id,
+        )
+        db.add(release)
+        db.commit()
+        admin_username, manager_username = admin.username, manager.username
+        period_id, other_period_id, release_id = period.id, other_period.id, release.id
+
+    with _client(postgres_engine) as client:
+        url = f"/api/admin/releases?reporting_period_id={period_id}"
+        assert client.get(url).status_code == 401
+        _login(client, manager_username)
+        assert client.get(url).status_code == 403
+
+    with _client(postgres_engine) as client:
+        _login(client, admin_username)
+        body = client.get(url).json()
+        assert [item["id"] for item in body] == [str(release_id)]
+        serialized = json.dumps(body).casefold()
+        for forbidden in ("payload", "prepared_by", "published_by", "username", "email", "evidence", "session"):
+            assert forbidden not in serialized
+        assert client.get(f"/api/admin/releases?reporting_period_id={other_period_id}").json() == []
+        assert client.get(f"/api/admin/releases?reporting_period_id={uuid4()}").status_code == 404
+        assert client.get("/api/admin/releases").status_code == 422

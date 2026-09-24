@@ -199,3 +199,15 @@ class ReleaseResponse(BaseModel):
     checksum_sha256: str
     reporting_period_id: UUID | None
     payload: dict[str, object]
+
+
+class ReleaseSummary(BaseModel):
+    """Release metadata only: no payload, no preparer/publisher identity."""
+
+    id: UUID
+    version: str
+    status: str
+    checksum_sha256: str
+    reporting_period_id: UUID | None
+    created_at: datetime
+    published_at: datetime | None
