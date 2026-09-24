@@ -98,6 +98,26 @@ Aggregate views:
 
 `/api/public/dashboard` and `/api/public/dashboard/history` now exclude non-public releases.
 
+## Display resolution (presentation only)
+
+Each timeline period also carries a `display` map. It says which verified number a KPI card shows for that selection, and with what label. It never changes `values`, which charts, Data Explorer exports and every calculation keep reading at true granularity.
+
+**Month view**, in order:
+1. The month's own value, labelled e.g. `March 2025`.
+2. A complete ANNUAL value of that year: `2025 Annual Data`.
+3. A complete YTD value whose window covers the month: `2026 YTD · Jan–Jun`.
+4. A static institutional reference: `Institutional Reference`, e.g. landfill diversion 88.1%.
+5. Otherwise the metric is absent and its card is omitted. The dashboard never shows "Unavailable", "N/A", 0 or a placeholder.
+
+Items from steps 2–4 are flagged `display_context: true` and carry `source_granularity`, `source_year` and `source_key`.
+
+**Rules:**
+- A partial-period sum is never used as context for a month.
+- A **Full Year / YTD view** shows its own values. A partial additive sum is labelled with its coverage (`2025 · 8 of 12 months`).
+- An official Scope 1 / Scope 2 / Operational GHG total is shown only with complete coverage, never as a partial figure.
+- Contextual numbers get no trend comparison.
+- The Carbon Story carries each card's label, and skips an act whose card has no number.
+
 ## Import procedure
 
 ```sh

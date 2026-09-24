@@ -243,11 +243,13 @@ test('an unpublished waste period reports unavailable rather than zero', async (
   assert.equal(metric.value, null);
 });
 
-test('active display marks full GHG and unresolved methodology values unavailable', () => {
+test('official GHG is shown only from backend values and never derived in the browser', () => {
   const app = read('app.js');
   assert.match(app, /Operational GHG Emissions — Scope 1 \+ Scope 2/);
-  assert.match(app, /Not published for this period/);
-  assert.match(app, /Not published/);
+  // The GHG hero shows each official figure from the backend display item, or omits it.
+  assert.match(app, /const total = shownValue\('operational_ghg_tco2e'\)/);
+  assert.match(app, /const s1 = shownValue\('scope1_tco2e'\), s2 = shownValue\('scope2_tco2e'\)/);
+  assert.match(app, /if \(!total && !s1 && !s2\) return '';/);
   assert.doesNotMatch(app, /2\.388|2\.701|0\.727|0\.71|1\.5571|2\.939/);
   assert.doesNotMatch(app, /Calculations\./);
   // LPG is displayed on its governed litre basis; the superseded kg series is gone.
@@ -500,7 +502,6 @@ test('no browser-derived official total and no population CSV', () => {
   const app = read('app.js');
   const loader = read('public-data-loader.js');
   assert.doesNotMatch(app, /const net = null;/);
-  assert.match(app, /Not published for this period/);
   // Nothing in the page derives an official total from Scope 1 + Scope 2.
   assert.doesNotMatch(app, /Calculations\.(?:grossEmissions|netCarbonIndicator|scope1Total|scope2Total)/);
   assert.doesNotMatch(loader, /totalGHG\s*=\s*[^n]*(?:scope1|elecEm)/);
@@ -548,13 +549,13 @@ test('loader maps derived Energy and Water values per month and fetches only the
   assert.deepEqual(requested.sort(), ['/api/public/dashboard/timeline', 'data/green_master.csv']);
 });
 
-test('missing values are shown as unavailable and are never coerced to zero', () => {
+test('missing values are never coerced to zero', () => {
   const app = read('app.js');
   assert.doesNotMatch(app, /const (?:dgVal|trDieselVal|petrolVal|lpgVal) = [^;]*\|\| 0/);
-  assert.match(app, /c == null \? 'Unavailable' : c/);
+  assert.match(app, /c == null \? '' : c/);
   assert.match(app, /"\$\{c == null \? '' : c\}"/);
   assert.doesNotMatch(app, /const cleanZero = arr => arr\.map\(v => v === 0/);
-  assert.match(app, /Combined electricity consumption is not published for this period/);
+  assert.match(app, /No combined electricity total for this selection/);
   assert.match(app, /kpi\('Total electricity consumption', totalElec/);
   assert.doesNotMatch(app, /v == null \? null : v \+ \(re\[i\] == null \? 0 : re\[i\]\)/);
 });
@@ -649,8 +650,8 @@ test('Carbon Story restores the last-good final-staging scenes and reads current
   const html = read('index.html');
   const story = read('walkthrough.js').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
   const css = read('walkthrough.css');
-  assert.match(html, /walkthrough\.css\?v=13/);
-  assert.match(html, /walkthrough\.js\?v=16/);
+  assert.match(html, /walkthrough\.css\?v=\d+/);
+  assert.match(html, /walkthrough\.js\?v=\d+/);
   assert.ok(html.indexOf('vendor/gsap-scrolltrigger.min.js') < html.indexOf('walkthrough.js'));
   assert.match(story, /document\.querySelectorAll\('\.page \.kpi'\)/);
   assert.match(story, /document\.querySelectorAll\('#ghgKpis \.ghg-split'\)/);
@@ -799,4 +800,76 @@ test('a year with a partial YTD and a separate annual record exposes both views'
   const app = read('app.js');
   assert.match(app, /value\.startsWith\('agg:'\)/);
   assert.match(app, /`agg:\$\{option\.key\}`/);
+});
+
+// ---- Display fallback (presentation only) ----------------------------------
+
+test('a month view shows annual context from the backend display map without touching monthly data', async () => {
+  const march = tlMonth(2025, 3, { grid_ht_kwh: tv(10, 'energy') });
+  march.display = {
+    grid_ht_kwh: { value: 10, unit: 'kWh', source_granularity: 'MONTHLY', display_context: false, display_label: 'March 2025' },
+    total_waste_generated_kg: { value: 55339.55, unit: 'kg', source_granularity: 'ANNUAL', source_year: 2025, display_context: true, display_label: '2025 Annual Data' },
+    total_participants: { value: 4000, unit: 'people', qualifier: 'AT_LEAST', source_granularity: 'ANNUAL', display_context: true, display_label: '2025 Annual Data' },
+    landfill_diversion_pct: { value: 88.1, unit: '%', source_granularity: 'STATIC', display_context: true, display_label: 'Institutional Reference' }
+  };
+  const annual = tlAggregate('2025-FY', 2025, 'ANNUAL', 12, { total_waste_generated_kg: tv(55339.55, 'waste', { granularity: 'ANNUAL' }) }, '2025 Full Year');
+  annual.display = { total_waste_generated_kg: { value: 55339.55, unit: 'kg', source_granularity: 'ANNUAL', display_context: false, display_label: '2025 Annual Data' } };
+  const { data, explorerRows } = await loadDashboardFromTimeline(timelineOf([annual, march], '2025-03'));
+  const year = data['2025'];
+  // Shown in the March view, labelled as annual context...
+  assert.equal(year.display[2].total_waste_generated_kg.value, 55339.55);
+  assert.equal(year.display[2].total_waste_generated_kg.display_label, '2025 Annual Data');
+  assert.equal(year.display[2].total_waste_generated_kg.display_context, true);
+  assert.equal(year.display[2].landfill_diversion_pct.display_label, 'Institutional Reference');
+  // ...but never a March record: charts, sums and exports read the true series.
+  assert.ok(year.totalWaste.every(value => value === null), 'no monthly waste point');
+  assert.equal(year.totalWaste.aggregate, 55339.55, 'annual value stays in the Full Year view');
+  const marchRows = explorerRows.filter(row => row[1] === 'Mar 2025');
+  assert.ok(marchRows.every(row => row[3] !== 'waste' && row[3] !== 'outreach'), 'no March waste/outreach export row');
+  const annualRow = explorerRows.find(row => row[3] === 'waste' && row[5] === 55339.55);
+  assert.equal(annualRow[1], '2025 Full Year');
+  assert.equal(annualRow[2], 'ANNUAL');
+});
+
+test('KPI cards render the backend display item with a provenance badge, or are omitted', () => {
+  const app = read('app.js');
+  assert.match(app, /const CARD_DISPLAY = \{/);
+  for (const [title, code] of [
+    ['Total waste generated', 'total_waste_generated_kg'], ['Outreach impact', 'total_participants'],
+    ['Landfill diversion', 'landfill_diversion_pct'], ['Total water recycled', 'water_recycled_kl'],
+    ['Wet waste generated', 'wet_waste_generated_kg'], ['Dry waste generated', 'dry_waste_generated_kg'],
+    ['Grid electricity emissions', 'scope2_tco2e'], ['Total grid electricity consumed', 'grid_total_kwh']
+  ]) assert.ok(app.includes(`'${title}': { code: '${code}'`), title);
+  // No trustworthy number: the card is omitted, never rendered as "Unavailable".
+  assert.match(app, /if \(!item\) return '';\s*\/\/ no trustworthy number/);
+  assert.match(app, /sourceBadge\(label, context\)/);
+  assert.match(app, /if \(context\) prev = null;/);
+  // Static institutional references always carry their label.
+  assert.match(app, /const STATIC_LABEL = 'Institutional Reference';/);
+  for (const title of ['Total green cover', 'Maintained vegetation', 'Natural vegetation', 'Total trees', 'Green cover zones']) {
+    assert.ok(app.includes(`'${title}'`), title);
+  }
+  assert.match(read('styles.css'), /\.kpi-source/);
+});
+
+test('public dashboard code renders no generic unavailable text', () => {
+  const sources = ['app.js', 'walkthrough.js'].map(file => read(file).replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, ''));
+  for (const source of sources) {
+    // string literals only; code identifiers such as `unavailable` are fine
+    const literals = [...source.matchAll(/(['"`])((?:\\.|(?!\1)[^\\])*)\1/g)].map(match => match[2]);
+    for (const text of literals) {
+      assert.doesNotMatch(text, /^\s*(Unavailable|Not available|N\/A|No data)\s*$/i, text);
+      assert.doesNotMatch(text, /Methodology under review|Not published for this period|Source not published/i, text);
+    }
+  }
+});
+
+test('Carbon Story carries provenance labels and skips acts without a number', () => {
+  const story = read('walkthrough.js').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+  assert.match(story, /card\.querySelector\('\.kpi-source'\)/);
+  assert.match(story, /split\.querySelector\('\.kpi-source'\)/);
+  assert.match(story, /if \(!c \|\| c\.na \|\| c\.value == null\) return;/);
+  assert.match(story, /if \(cfg\.provenance\) copy\.appendChild\(el\('div', 'wt-source', cfg\.provenance\)\)/);
+  assert.match(story, /if \(!ledgerRows\.length\) return;/);
+  assert.doesNotMatch(story, /Gross − avoided|Net impact|netVal|ledgerReady/);
 });

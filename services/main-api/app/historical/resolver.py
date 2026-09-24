@@ -499,6 +499,102 @@ def _aggregates(db: Session, year: int, months: list[Entry], sources: list[Entry
     return result
 
 
+STATIC_LABEL = "Institutional Reference"
+# Official inventory totals: shown only with complete coverage, never as a partial sum.
+OFFICIAL_GHG_TOTALS = {"scope1_tco2e", "scope2_tco2e", "operational_ghg_tco2e", "grid_electricity_emissions"}
+
+
+def _aggregate_label(entry: Entry) -> str:
+    if entry.granularity == "ANNUAL":
+        return f"{entry.year} Annual Data"
+    start, end = calendar.month_abbr[entry.coverage_start.month], calendar.month_abbr[entry.coverage_end.month]
+    return f"{entry.year} YTD · {start}–{end}"
+
+
+def _display_item(value: Value, entry: Entry, label: str, *, context: bool) -> dict[str, Any]:
+    return {
+        "value": _number(value.value, value.code),
+        "unit": value.unit,
+        "qualifier": value.qualifier,
+        "domain": value.domain,
+        "source_granularity": value.granularity if value.granularity in ("ANNUAL", "YTD") else entry.granularity,
+        "source_year": entry.year,
+        "source_month": entry.month,
+        "source_key": entry.key,
+        "display_context": context,
+        "display_label": label,
+    }
+
+
+def _static_display(landfill: Decimal) -> dict[str, dict[str, Any]]:
+    return {
+        "landfill_diversion_pct": {
+            "value": _number(landfill, "landfill_diversion_pct"),
+            "unit": "%",
+            "qualifier": "EXACT",
+            "domain": "waste",
+            "source_granularity": "STATIC",
+            "source_year": None,
+            "source_month": None,
+            "source_key": None,
+            "display_context": True,
+            "display_label": STATIC_LABEL,
+        }
+    }
+
+
+def _month_display(entry: Entry, aggregates: list[Entry], static: dict[str, Any]) -> dict[str, Any]:
+    """What a month view SHOWS for each metric. Presentation only.
+
+    Order: this month's own value; else a complete ANNUAL value of the year;
+    else a complete YTD value whose window covers the month; else a static
+    reference; else nothing (the card is hidden). A fallback is labelled with
+    its true source period and flagged ``display_context``; it is never added
+    to the month's ``values`` (which drive charts, exports and calculations).
+    """
+    display: dict[str, Any] = dict(static)
+    exact_label = f"{calendar.month_name[entry.month or 1]} {entry.year}"
+    for code, value in entry.values.items():
+        if value.value is not None and code != "population":
+            display[code] = _display_item(value, entry, exact_label, context=False)
+    month_date = entry.coverage_start
+    candidates = sorted(
+        (item for item in aggregates if item.coverage_start <= month_date <= item.coverage_end),
+        key=lambda item: 0 if item.granularity == "ANNUAL" else 1,
+    )
+    for aggregate in candidates:
+        for code, value in aggregate.values.items():
+            if code in display or code == "population" or value.value is None:
+                continue
+            if value.coverage_status != "complete":
+                continue  # a partial-period sum is never shown as context for a month
+            display[code] = _display_item(value, aggregate, _aggregate_label(aggregate), context=True)
+    return display
+
+
+def _aggregate_display(entry: Entry, static: dict[str, Any]) -> dict[str, Any]:
+    """A Full Year / YTD view shows its own values; partial sums say how many months they cover."""
+    display: dict[str, Any] = dict(static)
+    label = _aggregate_label(entry)
+    window = (
+        (entry.coverage_end.year - entry.coverage_start.year) * 12
+        + entry.coverage_end.month
+        - entry.coverage_start.month
+        + 1
+    )
+    for code, value in entry.values.items():
+        if value.value is None or code == "population":
+            continue
+        if value.coverage_status == "partial" and code in OFFICIAL_GHG_TOTALS:
+            continue  # never a partial figure under an official Scope 1 / Scope 2 / Operational GHG label
+        if value.coverage_status == "partial":
+            item_label = f"{entry.year} · {len(value.months_covered)} of {window} months"
+        else:
+            item_label = label
+        display[code] = _display_item(value, entry, item_label, context=False)
+    return display
+
+
 def _domain_status(entry: Entry, aggregates: list[Entry]) -> dict[str, dict[str, Any]]:
     status: dict[str, dict[str, Any]] = {}
     for domain in DOMAINS:
@@ -551,6 +647,7 @@ def build_timeline(db: Session) -> dict[str, Any]:
         if current is None or current.source_kind != "published_release":
             monthly[release_entry.key] = release_entry  # priority 1 beats history
 
+    static = _static_display(LANDFILL_DIVERSION_STATIC_REFERENCE_PCT)
     years = sorted({entry.year for entry in monthly.values()} | set(sources_by_year))
     periods: dict[str, dict[str, Any]] = {}
     selector = []
@@ -560,6 +657,7 @@ def build_timeline(db: Session) -> dict[str, Any]:
         options = []
         for aggregate in aggregates:
             periods[aggregate.key] = _entry_json(aggregate, [])
+            periods[aggregate.key]["display"] = _aggregate_display(aggregate, static)
             label = "Full Year" if aggregate.key == f"{year}-FY" else aggregate.label.split(" ", 1)[1]
             options.append({"key": aggregate.key, "label": label, "granularity": aggregate.granularity})
         population, source = population_for(db, year)
@@ -573,6 +671,7 @@ def build_timeline(db: Session) -> dict[str, Any]:
                     "source_kind": source.get("kind"),
                 }
             periods[entry.key] = _entry_json(entry, aggregates)
+            periods[entry.key]["display"] = _month_display(entry, aggregates, static)
             options.append({"key": entry.key, "label": calendar.month_abbr[entry.month or 1], "granularity": "MONTHLY"})
         selector.append({"year": year, "options": options})
     latest = max(monthly.values(), key=lambda item: (item.year, item.month or 0), default=None)

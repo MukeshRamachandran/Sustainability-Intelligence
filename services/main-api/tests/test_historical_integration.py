@@ -646,3 +646,113 @@ def test_default_period_is_latest_official_month(postgres_engine: Engine, tmp_pa
     options = next(item for item in timeline["selector"] if item["year"] == year + 1)["options"]
     assert [option["key"] for option in options] == [f"{year + 1}-YTD", f"{year + 1}-06"]
     assert options[0]["label"].startswith("YTD")
+
+
+# ---- Display resolution (presentation only) --------------------------------
+
+
+def _water_mapping(suffix: str, year: int, *, recycled: dict[str, Any], annual: dict[str, Any]) -> dict[str, Any]:
+    water = _mapping("water_staging", suffix)
+    water["year_rules"] = {str(year): {"recycled_period": recycled, "annual_period": annual}}
+    return water
+
+
+def test_month_display_uses_annual_context_without_creating_monthly_data(
+    postgres_engine: Engine, tmp_path: Path, year: int
+) -> None:
+    suffix = uuid4().hex[:8]
+    energy, waste, outreach = (
+        _mapping(name, suffix) for name in ("energy_staging", "waste_staging", "outreach_staging")
+    )
+    rules = {str(year): {"granularity": "ANNUAL", "coverage_start": f"{year}-01-01", "coverage_end": f"{year}-12-31"}}
+    waste["year_rules"] = outreach["year_rules"] = rules
+    _write(tmp_path, energy, _energy_csv(year, [("March", "1", "1", "1", "1", "1", "1")]))
+    _write(
+        tmp_path,
+        waste,
+        f"Waste Inventory,,\n,{year},\nWet Waste Generated ,1000,\nDry waste Generared ,150,\nPET,150,\n",
+    )
+    _write(
+        tmp_path,
+        outreach,
+        f'Overall Metrix,,\n,{year},\nTotal participants / reach,"4,000+",\n',
+    )
+    _import(postgres_engine, tmp_path, [energy, waste, outreach])
+    timeline = _timeline(postgres_engine)
+    march = timeline["periods"][f"{year}-03"]
+    shown = march["display"]["total_waste_generated_kg"]
+    assert shown["value"] == 1150
+    assert shown["display_label"] == f"{year} Annual Data"
+    assert shown["display_context"] is True and shown["source_granularity"] == "ANNUAL"
+    assert shown["source_key"] == f"{year}-FY" and shown["source_month"] is None
+    assert march["display"]["total_participants"]["qualifier"] == "AT_LEAST"
+    assert march["display"]["landfill_diversion_pct"] == {
+        **march["display"]["landfill_diversion_pct"],
+        "value": 88.1,
+        "source_granularity": "STATIC",
+        "display_label": "Institutional Reference",
+    }
+    # The month's own data is untouched: no March waste value, no monthly waste rows.
+    assert "total_waste_generated_kg" not in march["values"]
+    assert march["display"]["grid_ht_kwh"]["display_label"] == f"March {year}"
+    assert march["display"]["grid_ht_kwh"]["display_context"] is False
+    with Session(postgres_engine) as db:
+        monthly_waste = db.scalar(
+            select(HistoricalMetricValue.id)
+            .join(HistoricalPeriod, HistoricalPeriod.id == HistoricalMetricValue.period_id)
+            .where(
+                HistoricalPeriod.year == year,
+                HistoricalPeriod.granularity == "MONTHLY",
+                HistoricalMetricValue.domain == "waste",
+            )
+        )
+        assert monthly_waste is None
+    # The Full Year view shows the annual record as its own data, not as context.
+    full_year = timeline["periods"][f"{year}-FY"]["display"]["total_waste_generated_kg"]
+    assert full_year["display_context"] is False and full_year["display_label"] == f"{year} Annual Data"
+
+
+def test_exact_month_beats_annual_and_ytd_context_is_labelled(
+    postgres_engine: Engine, tmp_path: Path, year: int
+) -> None:
+    suffix = uuid4().hex[:8]
+    water = _water_mapping(
+        suffix,
+        year,
+        recycled={"granularity": "YTD", "coverage_start": f"{year}-01-01", "coverage_end": f"{year}-06-30"},
+        annual={"granularity": "ANNUAL", "coverage_start": f"{year}-01-01", "coverage_end": f"{year}-12-31"},
+    )
+    _write(
+        tmp_path,
+        water,
+        f"Water Consumption {year},,,,\nTotal Water Recyled ,470,,,\nMonth,Water Consumption (KL),,,\nJan,300,,,\n"
+        ",,,,\nTWAD Consumption KL,Borewell Consumption (KL):,Total Consumption,,\n400,600,1000,,\n",
+    )
+    _import(postgres_engine, tmp_path, [water])
+    jan = _timeline(postgres_engine)["periods"][f"{year}-01"]["display"]
+    assert jan["water_consumed_kl"]["value"] == 300  # exact month wins over the annual 1000
+    assert jan["water_consumed_kl"]["display_label"] == f"January {year}"
+    assert jan["water_twad_kl"]["value"] == 400 and jan["water_twad_kl"]["display_label"] == f"{year} Annual Data"
+    assert jan["water_recycled_kl"]["value"] == 470
+    assert jan["water_recycled_kl"]["display_label"] == f"{year} YTD · Jan–Jun"
+    assert jan["water_recycled_kl"]["display_context"] is True
+
+
+def test_no_partial_official_ghg_and_missing_is_omitted(postgres_engine: Engine, tmp_path: Path, year: int) -> None:
+    suffix = uuid4().hex[:8]
+    energy = _mapping("energy_staging", suffix)
+    _write(
+        tmp_path,
+        energy,
+        _energy_csv(year, [("January", "100", "20", "5", "1", "1", "0"), ("February", "100", "20", "", "1", "1", "0")]),
+    )
+    _import(postgres_engine, tmp_path, [energy])
+    timeline = _timeline(postgres_engine)
+    feb = timeline["periods"][f"{year}-02"]["display"]
+    for code in ("grid_total_kwh", "scope2_tco2e", "grid_temporary_kwh"):
+        assert code not in feb  # no value, no fallback: omitted, never zero
+    ytd = timeline["periods"][f"{year}-YTD"]["display"]
+    assert "scope2_tco2e" not in ytd and "grid_electricity_emissions" not in ytd  # never a partial Scope total
+    assert ytd["grid_total_kwh"]["value"] == 125
+    assert ytd["grid_total_kwh"]["display_label"] == f"{year} · 1 of 2 months"
+    assert ytd["renewable_electricity_kwh"]["display_label"] == f"{year} YTD · Jan–Feb"

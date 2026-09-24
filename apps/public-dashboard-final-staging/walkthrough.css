@@ -984,3 +984,7 @@
 #wt-overlay.wt-reduced .wt-hair { width: 100%; }
 #wt-overlay.wt-reduced .wt-ledger-rule { transform: scaleX(1); }
 #wt-overlay.wt-reduced .wt-stage { transition: opacity .25s linear; }
+
+/* Period the act's number comes from, e.g. "2025 Annual Data". */
+.wt-source { margin-top: 6px; font-size: 12px; font-weight: 600; letter-spacing: .03em; opacity: .75; }
+.wt-ledger .wt-source { margin: 0; font-size: 11px; opacity: .7; }

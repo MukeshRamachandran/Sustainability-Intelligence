@@ -1196,3 +1196,10 @@ body[data-page="weather"] .data-head p {
 
 
 
+
+/* Provenance of a KPI value: the period its number comes from. Context values
+   (annual / YTD / static shown for another selection) get a tinted pill. */
+.kpi-source { display: inline-block; margin: 6px 0 2px; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 600; letter-spacing: .02em; color: var(--muted, #6b7a72); background: var(--surface2, rgba(21,32,26,.05)); }
+.kpi-source.is-context { color: #1c7a4b; background: rgba(28,122,75,.10); }
+/* Keep the badge above the video/particle layer of animated KPI cards. */
+.kpi-fx .kpi-source { position: relative; z-index: 10 !important; opacity: 1 !important; }

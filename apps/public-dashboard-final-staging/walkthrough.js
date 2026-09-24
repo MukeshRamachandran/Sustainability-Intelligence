@@ -215,12 +215,14 @@
         };
       }
 
-      var unavailable = !counter || /unavailable/i.test(card.textContent || '');
+      var unavailable = !counter;
+      var source = card.querySelector('.kpi-source');
       map[title] = {
+        provenance: source ? source.textContent.trim() : '',
         value: unavailable ? null : parseFloat(counter.getAttribute('data-val')),
         dec: counter ? parseInt(counter.getAttribute('data-dec'), 10) || 0 : 0,
         unit: unit,
-        na: unavailable || unit === 'N/A',
+        na: unavailable,
         statusText: statusText,
         accent: (card.style.getPropertyValue('--a') || '#1c7a4b').trim(),
         video: src ? src.getAttribute('src') : null,
@@ -236,14 +238,16 @@
       var title = heading.textContent.trim().replace(/\s+/g, ' ').toLowerCase();
       if (title !== 'scope 1 emissions' && title !== 'scope 2 emissions') return;
       var counter = split.querySelector('.counter-val');
-      var unavailable = !counter || /unavailable/i.test(split.textContent || '');
+      var unavailable = !counter;
       var value = counter ? parseFloat(counter.getAttribute('data-val')) : NaN;
+      var splitSource = split.querySelector('.kpi-source');
       map[title === 'scope 1 emissions' ? 'Scope 1 emissions' : 'Scope 2 emissions'] = {
+        provenance: splitSource ? splitSource.textContent.trim() : '',
         value: unavailable || !isFinite(value) ? null : value,
         dec: counter ? parseInt(counter.getAttribute('data-dec'), 10) || 2 : 2,
         unit: 'tCO₂e',
         na: unavailable || !isFinite(value),
-        statusText: unavailable ? 'Unavailable' : '',
+        statusText: '',
         accent: '#1c7a4b',
         video: null,
         trend: null
@@ -262,12 +266,14 @@
     // It is the API-published Operational GHG value, not a browser sum.
     var grossEl = document.querySelector('#ghgKpis .ghg-top .counter-val');
     var grossValue = grossEl ? parseFloat(grossEl.getAttribute('data-val')) : NaN;
+    var grossSource = document.querySelector('#ghgKpis .ghg-top .kpi-source');
     map['Total carbon footprint (gross)'] = {
+      provenance: grossSource ? grossSource.textContent.trim() : '',
       value: isFinite(grossValue) ? grossValue : null,
       dec: grossEl ? parseInt(grossEl.getAttribute('data-dec'), 10) || 2 : 2,
       unit: 'tCO₂e',
       na: !isFinite(grossValue),
-      statusText: 'Unavailable',
+      statusText: '',
       accent: '#b8623a',
       video: null,
       trend: null
@@ -377,14 +383,13 @@
     if (cfg.ledger) {
       // Two independent published measures; never an arithmetic ledger.
       var lg = el('div', 'wt-ledger');
-      var rows = [
-        { k: 'Operational GHG', v: cfg.ledger.gross },
-        { k: 'Estimated avoided grid emissions', v: cfg.ledger.avoided }
-      ];
-      ledger = { nums: [], vals: [cfg.ledger.gross, cfg.ledger.avoided], rows: [] };
+      var rows = cfg.ledger.rows;
+      ledger = { nums: [], vals: rows.map(function (r) { return r.v; }), rows: [] };
       rows.forEach(function (r) {
         var row = el('div', 'wt-ledger-row');
-        row.appendChild(el('span', 'k', r.k));
+        var key = el('span', 'k', r.k);
+        if (r.provenance) key.appendChild(el('small', 'wt-source', ' · ' + r.provenance));
+        row.appendChild(key);
         var num = el('span', 'n', fmtNum(0, cfg.dec));
         num.appendChild(el('small', null, ' tCO₂e'));
         row.appendChild(num);
@@ -402,6 +407,7 @@
       valLine = el('div', 'wt-val-line');
       metric.appendChild(valLine);
       copy.appendChild(metric);
+      if (cfg.provenance) copy.appendChild(el('div', 'wt-source', cfg.provenance));
     }
 
     var def = el('p', 'wt-def');
@@ -472,23 +478,33 @@
     var intro = Object.assign({}, INTRO);
     list.push(intro);
 
+    // An act whose figure has no trustworthy number for this selection is
+    // skipped - the story never shows "Unavailable" or a placeholder.
+    var shown = 0;
     WT_STORY.forEach(function (s, i) {
       var c = cards[s.title];
-      var na = c ? c.na : true;
       if (s.title === 'Where We Stand') {
-        var operational = cards['Total carbon footprint (gross)'];
-        var avoided = cards['Emission avoided'];
+        var ledgerRows = [
+          { k: 'Operational GHG', card: cards['Total carbon footprint (gross)'] },
+          { k: 'Estimated avoided grid emissions', card: cards['Emission avoided'] }
+        ].filter(function (row) { return row.card && !row.card.na && row.card.value != null; })
+          .map(function (row) { return { k: row.k, v: row.card.value, provenance: row.card.provenance }; });
+        if (!ledgerRows.length) return;
+        shown += 1;
         list.push({
-          kind: 'kpi', n: i + 1, title: s.title, head: s.head, def: s.def,
+          kind: 'kpi', n: shown, title: s.title, head: s.head, def: s.def,
           chips: s.chips, video: s.video, accent: '#1c7a4b', na: false,
-          dec: 3, unit: 'tCO₂e', ledger: operational && avoided && !operational.na && !avoided.na
-            ? { gross: operational.value, avoided: avoided.value } : null
+          dec: 3, unit: 'tCO₂e', ledger: { rows: ledgerRows }
         });
         return;
       }
+      if (!c || c.na || c.value == null) return;
+      var na = false;
+      shown += 1;
       list.push({
         kind: 'kpi',
-        n: i + 1,
+        n: shown,
+        provenance: c.provenance,
         title: s.title,
         head: s.head,
         def: s.def,
@@ -601,9 +617,10 @@
     if (p.ledger) {
       // Reveal each independent published figure without combining them.
       var lg = p.ledger;
-      tl.to(lg.rows, { y: 0, opacity: 1, duration: .7, stagger: .14, ease: 'power3.out' }, .35)
-        .add(countTween(lg.nums[0], lg.vals[0], a.dec, .8), .55)
-        .add(countTween(lg.nums[1], lg.vals[1], a.dec, .8), 1.05);
+      tl.to(lg.rows, { y: 0, opacity: 1, duration: .7, stagger: .14, ease: 'power3.out' }, .35);
+      lg.nums.forEach(function (num, index) {
+        tl.add(countTween(num, lg.vals[index], a.dec, .8), .55 + index * .5);
+      });
     }
     return tl;
   }
@@ -1393,7 +1410,7 @@
         { '--wt-r': radius + 'px', duration: .95, ease: 'expo.inOut', onComplete: settleOpen });
       gsap.fromTo(['.wt-bar-top', '.wt-bar-bot'], { height: 0 },
         { height: '5.6vh', duration: 1.1, ease: 'expo.out', delay: .18 });
-      gsap.delayedCall(.55, function () { if (open) revealText(acts[0]); });
+      gsap.delayedCall(.55, function () { if (open && acts[0]) revealText(acts[0]); });
 
       grainLast = 0;
       atmoLast = 0;

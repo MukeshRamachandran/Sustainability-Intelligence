@@ -84,6 +84,9 @@
       year: Number(year), label: String(year), frequency: 'ytd', population: null,
       aggregateKey: null, aggregateEndMonth: null, aggregateGranularity: null,
       monthKeys: Array(12).fill(null), periodMeta: { all: null }, domainStatus: { all: {} }, secondary: {},
+      // What each period's KPI cards SHOW (backend display items, incl. labelled
+      // annual/YTD/static context). Never used for charts, exports or sums.
+      display: { all: {} },
       publishedMonths: Array(12).fill(false), wastePublishedMonths: Array(12).fill(false),
       wasteBreakdownByMonth: Array(12).fill(null), wasteBreakdownAggregate: [],
       landfillDiversionPct: null, waterTWADAnnual: null, waterBorewellAnnual: null, waterTotalAnnual: null,
@@ -177,6 +180,7 @@
           item.monthKeys[index] = option.key;
           item.periodMeta[index] = period;
           item.domainStatus[index] = period.domains || {};
+          item.display[index] = period.display || {};
           item.publishedMonths[index] = true;
           item.wastePublishedMonths[index] = period.domains?.waste?.state === 'available';
           Object.entries(SERIES).forEach(([name, code]) => { item[name][index] = valueOf(period, code); });
@@ -207,6 +211,7 @@
       item.label = period.label;
       item.periodMeta.all = period;
       item.domainStatus.all = period.domains || {};
+      item.display.all = period.display || {};
       item.population = num(period.population?.value);
       Object.entries(SERIES).forEach(([name, code]) => {
         const value = period.values?.[code];
