@@ -107,10 +107,26 @@ function monthsWithData(arr) { let last = 0; for (let i = 0; i < 12; i++) if (ar
 function valFor(d, arr, m) { return m === 'all' ? sum(arr, 0, d.frequency === 'ytd' ? monthsWithData(arr) : 12) : (arr[+m] == null ? null : n(arr[+m])) }
 /* The active toolbar selection plus its year dataset. */
 function currentPeriod() { return { year: +yearFilter.value, month: monthFilter.value, d: data[yearFilter.value] } }
+/* Scalar release blocks (Waste details, recycled Water and Outreach) belong
+   to one frozen month. Show them for that exact month; an all-period view is
+   safe only while the year has exactly one published month. */
+function selectionHasPublication(d, month) {
+  const published = Array.isArray(d?.publishedMonths) ? d.publishedMonths : [];
+  return month === 'all' ? published.filter(Boolean).length === 1 : published[+month] === true;
+}
 /* Human label for the selection - "Mar 2025" or the year dataset's own label. */
 function periodLabel(year, month) { return month === 'all' ? data[year].label : `${months[+month]} ${year}` }
 /* Comparison baseline for a metric: same period, one year back. null = nothing to compare against (no prior-year data). */
-function previousValue(arrName) { const { year, month, d } = currentPeriod(); const py = data[year - 1]; if (!py) return null; if (month === 'all') { const end = d.frequency === 'ytd' ? monthsWithData(d[arrName]) : 12; return sum(py[arrName], 0, end); } return valFor(py, py[arrName], month) }
+function previousValue(arrName) {
+  const { year, month, d } = currentPeriod();
+  const py = data[year - 1];
+  if (!d || !py || !Array.isArray(d[arrName]) || !Array.isArray(py[arrName])) return null;
+  if (month === 'all') {
+    const end = d.frequency === 'ytd' ? monthsWithData(d[arrName]) : 12;
+    return sum(py[arrName], 0, end);
+  }
+  return valFor(py, py[arrName], month);
+}
 /* The up/down trend chip; lowerGood flips which direction counts as green. */
 function trendHtml(cur, prev, lowerGood = true) { if (cur == null) return `<b class="neutral">unavailable</b><span>not in published release</span>`; if (prev == null || prev === 0) return `<b class="neutral">base</b><span>no comparison</span>`; const p = pct(cur, prev); const good = lowerGood ? p <= 0 : p >= 0; return `<b class="${good ? 'good' : 'bad'}">${p >= 0 ? '↑' : '↓'} ${Math.abs(p).toFixed(1)}%</b><span>vs last year</span>` }
 /* Build one KPI card: optional ambient FX layer (looping video, canvas
@@ -130,7 +146,9 @@ kpi = function (title, value, unit, accent, icon, prev, lowerGood = true, dec = 
    every page's KPI grid plus the public highlights strip. */
 function makeKpis() {
   const { year, month, d } = currentPeriod();
-  const outreachForPeriod = outreach.published && outreach.year === year;
+  const hasPublication = selectionHasPublication(d, month);
+  const outreachForPeriod = outreach.published && outreach.year === year
+    && (month === 'all' || outreach.month === +month + 1);
   const scope1 = valFor(d, d.scope1Full, month), diesel = valFor(d, d.dieselCombo, month), petrol = valFor(d, d.petrolEm, month), scope2 = valFor(d, d.elecEm, month), elec = valFor(d, d.elecKwh, month);
   const re = valFor(d, d.reKwh, month), avoid = d.avoided;
   const gross = d.totalGHG;
@@ -138,7 +156,7 @@ function makeKpis() {
 
   /* Shared with the Waste/Water KPI blocks further down - computed once
      here so the Overview strip and those pages can't drift apart. */
-  const wasteHasData = d.totalWaste != null || d.wetWaste != null || d.dryWaste != null;
+  const wasteHasData = hasPublication && (d.totalWaste != null || d.wetWaste != null || d.dryWaste != null);
   /* total_waste_generated_kg is published by the backend, so it is used as-is
      when present - including a legitimate zero. */
   const wasteTot = wasteHasData
@@ -153,9 +171,9 @@ function makeKpis() {
     : (d.waterKL[+month] == null ? null : n(d.waterKL[+month]));
 
   periodText.textContent = publication.state === 'published'
-    ? (year === publication.period.year
+    ? (hasPublication
       ? `${periodLabel(year, month)} · Published release: ${publication.release.version || 'active'}`
-      : `${periodLabel(year, month)} · Static/reference content only`)
+      : `${periodLabel(year, month)} · No published operational release`)
     : (publication.state === 'error' ? 'Published data unavailable' : 'No active publication');
   heroGHG(gross, year, month, d, avoid, net);
   const hsSolar = document.getElementById('hs-solar-val'), hsAdmin = document.getElementById('hs-admin-val'), hsDg = document.getElementById('hs-dg-val');
@@ -165,12 +183,12 @@ function makeKpis() {
   document.getElementById('overviewKpis').innerHTML = [
     kpi('Renewable energy used', re, 'kWh', colors.emerald, 'sun', previousValue('reKwh'), false, 0, 'solarvideo'),
     kpi('Total grid electricity consumed', elec, 'kWh', colors.cyan, 'bolt', previousValue('elecKwh'), true, 0, 'elecmetervideo'),
-    kpi('Total water recycled', d.waterRecycledKL, 'KL', colors.cyan, 'repeat', null, false, 0, 'rewatervideo'),
+    kpi('Total water recycled', hasPublication ? d.waterRecycledKL : null, 'KL', colors.cyan, 'repeat', null, false, 0, 'rewatervideo'),
     kpi('Total waste generated', wasteTot == null ? null : wasteTot * wasteShow.factor, wasteShow.unit, colors.orange, 'trash', null, true, wasteShow.dec, 'convwastevideo'),
     kpi('Landfill diversion', wasteTot > 0 ? Calculations.safeRatioPct(wasteDiverted, wasteTot) : null, '%', colors.lime, 'shield', null, false, 1, 'landfillvideo'),
     kpi('Total water usage', waterKL, 'KL', colors.cyan, 'droplet', null, true, 0, 'watervideo'),
     kpi('Total green cover', green.totalGreenCoverPct, '%', colors.emerald, 'tree', null, false, 0, 'leavesvideo'),
-    kpi('Outreach impact', outreach.participantsServed, 'people', colors.gold, 'users', null, false, 0, 'earthvideo'),
+    kpi('Outreach impact', outreachForPeriod ? outreach.participantsServed : null, 'people', colors.gold, 'users', null, false, 0, 'earthvideo'),
     kpi('Scope 1 emissions', scope1, 'tCO₂e', colors.orange, 'cloud', previousValue('scope1Full'), true),
     kpi('Scope 2 emissions', scope2, 'tCO₂e', colors.cyan, 'bolt', previousValue('elecEm'), true)
   ].join('');
@@ -417,7 +435,7 @@ function makeKpis() {
     waterKpisEl.innerHTML = [
       kpi('Total water consumption', waterKL, 'KL', colors.cyan, 'droplet', waterPrev, true, 0),
       kpi('Consumption per capita', waterPerCapitaL, 'L/person', colors.teal, 'users', null, true, 0),
-      kpi('Total water recycled', d.waterRecycledKL, 'KL', colors.emerald, 'repeat', null, false, 0)
+      kpi('Total water recycled', hasPublication ? d.waterRecycledKL : null, 'KL', colors.emerald, 'repeat', null, false, 0)
     ].join('');
   }
 
@@ -856,7 +874,16 @@ const baseline = 'rgba(21,32,26,.16)';
    hidden pages, cutting a refresh from 20 charts to at most 4. Hidden
    pages get theirs on arrival, since go() always calls refresh(). */
 function drawCharts() {
-  killCharts(); const mk = (id, cfg) => { const el = document.getElementById(id); if (el && el.closest('.page.active')) charts[id] = new Chart(el, cfg); }; const { year, d } = currentPeriod(); const d25 = data[2025], d26 = data[2026];
+  killCharts();
+  const mk = (id, cfg) => { const el = document.getElementById(id); if (el && el.closest('.page.active')) charts[id] = new Chart(el, cfg); };
+  const { year, month, d } = currentPeriod();
+  if (!d) return;
+  const emptyTrendYear = {
+    elecKwh: Array(12).fill(null), reKwh: Array(12).fill(null),
+    reOnCampusKwh: Array(12).fill(null), reProcuredKwh: Array(12).fill(null)
+  };
+  const trendYear = value => ({ ...emptyTrendYear, ...(value || {}) });
+  const d25 = trendYear(data[2025]), d26 = trendYear(data[2026]);
   /* Combined Scope1+Scope2 charts need one shared month window - capped to
      whichever contributing source has reported the fewest months so far
      (fuel/Fleet/DG typically lag grid electricity), not a hardcoded cutoff.
@@ -1079,11 +1106,12 @@ function drawCharts() {
 
   /* Unpublished waste stays absent rather than being coerced to zero, so the
      chart cannot imply a measured 0 kg for a month that was never published. */
-  const wWet = d.wetWaste, wDry = d.dryWaste;  // kg, as published
+  const hasPublication = selectionHasPublication(d, month);
+  const wWet = hasPublication ? d.wetWaste : null, wDry = hasPublication ? d.dryWaste : null;  // kg, as published
   mk('wastePieChartCanvas', { type: 'pie', data: { labels: ['Wet waste', 'Dry waste'], datasets: [{ data: [wWet, wDry], backgroundColor: [colors.blue, colors.gold], borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: function (context) { return ' ' + context.label + ': ' + (context.raw == null ? 'Not published' : (context.raw < 1000 ? context.raw.toFixed(2) + ' kg' : (context.raw / 1000).toFixed(1) + ' tons')); } } } } } });
 
   // Link to the main top bar year selection
-  const tmD = d || { wasteBreakdown: [] };
+  const tmD = hasPublication ? d : { wasteBreakdown: [] };
   const treemapData = (tmD.wasteBreakdown || []).map(item => ({ name: item.name, value: item.value }));
 
   mk('wasteTreemapCanvas', {
@@ -1228,7 +1256,8 @@ function drawCharts() {
   /* Outreach charts use only the active published aggregate. */
   const outreachChartsRow = document.getElementById('outreachChartsRow');
   if (outreachChartsRow) {
-    const outreachForPeriod = outreach.published && outreach.year === year;
+    const outreachForPeriod = outreach.published && outreach.year === year
+      && (month === 'all' || outreach.month === +month + 1);
     outreachChartsRow.style.display = outreachForPeriod ? '' : 'none';
     if (outreachForPeriod) {
       const sliceOpts = (unit, cutout) => ({

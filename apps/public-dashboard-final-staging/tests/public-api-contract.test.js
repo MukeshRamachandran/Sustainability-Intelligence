@@ -49,6 +49,13 @@ test('a chart-rendering failure cannot block non-chart content from rendering', 
   assert.match(afterCatch, /renderTable\(\);/);
 });
 
+test('missing comparison years and error-state trend years do not throw', () => {
+  const app = read('app.js');
+  assert.match(app, /!d \|\| !py \|\| !Array\.isArray\(d\[arrName\]\) \|\| !Array\.isArray\(py\[arrName\]\)/);
+  assert.match(app, /if \(!d\) return;/);
+  assert.match(app, /const d25 = trendYear\(data\[2025\]\), d26 = trendYear\(data\[2026\]\);/);
+});
+
 test('adapter normalizes the active immutable release and preserves governed LPG litre state', async () => {
   let requested;
   const api = adapterContext(async (url, options) => {
@@ -286,6 +293,18 @@ test('governed emission components reach the dashboard arrays from the frozen re
   // Every other month is missing, never zero.
   item.petrolEm.forEach((value, index) => { if (index !== sep) assert.equal(value, null); });
   item.elecEm.forEach((value, index) => { if (index !== sep) assert.equal(value, null); });
+  item.publishedMonths.forEach((value, index) => assert.equal(value, index === sep));
+});
+
+test('month-bound scalar release blocks are hidden for unpublished months', () => {
+  const app = read('app.js');
+  assert.match(app, /function selectionHasPublication\(d, month\)/);
+  assert.match(app, /published\[\+month\] === true/);
+  assert.match(app, /const wasteHasData = hasPublication &&/);
+  assert.match(app, /hasPublication \? d\.waterRecycledKL : null/);
+  assert.match(app, /outreach\.month === \+month \+ 1/);
+  assert.match(app, /outreachForPeriod \? outreach\.participantsServed : null/);
+  assert.match(app, /No published operational release/);
 });
 
 test('Scope 1 and combined diesel are additive displays of published components, never official totals', async () => {

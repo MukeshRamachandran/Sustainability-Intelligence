@@ -51,7 +51,8 @@
     const empty = () => Array(12).fill(null);
     return {
       year: Number(year), label: `${year} Published snapshot`, frequency: 'ytd', population: null,
-      publicationState: 'unavailable', totalGHG: null, totalEnergy: null, gridEnergy: null,
+      publicationState: 'unavailable', publishedMonths: Array(12).fill(false),
+      totalGHG: null, totalEnergy: null, gridEnergy: null,
       reEnergy: null, reShare: null, avoided: null, perCapita: null,
       petrolL: empty(), trDieselL: empty(), dgL: empty(), lpgL: empty(),
       petrolEm: empty(), trDieselEm: empty(), dgEm: empty(), lpgEm: empty(),
@@ -91,6 +92,7 @@
     const item = ensureYear(data, publication.period.year);
     const month = Math.max(0, Math.min(11, publication.period.month - 1));
     item.publicationState = 'published';
+    item.publishedMonths[month] = true;
     item.label = `${MONTHS[month]} ${publication.period.year} · Published ${publication.release.version || 'release'}`;
     const { transport, energy, lpg, water } = publication.domains;
     setMetric(item.petrolL, month, transport, 'transport_petrol_litres');
