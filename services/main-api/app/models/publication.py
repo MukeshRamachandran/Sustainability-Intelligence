@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text, text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -52,3 +52,32 @@ class PublicReleasePayload(Base):
     )
     payload: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class PublicReleaseMetadata(Base):
+    """Classification and public visibility, kept outside the frozen payload.
+
+    The payload and its checksum stay immutable; this row only says whether a
+    release is official institutional data and whether it may be served
+    publicly. A release without a row is official and publicly visible, so
+    the normal Prepare -> Publish workflow needs no extra step.
+    """
+
+    __tablename__ = "public_release_metadata"
+    __table_args__ = (
+        CheckConstraint("classification in ('official', 'test')", name="classification_allowed"),
+        CheckConstraint("classification = 'official' or public_visible = false", name="test_never_public"),
+        CheckConstraint("length(trim(reason)) > 0", name="reason_required"),
+        {"schema": "publication"},
+    )
+
+    release_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("publication.public_releases.id", ondelete="RESTRICT"),
+        primary_key=True,
+    )
+    classification: Mapped[str] = mapped_column(String(20), nullable=False)
+    public_visible: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -1,0 +1,140 @@
+{
+  "code": "waste_staging",
+  "version": 1,
+  "domain": "waste",
+  "priority": 1,
+  "source_reference": "apps/public-dashboard-final-staging/data/waste_master.csv",
+  "parser": "year_columns",
+  "description": "Waste inventory by material and wet/dry/total, one column per year (2025 annual; 2026 to date).",
+  "sections": {
+    "Waste Inventory": "waste"
+  },
+  "header_labels": [
+    "Item",
+    "Total"
+  ],
+  "rows": {
+    "waste": {
+      "Colour Paper": {
+        "metric_code": "material:COLOUR_PAPER",
+        "unit": "kg"
+      },
+      "White Paper": {
+        "metric_code": "material:WHITE_PAPER",
+        "unit": "kg"
+      },
+      "Iron": {
+        "metric_code": "material:IRON",
+        "unit": "kg"
+      },
+      "Lite Weight": {
+        "metric_code": "material:LITE_WEIGHT",
+        "unit": "kg"
+      },
+      "Cardboard": {
+        "metric_code": "material:CARDBOARD",
+        "unit": "kg"
+      },
+      "Coconut Shell": {
+        "metric_code": "material:COCONUT_SHELL",
+        "unit": "kg"
+      },
+      "PP Cardboards": {
+        "metric_code": "material:PP_CARDBOARDS",
+        "unit": "kg"
+      },
+      "Plastic (Mixed Plastics)": {
+        "metric_code": "material:MIXED_PLASTICS",
+        "unit": "kg"
+      },
+      "Stainless Steel": {
+        "metric_code": "material:STAINLESS_STEEL",
+        "unit": "kg"
+      },
+      "PVC Pipe": {
+        "metric_code": "material:PVC_PIPE",
+        "unit": "kg"
+      },
+      "Black Plastic (PP)": {
+        "metric_code": "material:BLACK_PLASTIC_PP",
+        "unit": "kg"
+      },
+      "PET": {
+        "metric_code": "material:PET",
+        "unit": "kg"
+      },
+      "Aluminium": {
+        "metric_code": "material:ALUMINIUM",
+        "unit": "kg"
+      },
+      "E WASTE": {
+        "metric_code": "material:E_WASTE",
+        "unit": "kg"
+      },
+      "HDPE": {
+        "metric_code": "material:HDPE",
+        "unit": "kg"
+      },
+      "LDPE": {
+        "metric_code": "material:LDPE",
+        "unit": "kg"
+      },
+      "News Paper": {
+        "metric_code": "material:NEWS_PAPER",
+        "unit": "kg"
+      },
+      "Tyre": {
+        "metric_code": "material:TYRE",
+        "unit": "kg"
+      },
+      "Unclassified": {
+        "metric_code": "material:UNCLASSIFIED",
+        "unit": "kg"
+      },
+      "Total waste Approximate": {
+        "metric_code": "total_waste_generated_kg",
+        "unit": "kg",
+        "qualifier": "APPROXIMATE"
+      },
+      "Wet Waste Generated": {
+        "metric_code": "wet_waste_generated_kg",
+        "unit": "kg"
+      },
+      "Dry waste Generared": {
+        "metric_code": "dry_waste_generated_kg",
+        "unit": "kg"
+      }
+    }
+  },
+  "year_rules": {
+    "2025": {
+      "granularity": "ANNUAL",
+      "coverage_start": "2025-01-01",
+      "coverage_end": "2025-12-31"
+    },
+    "2026": {
+      "granularity": "YTD",
+      "coverage_start": "2026-01-01",
+      "coverage_end": "2026-06-30",
+      "coverage_confirmed": false,
+      "note": "The source labels this figure only '2026' / 'to date'; its coverage end month is not stated. Imported UNVERIFIED as a proposed Jan-Jun YTD until the project owner confirms the coverage."
+    }
+  },
+  "sum_checks": [
+    {
+      "parts_prefix": "material:",
+      "total": "dry_waste_generated_kg",
+      "description": "material quantities sum to dry waste"
+    }
+  ],
+  "equation_checks": [
+    {
+      "total": "total_waste_generated_kg",
+      "parts": [
+        "wet_waste_generated_kg",
+        "dry_waste_generated_kg"
+      ],
+      "description": "total waste equals wet + dry"
+    }
+  ]
+}

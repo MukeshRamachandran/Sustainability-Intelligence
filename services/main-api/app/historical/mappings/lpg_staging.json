@@ -1,0 +1,20 @@
+{
+  "code": "lpg_staging",
+  "version": 1,
+  "domain": "lpg",
+  "priority": 1,
+  "source_reference": "apps/public-dashboard-final-staging/data/lpg_master.csv",
+  "parser": "long_monthly",
+  "description": "LPG monthly litres, Jan - Dec 2025 (no 2026 rows).",
+  "options": {
+    "year_column": "year",
+    "month_column": "month",
+    "value_column": "consumption_litre"
+  },
+  "categories": {
+    "_": {
+      "metric_code": "lpg_consumption_litres",
+      "unit": "L"
+    }
+  }
+}

@@ -1,0 +1,4 @@
+{
+  "_comment": "Owner-approved conflict resolutions. Each entry selects the source batch (mapping code) whose value becomes AUTHORITATIVE for one conflicted (period, domain, metric). Only the project owner may add entries; every entry must carry a reason, approver and approval date.",
+  "resolutions": []
+}

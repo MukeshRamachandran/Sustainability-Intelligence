@@ -1,0 +1,21 @@
+{
+  "code": "dg_manager",
+  "version": 1,
+  "domain": "transport",
+  "priority": 2,
+  "source_reference": "apps/manager-admin/data/dg_master.csv",
+  "parser": "long_monthly",
+  "description": "Manager prototype DG copy. Competing copy used for reconciliation.",
+  "options": {
+    "year_column": "year",
+    "month_column": "month",
+    "category_column": "fuel_type",
+    "value_column": "consumption_litre"
+  },
+  "categories": {
+    "diesel": {
+      "metric_code": "dg_diesel_litres",
+      "unit": "L"
+    }
+  }
+}

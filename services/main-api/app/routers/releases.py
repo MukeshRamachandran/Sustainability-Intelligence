@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select, update
 
+from app.historical.resolver import build_timeline, is_publicly_visible, visible_official_releases
 from app.models.enums import ReleaseStatus
 from app.models.publication import PublicRelease, PublicReleasePayload
 from app.models.sustainability import ReportingPeriod
@@ -243,7 +244,8 @@ def public_dashboard(db: DbSession, year: int | None = None, month: int | None =
         .join(PublicReleasePayload, PublicReleasePayload.release_id == PublicRelease.id)
         .where(PublicRelease.status == ReleaseStatus.ACTIVE)
     ).one_or_none()
-    if row is None:
+    # A TEST / non-public release stays intact for audit but is never served publicly.
+    if row is None or not is_publicly_visible(db, row[0].id):
         return empty_public_dashboard(year=year, month=month)
     release, payload = row
     period_data = payload.payload.get("period")
@@ -255,21 +257,15 @@ def public_dashboard(db: DbSession, year: int | None = None, month: int | None =
     return _public_response(release, payload)
 
 
+@public_router.get("/dashboard/timeline")
+def public_dashboard_timeline(db: DbSession) -> dict[str, object]:
+    """Official published releases merged with verified historical data."""
+    return build_timeline(db)
+
+
 @public_router.get("/dashboard/history")
 def public_dashboard_history(db: DbSession) -> list[dict[str, object]]:
-    rows = db.execute(
-        select(PublicRelease, PublicReleasePayload)
-        .join(PublicReleasePayload, PublicReleasePayload.release_id == PublicRelease.id)
-        .where(
-            PublicRelease.status.in_((ReleaseStatus.ACTIVE, ReleaseStatus.SUPERSEDED)),
-            PublicRelease.published_at.is_not(None),
-        )
-        .order_by(
-            PublicRelease.published_at.desc(),
-            PublicRelease.created_at.desc(),
-            PublicRelease.id.desc(),
-        )
-    ).all()
+    rows = visible_official_releases(db)
     latest_by_period: dict[str, tuple[PublicRelease, PublicReleasePayload]] = {}
     for release, payload in rows:
         period = payload.payload.get("period")

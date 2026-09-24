@@ -1,0 +1,321 @@
+"""Reconcile observations from every source copy before anything is stored.
+
+Rules (documented in HISTORICAL_DATA_ARCHITECTURE.md):
+
+R0  A failed internal source check marks the affected values CONFLICT.
+R1  Copies agree when their values are equal, or when one is exactly the
+    other rounded to fewer decimal places (a precision-only difference); the
+    more precise value is kept and the difference is recorded as RESOLVED.
+R2  Copies that genuinely disagree are all marked CONFLICT and recorded as
+    UNRESOLVED - unless an owner-approved entry in resolutions.json selects
+    one source, which then becomes AUTHORITATIVE and the others REJECTED.
+R3  A reported ANNUAL/YTD aggregate is compared with the sum of the genuine
+    monthly values it covers. A mismatch is a CONFLICT for the aggregate and
+    for the monthly values of the same metric, unless the aggregate's own
+    source declares itself superseded by monthly rows (REJECTED_SOURCE).
+R4  A value whose source does not state its coverage stays UNVERIFIED.
+R5  Only VERIFIED values from the highest-priority agreeing source become
+    AUTHORITATIVE; agreeing lower-priority copies stay SOURCE_REPORTED.
+"""
+
+from __future__ import annotations
+
+from collections import defaultdict
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from decimal import Decimal
+from typing import Any
+
+from app.historical.sources import Observation, ParsedSource, PeriodKey
+
+R1_REASON = "Rule R1: the values differ only by rounding; the more precise value is kept."
+
+
+@dataclass
+class LoadedSource:
+    mapping: dict[str, Any]
+    parsed: ParsedSource
+    sha256: str
+    original_filename: str
+
+    @property
+    def code(self) -> str:
+        return str(self.mapping["code"])
+
+    @property
+    def priority(self) -> int:
+        return int(self.mapping["priority"])
+
+
+@dataclass
+class PlannedValue:
+    source: LoadedSource
+    observation: Observation
+    verification_status: str = "VERIFIED"
+    authority_status: str = "SOURCE_REPORTED"
+    notes: list[str] = field(default_factory=list)
+
+    @property
+    def key(self) -> tuple[PeriodKey, str, str]:
+        return (self.observation.period, self.observation.domain, self.observation.metric_code)
+
+
+@dataclass
+class PlannedConflict:
+    conflict_type: str
+    period: PeriodKey
+    domain: str
+    metric_code: str
+    source_a: str
+    value_a: Decimal | None
+    source_b: str | None
+    value_b: Decimal | None
+    detail: str
+    resolution_status: str = "UNRESOLVED"
+    chosen_source: str | None = None
+    resolution_reason: str | None = None
+    resolved_at: datetime | None = None
+
+    @property
+    def key(self) -> str:
+        period = f"{self.period.granularity}|{self.period.coverage_start}|{self.period.coverage_end}"
+        return "|".join(
+            (self.conflict_type, period, self.domain, self.metric_code, self.source_a, self.source_b or "-")
+        )
+
+
+@dataclass
+class ReconciliationPlan:
+    values: list[PlannedValue]
+    conflicts: list[PlannedConflict]
+    auto_resolutions: list[str]
+
+
+def _decimals(value: Decimal) -> int:
+    exponent = value.normalize().as_tuple().exponent
+    return -exponent if isinstance(exponent, int) and exponent < 0 else 0
+
+
+def precision_only_difference(a: Decimal, b: Decimal) -> Decimal | None:
+    """Return the more precise value when a and b differ only by rounding."""
+    if a == b:
+        return a
+    precise, coarse = (a, b) if _decimals(a) > _decimals(b) else (b, a)
+    if _decimals(precise) == _decimals(coarse):
+        return None
+    quantum = Decimal(1).scaleb(-_decimals(coarse))
+    return precise if precise.quantize(quantum) == coarse else None
+
+
+def _resolution_index(resolutions: list[dict[str, Any]]) -> dict[tuple[str, str, str, str, str], dict[str, Any]]:
+    index = {}
+    for entry in resolutions:
+        for required in (
+            "granularity",
+            "coverage_start",
+            "coverage_end",
+            "domain",
+            "metric_code",
+            "chosen_mapping_code",
+            "reason",
+            "approved_by",
+            "approved_at",
+        ):
+            if not entry.get(required):
+                raise ValueError(f"resolution entry is missing {required!r}: {entry}")
+        index[
+            (
+                entry["granularity"],
+                entry["coverage_start"],
+                entry["coverage_end"],
+                entry["domain"],
+                entry["metric_code"],
+            )
+        ] = entry
+    return index
+
+
+def reconcile(sources: list[LoadedSource], resolutions: list[dict[str, Any]]) -> ReconciliationPlan:
+    now = datetime.now(UTC)
+    resolved = _resolution_index(resolutions)
+    planned = [
+        PlannedValue(source, item, verification_status=item.verification_hint, notes=list(item.notes))
+        for source in sources
+        for item in source.parsed.observations
+    ]
+    conflicts: list[PlannedConflict] = []
+    auto: list[str] = []
+    by_key: dict[tuple[PeriodKey, str, str], list[PlannedValue]] = defaultdict(list)
+    for value in planned:
+        by_key[value.key].append(value)
+
+    def mark(value: PlannedValue, note: str) -> None:
+        if value.verification_status != "REJECTED":
+            value.verification_status = "CONFLICT"
+        value.notes.append(note)
+
+    # R0 - internal source checks.
+    for source in sources:
+        for check in source.parsed.checks:
+            if check.passed:
+                continue
+            for period, domain, metric in check.affects:
+                for value in by_key.get((period, domain, metric), []):
+                    if value.source is source:
+                        mark(value, f"internal check failed: {check.description}")
+                conflicts.append(
+                    PlannedConflict(
+                        "internal_inconsistency",
+                        period,
+                        domain,
+                        metric,
+                        source.code,
+                        check.expected,
+                        None,
+                        check.actual,
+                        f"{check.description}: printed {check.expected}, computed {check.actual}",
+                    )
+                )
+
+    # R1 / R2 - competing copies of the same value.
+    for key, values in by_key.items():
+        batches = {value.source.code for value in values}
+        if len(batches) < 2:
+            continue
+        values.sort(key=lambda item: item.source.priority)
+        primary = values[0]
+        disagreeing = []
+        for other in values[1:]:
+            kept = precision_only_difference(primary.observation.value, other.observation.value)
+            if kept is None:
+                disagreeing.append(other)
+            elif primary.observation.value != other.observation.value:
+                conflicts.append(
+                    PlannedConflict(
+                        "precision_difference",
+                        key[0],
+                        key[1],
+                        key[2],
+                        primary.source.code,
+                        primary.observation.value,
+                        other.source.code,
+                        other.observation.value,
+                        "copies differ only by rounding precision",
+                        resolution_status="RESOLVED",
+                        chosen_source=primary.source.code if kept == primary.observation.value else other.source.code,
+                        resolution_reason=R1_REASON,
+                        resolved_at=now,
+                    )
+                )
+                auto.append(f"{key[0].label} {key[2]}: {primary.observation.value} vs {other.observation.value} (R1)")
+                if kept != primary.observation.value:
+                    other.notes.append("R1: more precise copy selected")
+                    values.remove(other)
+                    values.insert(0, other)
+                    primary = other
+        if not disagreeing:
+            continue
+        period = key[0]
+        resolution = resolved.get(
+            (period.granularity, period.coverage_start.isoformat(), period.coverage_end.isoformat(), key[1], key[2])
+        )
+        for other in disagreeing:
+            conflict = PlannedConflict(
+                "source_copies_disagree",
+                period,
+                key[1],
+                key[2],
+                primary.source.code,
+                primary.observation.value,
+                other.source.code,
+                other.observation.value,
+                f"{primary.source.code}={primary.observation.value} vs {other.source.code}={other.observation.value}",
+            )
+            if resolution is not None:
+                conflict.resolution_status = "RESOLVED"
+                conflict.chosen_source = resolution["chosen_mapping_code"]
+                conflict.resolution_reason = (
+                    f"{resolution['reason']} (approved by {resolution['approved_by']} on {resolution['approved_at']})"
+                )
+                conflict.resolved_at = now
+            conflicts.append(conflict)
+        for value in values:
+            if resolution is None:
+                mark(value, "competing source copies disagree (unresolved)")
+            elif value.source.code == resolution["chosen_mapping_code"]:
+                value.notes.append("selected by owner-approved resolution")
+            else:
+                value.verification_status = "REJECTED"
+                value.notes.append("rejected by owner-approved resolution")
+
+    # R3 - reported aggregates versus the genuine monthly values they cover.
+    def monthly_value(year: int, month: int, domain: str, metric: str) -> tuple[Decimal | None, bool]:
+        candidates = [
+            value
+            for value in by_key.get((PeriodKey.monthly(year, month), domain, metric), [])
+            if value.verification_status in ("VERIFIED", "CONFLICT")
+        ]
+        if not candidates:
+            return None, False
+        best = min(candidates, key=lambda item: item.source.priority)
+        return best.observation.value, best.verification_status == "CONFLICT"
+
+    for value in planned:
+        against = value.observation.reconcile_against
+        period = value.observation.period
+        if not against or period.granularity == "MONTHLY" or value.observation.qualifier != "EXACT":
+            continue
+        total = Decimal("0")
+        complete, contested = True, False
+        for year, month in period.months():
+            for metric in against:
+                item, is_conflict = monthly_value(year, month, value.observation.domain, metric)
+                if item is None:
+                    complete = False
+                else:
+                    total += item
+                    contested = contested or is_conflict
+        if not complete or total == value.observation.value:
+            continue
+        detail = (
+            f"reported {period.label} {value.observation.metric_code} = {value.observation.value}; "
+            f"sum of monthly {' + '.join(against)} = {total}"
+        )
+        superseded = value.source.mapping.get("superseded_by_monthly_rows")
+        conflict = PlannedConflict(
+            "aggregate_vs_monthly",
+            period,
+            value.observation.domain,
+            value.observation.metric_code,
+            value.source.code,
+            value.observation.value,
+            None,
+            total,
+            detail,
+        )
+        if superseded:
+            value.verification_status = "REJECTED"
+            value.notes.append(f"rejected: {superseded}")
+            conflict.resolution_status = "REJECTED_SOURCE"
+            conflict.resolution_reason = superseded
+            conflict.resolved_at = now
+        else:
+            mark(value, "reported aggregate does not equal the sum of its monthly values")
+            if tuple(against) == (value.observation.metric_code,):
+                for year, month in period.months():
+                    for monthly in by_key.get(
+                        (PeriodKey.monthly(year, month), value.observation.domain, value.observation.metric_code), []
+                    ):
+                        mark(monthly, f"monthly values do not reconcile with the reported {period.label} total")
+            if contested:
+                conflict.detail += " (some monthly values are themselves contested)"
+        conflicts.append(conflict)
+
+    # R4 / R5 - authority.
+    for values in by_key.values():
+        verified = [value for value in values if value.verification_status == "VERIFIED"]
+        if not verified:
+            continue
+        chosen = min(verified, key=lambda item: item.source.priority)
+        chosen.authority_status = "AUTHORITATIVE"
+    return ReconciliationPlan(planned, conflicts, auto)

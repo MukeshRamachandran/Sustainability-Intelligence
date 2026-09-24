@@ -1,0 +1,21 @@
+{
+  "code": "dg_staging",
+  "version": 1,
+  "domain": "transport",
+  "priority": 1,
+  "source_reference": "apps/public-dashboard-final-staging/data/dg_master.csv",
+  "parser": "long_monthly",
+  "description": "DG diesel monthly litres, Jan 2025 - Apr 2026.",
+  "options": {
+    "year_column": "year",
+    "month_column": "month",
+    "category_column": "fuel_type",
+    "value_column": "consumption_litre"
+  },
+  "categories": {
+    "diesel": {
+      "metric_code": "dg_diesel_litres",
+      "unit": "L"
+    }
+  }
+}

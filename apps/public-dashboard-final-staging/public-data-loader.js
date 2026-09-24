@@ -1,10 +1,48 @@
-/* API-authoritative staging loader. Governed operational domains come only
-   from public-api.js. Green cover and labels remain clearly separated static
-   institutional presentation data; operational population comes from release
-   schema 1.3, never from the historical CSV. */
+/* API-authoritative staging loader.
+
+   Every sustainability value comes from GET /api/public/dashboard/timeline:
+   official published releases merged by the backend with verified historical
+   records from PostgreSQL. The browser never reads operational CSVs and never
+   recomputes an official figure.
+
+   Granularity is preserved: a month's arrays hold only that month's genuine
+   values; Full Year / YTD figures are the backend's aggregates (with their
+   coverage), attached to each array as `.aggregate`; annual-only or YTD-only
+   records are never placed into a month. Green cover remains static
+   institutional presentation data (green_master.csv). */
 (function () {
   'use strict';
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  /* Dashboard array name -> timeline value code. */
+  const SERIES = {
+    petrolL: 'transport_petrol_litres', trDieselL: 'transport_diesel_litres', dgL: 'dg_diesel_litres',
+    lpgL: 'lpg_consumption_litres',
+    petrolEm: 'transport_petrol_emissions', trDieselEm: 'transport_diesel_emissions', dgEm: 'dg_diesel_emissions',
+    lpgEm: 'lpg_emissions',
+    htKwh: 'grid_ht_kwh', commKwh: 'grid_commercial_kwh', tempKwh: 'grid_temporary_kwh', elecKwh: 'grid_total_kwh',
+    elecEm: 'scope2_tco2e',
+    reOnCampusKwh: 'renewable_on_campus_kwh', reProcuredKwh: 'renewable_procured_kwh',
+    solarWaterHeaterKwh: 'solar_water_heater_kwh',
+    reKwh: 'renewable_electricity_kwh', totalElectricityKwh: 'total_electricity_consumption_kwh',
+    renewableSharePct: 'renewable_share_pct', avoidEm: 'estimated_avoided_grid_emissions_tco2e',
+    scope1Full: 'scope1_tco2e', scope1Selected: 'scope1_tco2e', operationalGHG: 'operational_ghg_tco2e',
+    perCapita: 'operational_ghg_per_capita_kgco2e',
+    waterKL: 'water_consumed_kl', waterTWAD: 'water_twad_kl', waterBorewell: 'water_borewell_kl',
+    waterProcured: 'water_private_kl', wastewaterKL: 'wastewater_generated_kl', waterRecycledKL: 'water_recycled_kl',
+    waterPerCapitaL: 'water_per_capita_l',
+    wetWaste: 'wet_waste_generated_kg', dryWaste: 'dry_waste_generated_kg', totalWaste: 'total_waste_generated_kg',
+    wastePerCapita: 'waste_per_capita_kg'
+  };
+  const FACTOR_SERIES = {
+    petrolEF: 'transport_petrol_emissions', trDieselEF: 'transport_diesel_emissions', dgEF: 'dg_diesel_emissions',
+    gridEF: 'grid_electricity_emissions', lpgEF: 'lpg_emissions'
+  };
+  const OUTREACH_FIELDS = {
+    programsDelivered: 'total_programs', participantsServed: 'total_participants',
+    partnerOrganizations: 'partner_organizations', saplingsPlanted: 'saplings_planted',
+    expertsInvolved: 'experts_involved', volunteersEngaged: 'volunteers_engaged', volunteerHours: 'volunteer_hours'
+  };
 
   function num(value) {
     if (value === null || value === undefined) return null;
@@ -34,13 +72,6 @@
     return rows;
   }
 
-  function parseCSV(text) {
-    const rows = tokenizeCSV(text);
-    if (!rows.length) return [];
-    const headers = rows.shift().map(value => value.trim());
-    return rows.map(row => Object.fromEntries(headers.map((header, index) => [header, (row[index] || '').trim()])));
-  }
-
   async function optionalText(path) {
     try {
       const response = await fetch(`${path}?v=${Date.now()}`, { cache: 'no-store' });
@@ -49,133 +80,147 @@
   }
 
   function emptyYear(year) {
-    const empty = () => Array(12).fill(null);
-    return {
-      year: Number(year), label: `${year} Published snapshot`, frequency: 'ytd', population: null,
-      publicationState: 'unavailable', publishedMonths: Array(12).fill(false),
-      totalGHG: null, operationalGHG: empty(), totalEnergy: null, gridEnergy: null,
-      reEnergy: null, reShare: null, avoided: null, perCapita: empty(),
-      totalElectricityKwh: empty(), renewableSharePct: empty(), waterPerCapitaL: empty(),
-      wastePerCapita: empty(), landfillDiversionPct: null,
-      petrolL: empty(), trDieselL: empty(), dgL: empty(), lpgL: empty(),
-      petrolEm: empty(), trDieselEm: empty(), dgEm: empty(), lpgEm: empty(),
-      petrolEF: empty(), trDieselEF: empty(), dgEF: empty(), gridEF: empty(), lpgEF: empty(),
-      scope1Selected: empty(), scope1Full: empty(),
-      htKwh: empty(), commKwh: empty(), tempKwh: empty(), elecKwh: empty(),
-      htEm: empty(), commEm: empty(), tempEm: empty(), elecEm: empty(),
-      reKwh: empty(), reOnCampusKwh: empty(), reProcuredKwh: empty(), avoidEm: empty(),
-      solarWaterHeaterKwh: empty(), wetWaste: empty(), dryWaste: empty(), totalWaste: empty(),
-      wasteBreakdownByMonth: Array(12).fill(null), wasteCategoriesByMonth: Array(12).fill(null),
-      wastePublishedMonths: Array(12).fill(false),
-      waterKL: empty(), waterTWAD: empty(), waterBorewell: empty(), waterProcured: empty(),
-      wastewaterKL: empty(),
-      waterRecycledKL: empty(), waterTWADAnnual: null, waterBorewellAnnual: null, waterTotalAnnual: null,
-      grossSelected: empty(), grossFull: empty(), petrolVehicleCount: null, dieselVehicleCount: null,
-      evConsumptionKwh: null, dgCount: null
+    const item = {
+      year: Number(year), label: String(year), frequency: 'ytd', population: null,
+      aggregateKey: null, aggregateEndMonth: null, aggregateGranularity: null,
+      monthKeys: Array(12).fill(null), periodMeta: { all: null }, domainStatus: { all: {} }, secondary: {},
+      publishedMonths: Array(12).fill(false), wastePublishedMonths: Array(12).fill(false),
+      wasteBreakdownByMonth: Array(12).fill(null), wasteBreakdownAggregate: [],
+      landfillDiversionPct: null, waterTWADAnnual: null, waterBorewellAnnual: null, waterTotalAnnual: null,
+      totalGHG: null, avoided: null, reShare: null,
+      petrolVehicleCount: null, dieselVehicleCount: null, evConsumptionKwh: null, dgCount: null
     };
+    // Arrays the charts no longer draw from are kept empty rather than faked.
+    ['htEm', 'commEm', 'tempEm', 'grossSelected', 'grossFull']
+      .concat(Object.keys(SERIES), Object.keys(FACTOR_SERIES))
+      .forEach(name => {
+        const series = Array(12).fill(null);
+        series.aggregate = null;
+        series.aggregateCoverage = null;
+        series.aggregateMonths = [];
+        item[name] = series;
+      });
+    return item;
   }
 
-  function ensureYear(store, year) {
-    const key = String(year);
-    if (!store[key]) store[key] = emptyYear(key);
-    return store[key];
+  function valueOf(period, code) {
+    const item = period?.values?.[code];
+    return item && item.status === 'available' ? num(item.value) : null;
   }
 
-  function setMetric(target, index, domain, code) {
-    const metric = window.KCOSMOSPublicAPI.metric(domain, code);
-    target[index] = metric.status === 'available' ? metric.value : null;
-    return metric.value;
+  function factorOf(period, code) {
+    return num(period?.values?.[code]?.provenance?.factor_value);
   }
 
-  function setCalculation(target, index, domain, code) {
-    const calculation = window.KCOSMOSPublicAPI.calculation(domain, code);
-    target[index] = calculation.status === 'available' ? calculation.value : null;
-    return calculation;
+  function materials(period, labels) {
+    return Object.entries(period?.values || {})
+      .filter(([code, item]) => code.startsWith('material:') && item.status === 'available')
+      .map(([code, item]) => ({ name: labels[code] || code.slice('material:'.length), value: num(item.value) }))
+      .filter(row => row.value !== null);
   }
 
-  function applyPublication(publication, data) {
-    if (publication.state !== 'published') return;
-    const item = ensureYear(data, publication.period.year);
-    const month = Math.max(0, Math.min(11, publication.period.month - 1));
-    item.publicationState = 'published';
-    item.publishedMonths[month] = true;
-    item.label = `${MONTHS[month]} ${publication.period.year} · Published ${publication.release.version || 'release'}`;
-    const { transport, energy, lpg, water } = publication.domains;
-    setMetric(item.petrolL, month, transport, 'transport_petrol_litres');
-    setMetric(item.trDieselL, month, transport, 'transport_diesel_litres');
-    setMetric(item.dgL, month, transport, 'dg_diesel_litres');
-    item.petrolEF[month] = setCalculation(item.petrolEm, month, transport, 'transport_petrol_emissions').factorValue;
-    item.trDieselEF[month] = setCalculation(item.trDieselEm, month, transport, 'transport_diesel_emissions').factorValue;
-    item.dgEF[month] = setCalculation(item.dgEm, month, transport, 'dg_diesel_emissions').factorValue;
-    item.petrolVehicleCount = window.KCOSMOSPublicAPI.metric(transport, 'petrol_vehicle_count').value;
-    item.dieselVehicleCount = window.KCOSMOSPublicAPI.metric(transport, 'diesel_vehicle_count').value;
-    item.evConsumptionKwh = window.KCOSMOSPublicAPI.metric(transport, 'ev_consumption_kwh').value;
-    item.dgCount = window.KCOSMOSPublicAPI.metric(transport, 'dg_count').value;
-    setMetric(item.htKwh, month, energy, 'grid_ht_kwh');
-    setMetric(item.commKwh, month, energy, 'grid_commercial_kwh');
-    setMetric(item.tempKwh, month, energy, 'grid_temporary_kwh');
-    setMetric(item.elecKwh, month, energy, 'grid_total_kwh');
-    item.gridEnergy = item.elecKwh[month];
-    item.gridEF[month] = setCalculation(item.elecEm, month, energy, 'grid_electricity_emissions').factorValue;
-    setMetric(item.reOnCampusKwh, month, energy, 'renewable_on_campus_kwh');
-    setMetric(item.reProcuredKwh, month, energy, 'renewable_procured_kwh');
-    setMetric(item.solarWaterHeaterKwh, month, energy, 'solar_water_heater_kwh');
-    // Schema 1.4 indicators are frozen by the backend. The legacy renewable
-    // total includes solar thermal reference and is never an electricity KPI.
-    item.reKwh[month] = window.KCOSMOSPublicAPI.indicator(publication.raw, 'renewable_electricity_kwh').value;
-    item.totalElectricityKwh[month] = window.KCOSMOSPublicAPI.indicator(publication.raw, 'total_electricity_consumption_kwh').value;
-    item.renewableSharePct[month] = window.KCOSMOSPublicAPI.indicator(publication.raw, 'renewable_share_pct').value;
-    item.avoidEm[month] = window.KCOSMOSPublicAPI.indicator(publication.raw, 'estimated_avoided_grid_emissions_tco2e').value;
-    item.waterPerCapitaL[month] = window.KCOSMOSPublicAPI.indicator(publication.raw, 'water_per_capita_l').value;
-    item.reEnergy = item.reKwh[month];
-    setMetric(item.lpgL, month, lpg, 'lpg_consumption_litres');
-    item.lpgEF[month] = setCalculation(item.lpgEm, month, lpg, 'lpg_emissions').factorValue;
-    /* Headline Scope 1/2 and operational indicators are backend-produced in
-       schema 1.3 from the frozen component calculations. */
-    item.scope1Full[month] = window.KCOSMOSPublicAPI.indicator(publication.raw, 'scope1_tco2e').value;
-    item.scope1Selected[month] = item.scope1Full[month];
-    /* Governed waste comes from the published release only. The static
-       waste_master.csv is historical reference and must never overwrite a
-       published month. */
-    const waste = publication.domains.waste;
-    if (waste) {
-      setMetric(item.wetWaste, month, waste, 'wet_waste_generated_kg');
-      setMetric(item.dryWaste, month, waste, 'dry_waste_generated_kg');
-      setMetric(item.totalWaste, month, waste, 'total_waste_generated_kg');
-      item.wasteBreakdownByMonth[month] = (waste.materials || []).map(row => ({
-        name: row.display_name,
-        value: window.KCOSMOSPublicAPI.numberOrNull(row.quantity_kg)
-      })).filter(row => row.value !== null);
-      item.wasteCategoriesByMonth[month] = (waste.categories || []).map(row => ({
-        code: row.code,
-        name: row.display_name,
-        value: window.KCOSMOSPublicAPI.numberOrNull(row.quantity_kg)
-      })).filter(row => row.value !== null);
-      item.wastePublishedMonths[month] = true;
+  function outreachFrom(period, year, month) {
+    const empty = {
+      programsDelivered: null, participantsServed: null, partnerOrganizations: null, saplingsPlanted: null,
+      expertsInvolved: null, volunteersEngaged: null, volunteerHours: null, audienceReach: [], thematicAreas: [],
+      gender: { available: false }, qualifiers: {}, published: false, year, month
+    };
+    if (!period || period.domains?.outreach?.state !== 'available') return empty;
+    const result = { ...empty, published: true };
+    Object.entries(OUTREACH_FIELDS).forEach(([field, code]) => {
+      result[field] = valueOf(period, code);
+      result.qualifiers[field] = period.values?.[code]?.qualifier || 'EXACT';
+    });
+    Object.entries(period.values || {}).forEach(([code, item]) => {
+      if (item.status !== 'available') return;
+      if (code.startsWith('theme:')) result.thematicAreas.push({ category: code.slice(6), programs: num(item.value) });
+      if (code.startsWith('audience:')) result.audienceReach.push({ category: code.slice(9), reach: num(item.value) });
+    });
+    return result;
+  }
+
+  /* One flat, semantics-preserving row per published value for the Data Explorer. */
+  function explorerRows(timeline) {
+    const rows = [];
+    Object.values(timeline.periods || {}).forEach(period => {
+      Object.values(period.values || {}).forEach(item => {
+        if (item.status !== 'available') return;
+        const coverage = item.months_covered && item.months_covered.length
+          ? `${item.months_covered.length} month(s): ${item.months_covered[0]}…${item.months_covered[item.months_covered.length - 1]}`
+          : `${period.coverage_start} – ${period.coverage_end}`;
+        rows.push([
+          String(period.year), period.label, item.granularity || period.granularity, item.domain,
+          (timeline.labels || {})[item.code] || item.code, num(item.value), item.unit,
+          item.source_kind, `${coverage} (${item.coverage_status})`,
+          item.provenance?.verification_status || (item.kind === 'calculation' ? 'CALCULATED' : 'PUBLISHED'),
+          item.qualifier === 'AT_LEAST' ? 'at least' : (item.qualifier === 'APPROXIMATE' ? 'approximate' : '')
+        ]);
+      });
+    });
+    return rows.sort((a, b) => a[0].localeCompare(b[0]) || String(a[1]).localeCompare(String(b[1])));
+  }
+
+  function buildData(timeline) {
+    const data = {};
+    const labels = timeline.labels || {};
+    const landfill = num(timeline.static_references?.landfill_diversion_pct?.value);
+    const outreachByKey = {};
+    (timeline.selector || []).forEach(({ year, options }) => {
+      const item = emptyYear(year);
+      item.landfillDiversionPct = landfill;
+      data[String(year)] = item;
+      options.forEach(option => {
+        const period = timeline.periods[option.key];
+        if (!period) return;
+        if (option.granularity === 'MONTHLY') {
+          const index = period.month - 1;
+          item.monthKeys[index] = option.key;
+          item.periodMeta[index] = period;
+          item.domainStatus[index] = period.domains || {};
+          item.publishedMonths[index] = true;
+          item.wastePublishedMonths[index] = period.domains?.waste?.state === 'available';
+          Object.entries(SERIES).forEach(([name, code]) => { item[name][index] = valueOf(period, code); });
+          Object.entries(FACTOR_SERIES).forEach(([name, code]) => { item[name][index] = factorOf(period, code); });
+          item.wasteBreakdownByMonth[index] = materials(period, labels);
+          outreachByKey[option.key] = outreachFrom(period, year, period.month);
+        } else {
+          // The first aggregate option is the year's primary Full Year / YTD view;
+          // any further one (e.g. an annual-only source record in a year that has
+          // a partial-year YTD) gets its own dataset, reachable as 'agg:<key>'.
+          const target = item.aggregateKey ? emptyYear(year) : item;
+          if (target !== item) {
+            target.landfillDiversionPct = landfill;
+            item.secondary[option.key] = target;
+          }
+          applyAggregate(target, option, period);
+          outreachByKey[option.key] = outreachFrom(period, year, null);
+        }
+      });
+    });
+    return { data, outreachByKey };
+
+    function applyAggregate(item, option, period) {
+      item.aggregateKey = option.key;
+      item.aggregateGranularity = period.granularity;
+      item.aggregateEndMonth = Number(String(period.coverage_end).slice(5, 7));
+      item.frequency = period.granularity === 'ANNUAL' ? 'annual' : 'ytd';
+      item.label = period.label;
+      item.periodMeta.all = period;
+      item.domainStatus.all = period.domains || {};
+      item.population = num(period.population?.value);
+      Object.entries(SERIES).forEach(([name, code]) => {
+        const value = period.values?.[code];
+        item[name].aggregate = valueOf(period, code);
+        item[name].aggregateCoverage = value?.status === 'available' ? value.coverage_status : null;
+        item[name].aggregateMonths = value?.months_covered || [];
+      });
+      Object.entries(FACTOR_SERIES).forEach(([name, code]) => { item[name].aggregate = factorOf(period, code); });
+      const annual = code => (period.values?.[code]?.granularity === 'ANNUAL' ? valueOf(period, code) : null);
+      item.waterTWADAnnual = annual('water_twad_kl');
+      item.waterBorewellAnnual = annual('water_borewell_kl');
+      item.wasteBreakdownAggregate = materials(period, labels);
     }
-    setMetric(item.waterKL, month, water, 'water_consumed_kl');
-    setMetric(item.waterTWAD, month, water, 'water_twad_kl');
-    setMetric(item.waterBorewell, month, water, 'water_borewell_kl');
-    setMetric(item.waterProcured, month, water, 'water_private_kl');
-    setMetric(item.wastewaterKL, month, water, 'wastewater_generated_kl');
-    setMetric(item.waterRecycledKL, month, water, 'water_recycled_kl');
-    item.totalGHG = window.KCOSMOSPublicAPI.indicator(publication.raw, 'total_ghg_tco2e').value;
-    item.operationalGHG[month] = window.KCOSMOSPublicAPI.indicator(publication.raw, 'operational_ghg_tco2e').value;
-    item.elecEm[month] = window.KCOSMOSPublicAPI.indicator(publication.raw, 'scope2_tco2e').value;
-    item.perCapita[month] = window.KCOSMOSPublicAPI.indicator(publication.raw, 'operational_ghg_per_capita_kgco2e').value;
-    item.wastePerCapita[month] = window.KCOSMOSPublicAPI.indicator(publication.raw, 'waste_per_capita_kg').value;
-    item.landfillDiversionPct = num(publication.raw.static_references?.landfill_diversion_pct?.value);
-    const population = publication.population;
-    item.population = population?.status === 'available' ? num(population.value) : null;
-    item.avoided = item.avoidEm[month];
-    item.reShare = item.renewableSharePct[month];
   }
-
-  /* Waste became a governed Manager domain (0009_waste_domain). Its values now
-     come only from the published release, like the other five domains, so
-     data/waste_master.csv is no longer read here. The file remains on disk as
-     pre-governance historical reference; an unpublished month reports
-     "not published" rather than falling back to it or showing 0 kg. */
 
   function staticGreen(text) {
     const green = {
@@ -205,49 +250,35 @@
     return green;
   }
 
-  function outreachFrom(domain, publication) {
-    if (!domain || publication.state !== 'published') return {
-      programsDelivered: null, participantsServed: null, partnerOrganizations: null,
-      saplingsPlanted: null, expertsInvolved: null, volunteersEngaged: null, volunteerHours: null,
-      audienceReach: [], thematicAreas: [], gender: { available: false }, published: false
-    };
-    return {
-      programsDelivered: num(domain.total_programs), participantsServed: num(domain.total_participants),
-      partnerOrganizations: num(domain.partner_organizations), saplingsPlanted: num(domain.saplings_planted),
-      expertsInvolved: num(domain.experts_involved), volunteersEngaged: num(domain.volunteers_engaged),
-      volunteerHours: num(domain.volunteer_hours),
-      audienceReach: Object.entries(domain.participants_by_category || {}).map(([category, reach]) => ({ category, reach: num(reach) })),
-      thematicAreas: Object.entries(domain.themes || {}).map(([category, programs]) => ({ category, programs: num(programs) })),
-      gender: domain.gender || { available: false }, year: publication.period.year, month: publication.period.month,
-      published: true
-    };
-  }
-
   async function loadDashboardData() {
-    const [publication, history, metadataText, greenText] = await Promise.all([
-      window.KCOSMOSPublicAPI.load(), window.KCOSMOSPublicAPI.loadHistory(),
-      optionalText('data/dashboard_metadata.csv'), optionalText('data/green_master.csv')
+    const [timeline, greenText] = await Promise.all([
+      window.KCOSMOSPublicAPI.loadTimeline(), optionalText('data/green_master.csv')
     ]);
-    const data = {};
-    parseCSV(metadataText).forEach(row => {
-      if (!row.year) return;
-      const item = ensureYear(data, row.year);
-      item.label = row.label || item.label;
-    });
-
-    const fallbackYear = publication.period?.year || new Date().getFullYear();
-    const item = ensureYear(data, fallbackYear);
-    item.publicationState = publication.state;
-    const releases = history.releases.length ? history.releases : (publication.state === 'published' ? [publication] : []);
-    releases.forEach(release => applyPublication(release, data));
-    if (publication.state === 'published') applyPublication(publication, data);
-
+    const { data, outreachByKey } = buildData(timeline);
+    // No timeline (API unreachable): one empty year so every card reads "unavailable".
+    const selector = timeline.selector && timeline.selector.length
+      ? timeline.selector : [{ year: new Date().getFullYear(), options: [] }];
+    selector.forEach(({ year }) => { if (!data[String(year)]) data[String(year)] = emptyYear(year); });
+    const emptyOutreach = outreachFrom(null, null, null);
     return {
       data,
-      green: staticGreen(greenText), outreach: outreachFrom(publication.domains.outreach, publication),
-      publication, history
+      timeline,
+      selector,
+      defaultKey: timeline.default_key,
+      green: staticGreen(greenText),
+      outreachFor(year, month) {
+        const item = data[String(year)];
+        if (!item) return emptyOutreach;
+        const key = String(month).startsWith('agg:') ? String(month).slice(4)
+          : (month === 'all' ? item.aggregateKey : item.monthKeys[+month]);
+        return (key && outreachByKey[key]) || { ...emptyOutreach, year: Number(year) };
+      },
+      explorerRows: explorerRows(timeline),
+      // Kept for callers that still read the publication state line.
+      publication: { state: timeline.state === 'loaded' ? 'published' : 'error', release: null, period: null }
     };
   }
 
   window.loadDashboardData = loadDashboardData;
+  window.KCOSMOSMonths = MONTHS;
 })();

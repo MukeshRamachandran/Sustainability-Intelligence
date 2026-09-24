@@ -5,6 +5,7 @@
 
   const ROUTE = '/api/public/dashboard';
   const HISTORY_ROUTE = '/api/public/dashboard/history';
+  const TIMELINE_ROUTE = '/api/public/dashboard/timeline';
 
   function apiBase() {
     if (typeof window.KCOSMOS_API_BASE === 'string' && window.KCOSMOS_API_BASE.trim()) {
@@ -127,8 +128,29 @@
     }
   }
 
+  /* The public timeline: official published releases merged by the backend
+     with verified historical records. Granularity, coverage and provenance
+     come from the API; the browser never recomputes them. */
+  async function loadTimeline() {
+    const url = apiBase() + TIMELINE_ROUTE;
+    try {
+      const response = await fetch(url, { cache: 'no-store', credentials: 'omit' });
+      if (!response.ok) throw new Error(`Public timeline request failed (${response.status})`);
+      const payload = await response.json();
+      if (!payload || typeof payload.periods !== 'object' || !Array.isArray(payload.selector)) {
+        throw new Error('Public timeline response is invalid');
+      }
+      return { state: 'loaded', ...payload, url };
+    } catch (error) {
+      return {
+        state: 'error', default_key: null, selector: [], periods: {}, labels: {}, static_references: {}, url,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
   window.KCOSMOSPublicAPI = Object.freeze({
-    load, loadHistory, metric, calculation, indicator, numberOrNull,
-    route: ROUTE, historyRoute: HISTORY_ROUTE
+    load, loadHistory, loadTimeline, metric, calculation, indicator, numberOrNull,
+    route: ROUTE, historyRoute: HISTORY_ROUTE, timelineRoute: TIMELINE_ROUTE
   });
 })();

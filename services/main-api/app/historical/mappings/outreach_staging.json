@@ -1,0 +1,141 @@
+{
+  "code": "outreach_staging",
+  "version": 1,
+  "domain": "outreach",
+  "priority": 1,
+  "source_reference": "apps/public-dashboard-final-staging/data/outreach_master.csv",
+  "parser": "year_columns",
+  "description": "Outreach overall metrics, thematic programme counts and audience reach, one column per year. Aggregate figures only - no programme-level rows exist.",
+  "sections": {
+    "Overall Metrix": "overall",
+    "Thematic Areas": "themes",
+    "Category wise mapping": "audience"
+  },
+  "header_labels": [
+    "Metric",
+    "Category",
+    "Audience category"
+  ],
+  "rows": {
+    "overall": {
+      "Number of Outreach Programs / Events": {
+        "metric_code": "total_programs",
+        "unit": "programmes"
+      },
+      "Volunteers engaged": {
+        "metric_code": "volunteers_engaged",
+        "unit": "people"
+      },
+      "Volunteering hours": {
+        "metric_code": "volunteer_hours",
+        "unit": "hours"
+      },
+      "Experts involved": {
+        "metric_code": "experts_involved",
+        "unit": "people"
+      },
+      "Total participants / reach": {
+        "metric_code": "total_participants",
+        "unit": "people"
+      },
+      "Partner organizations / collaborations": {
+        "metric_code": "partner_organizations",
+        "unit": "organizations"
+      },
+      "Saplings / seedlings": {
+        "metric_code": "saplings_planted",
+        "unit": "saplings"
+      }
+    },
+    "themes": {
+      "Climate Smart Agriculture": {
+        "metric_code": "theme:climate_smart_agriculture",
+        "unit": "programmes"
+      },
+      "Climate Change": {
+        "metric_code": "theme:climate_change",
+        "unit": "programmes"
+      },
+      "Afforestation": {
+        "metric_code": "theme:afforestation",
+        "unit": "programmes"
+      },
+      "Water Conservation": {
+        "metric_code": "theme:water_conservation",
+        "unit": "programmes"
+      },
+      "Waste Management": {
+        "metric_code": "theme:waste_management",
+        "unit": "programmes"
+      },
+      "Biodiversity Conservation": {
+        "metric_code": "theme:biodiversity_conservation",
+        "unit": "programmes"
+      },
+      "HWC": {
+        "metric_code": "theme:hwcc",
+        "unit": "programmes"
+      },
+      "Livelihood Development": {
+        "metric_code": "theme:livelihood_development",
+        "unit": "programmes"
+      },
+      "Campus Sustainability": {
+        "metric_code": "theme:campus_sustainability",
+        "unit": "programmes"
+      }
+    },
+    "audience": {
+      "School Students": {
+        "metric_code": "audience:school_students",
+        "unit": "people"
+      },
+      "College Students": {
+        "metric_code": "audience:college_students",
+        "unit": "people"
+      },
+      "Farmers / Agriculture Participants": {
+        "metric_code": "audience:farmers_agriculture",
+        "unit": "people"
+      },
+      "Industrial Experts": {
+        "metric_code": "audience:industrial_experts",
+        "unit": "people"
+      },
+      "Researchers / Experts": {
+        "metric_code": "audience:researchers_experts",
+        "unit": "people"
+      },
+      "Government": {
+        "metric_code": "audience:government",
+        "unit": "people"
+      },
+      "Entrepreneurs / Startup Founders": {
+        "metric_code": "audience:entrepreneurs_startup_founders",
+        "unit": "people"
+      },
+      "Community / General Participants": {
+        "metric_code": "audience:community_general",
+        "unit": "people"
+      },
+      "International / Exchange Participants": {
+        "metric_code": "audience:international_exchange",
+        "unit": "people"
+      }
+    }
+  },
+  "year_rules": {
+    "2025": {
+      "granularity": "ANNUAL",
+      "coverage_start": "2025-01-01",
+      "coverage_end": "2025-12-31"
+    },
+    "2026": {
+      "granularity": "YTD",
+      "coverage_start": "2026-01-01",
+      "coverage_end": "2026-06-30",
+      "coverage_confirmed": false,
+      "note": "The source labels this figure only '2026' / 'to date'; its coverage end month is not stated. Imported UNVERIFIED as a proposed Jan-Jun YTD until the project owner confirms the coverage."
+    }
+  }
+}

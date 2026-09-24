@@ -1,0 +1,42 @@
+{
+  "code": "energy_staging",
+  "version": 1,
+  "domain": "energy",
+  "priority": 1,
+  "source_reference": "apps/public-dashboard-final-staging/data/energy_master.csv",
+  "parser": "wide_monthly",
+  "description": "Final-staging energy workbook export: monthly grid connections, renewable electricity and solar water heater, Jan 2025 - Jun 2026.",
+  "options": {
+    "header_row": 0,
+    "year_column": "Year",
+    "month_column": "Month"
+  },
+  "columns": {
+    "Grid HT (kWh)": {
+      "metric_code": "grid_ht_kwh",
+      "unit": "kWh"
+    },
+    "Grid Commercial (kWh)": {
+      "metric_code": "grid_commercial_kwh",
+      "unit": "kWh"
+    },
+    "Grid Temporary (kWh)": {
+      "metric_code": "grid_temporary_kwh",
+      "unit": "kWh"
+    },
+    "Renewable On Campus (kWh)": {
+      "metric_code": "renewable_on_campus_kwh",
+      "unit": "kWh"
+    },
+    "Procured Renewable (kWh)": {
+      "metric_code": "renewable_procured_kwh",
+      "unit": "kWh"
+    },
+    "Solar Water Heater(same for all month)": {
+      "metric_code": "solar_water_heater_kwh",
+      "unit": "kWh",
+      "verification": "UNVERIFIED",
+      "note": "Source header states the value is the same for every month; the monthly basis is undocumented, so it is imported UNVERIFIED as thermal reference only (never electricity)."
+    }
+  }
+}

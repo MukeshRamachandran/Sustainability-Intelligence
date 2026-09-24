@@ -1,0 +1,19 @@
+{
+  "code": "renewable_manager_period_totals",
+  "version": 1,
+  "domain": "energy",
+  "priority": 3,
+  "source_reference": "apps/manager-admin/data/renewable_master.csv",
+  "parser": "period_totals",
+  "description": "Manager prototype renewable period totals (2025 annual, 2026 Jan-Apr).",
+  "value_column": "renewable_kwh",
+  "superseded_by_monthly_rows": "The source row itself says: 'Period total. Replace with monthly rows when monthly RE data is available.'",
+  "metric": {
+    "metric_code": "renewable_total_reported_kwh",
+    "unit": "kWh",
+    "reconcile_against": [
+      "renewable_on_campus_kwh",
+      "renewable_procured_kwh"
+    ]
+  }
+}

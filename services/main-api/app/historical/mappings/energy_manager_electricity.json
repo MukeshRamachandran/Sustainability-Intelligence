@@ -1,0 +1,29 @@
+{
+  "code": "energy_manager_electricity",
+  "version": 1,
+  "domain": "energy",
+  "priority": 3,
+  "source_reference": "apps/manager-admin/data/electricity_master.csv",
+  "parser": "long_monthly",
+  "description": "Manager prototype normalized electricity file (Jan 2025 - Apr 2026). Competing copy used for reconciliation.",
+  "options": {
+    "year_column": "year",
+    "month_column": "month",
+    "category_column": "connection_type",
+    "value_column": "consumption_kwh"
+  },
+  "categories": {
+    "HT": {
+      "metric_code": "grid_ht_kwh",
+      "unit": "kWh"
+    },
+    "Commercial": {
+      "metric_code": "grid_commercial_kwh",
+      "unit": "kWh"
+    },
+    "Temporary": {
+      "metric_code": "grid_temporary_kwh",
+      "unit": "kWh"
+    }
+  }
+}

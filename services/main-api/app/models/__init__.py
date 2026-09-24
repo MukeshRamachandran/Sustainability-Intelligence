@@ -1,6 +1,14 @@
 """SQLAlchemy models will be added in Phase D4."""
 
 from app.models.audit import AuditLog
+from app.models.history import (
+    HistoricalCalculationResult,
+    HistoricalConflict,
+    HistoricalImportBatch,
+    HistoricalMetricValue,
+    HistoricalPeriod,
+    HistoricalSourceRow,
+)
 from app.models.identity import (
     ManagerDomainAssignment,
     Role,
@@ -8,7 +16,7 @@ from app.models.identity import (
     User,
     UserRoleAssignment,
 )
-from app.models.publication import PublicRelease, PublicReleasePayload
+from app.models.publication import PublicRelease, PublicReleaseMetadata, PublicReleasePayload
 from app.models.sustainability import (
     CalculationResult,
     EmissionFactor,
@@ -28,11 +36,18 @@ __all__ = [
     "CalculationResult",
     "EmissionFactor",
     "EmissionFactorSet",
+    "HistoricalCalculationResult",
+    "HistoricalConflict",
+    "HistoricalImportBatch",
+    "HistoricalMetricValue",
+    "HistoricalPeriod",
+    "HistoricalSourceRow",
     "InstitutionalPopulationReference",
     "ManagerDomainAssignment",
     "MetricDefinition",
     "OutreachProgramme",
     "PublicRelease",
+    "PublicReleaseMetadata",
     "PublicReleasePayload",
     "ReportingPeriod",
     "ReviewAction",

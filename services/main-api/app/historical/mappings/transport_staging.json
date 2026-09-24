@@ -1,0 +1,30 @@
+{
+  "code": "transport_staging",
+  "version": 1,
+  "domain": "transport",
+  "priority": 1,
+  "source_reference": "apps/public-dashboard-final-staging/data/transport_master.csv",
+  "parser": "paired_monthly",
+  "description": "Fleet diesel and petrol monthly litres (side-by-side blocks), Jan 2025 - Apr 2026.",
+  "options": {
+    "first_data_row": 2
+  },
+  "blocks": [
+    {
+      "title": "Diesel",
+      "first_column": 0,
+      "metric": {
+        "metric_code": "transport_diesel_litres",
+        "unit": "L"
+      }
+    },
+    {
+      "title": "Petrol",
+      "first_column": 4,
+      "metric": {
+        "metric_code": "transport_petrol_litres",
+        "unit": "L"
+      }
+    }
+  ]
+}

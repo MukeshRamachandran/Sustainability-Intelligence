@@ -1,0 +1,84 @@
+{
+  "code": "water_staging",
+  "version": 1,
+  "domain": "water",
+  "priority": 1,
+  "source_reference": "apps/public-dashboard-final-staging/data/water_master.csv",
+  "parser": "water_blocks",
+  "description": "Institutional water workbook: 2025 monthly consumption column plus annual TWAD/Borewell/Total and recycled; 2026 monthly TWAD/Borewell/Procured.",
+  "year_rules": {
+    "2025": {
+      "recycled_period": {
+        "granularity": "ANNUAL",
+        "coverage_start": "2025-01-01",
+        "coverage_end": "2025-12-31"
+      },
+      "annual_period": {
+        "granularity": "ANNUAL",
+        "coverage_start": "2025-01-01",
+        "coverage_end": "2025-12-31"
+      }
+    },
+    "2026": {
+      "recycled_period": {
+        "granularity": "YTD",
+        "coverage_start": "2026-01-01",
+        "coverage_end": "2026-06-30",
+        "coverage_confirmed": false,
+        "note": "The source labels this figure only '2026' / 'to date'; its coverage end month is not stated. Imported UNVERIFIED as a proposed Jan-Jun YTD until the project owner confirms the coverage."
+      },
+      "annual_period": {
+        "granularity": "YTD",
+        "coverage_start": "2026-01-01",
+        "coverage_end": "2026-06-30",
+        "coverage_confirmed": false
+      }
+    }
+  },
+  "metrics": {
+    "recycled": {
+      "metric_code": "water_recycled_kl",
+      "unit": "KL"
+    }
+  },
+  "monthly_columns": {
+    "Water Consumption (KL)": {
+      "metric_code": "water_consumed_kl",
+      "unit": "KL",
+      "note": "2025 monthly column is labelled total consumption; see reconciliation against the annual TWAD/Borewell/Total line."
+    },
+    "TWAD Consumption KL": {
+      "metric_code": "water_twad_kl",
+      "unit": "KL"
+    },
+    "Borewell Consumption (KL):": {
+      "metric_code": "water_borewell_kl",
+      "unit": "KL"
+    },
+    "Quantity of Water Procured KL": {
+      "metric_code": "water_private_kl",
+      "unit": "KL",
+      "note": "Terminology normalized: source 'Quantity of Water Procured' is the third supply component, i.e. the backend 'Private' supply (TWAD + Borewell + Procured = printed Total Consumption)."
+    }
+  },
+  "monthly_total_check_columns": [
+    "Total Consumption"
+  ],
+  "annual_columns": {
+    "TWAD Consumption KL": {
+      "metric_code": "water_twad_kl",
+      "unit": "KL"
+    },
+    "Borewell Consumption (KL):": {
+      "metric_code": "water_borewell_kl",
+      "unit": "KL"
+    },
+    "Total Consumption": {
+      "metric_code": "water_consumed_kl",
+      "unit": "KL",
+      "reconcile_against": [
+        "water_consumed_kl"
+      ]
+    }
+  }
+}

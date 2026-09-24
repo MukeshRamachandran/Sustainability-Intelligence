@@ -1,0 +1,16 @@
+{
+  "code": "population_staging",
+  "version": 1,
+  "domain": "population",
+  "priority": 1,
+  "source_reference": "apps/public-dashboard-final-staging/data/population_master.csv",
+  "parser": "annual_rows",
+  "description": "Institutional population reference (year, population).",
+  "columns": {
+    "population": {
+      "metric_code": "population",
+      "unit": "people",
+      "note": "Source row states year 2025. The same figure (6,991) is the owner-approved 2026 reference; the owner should confirm it is the genuine 2025 population."
+    }
+  }
+}

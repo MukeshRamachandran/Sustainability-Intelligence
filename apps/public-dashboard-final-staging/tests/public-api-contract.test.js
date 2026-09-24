@@ -150,9 +150,9 @@ test('adapter returns an explicit error state without fabricating data', async (
 
 test('active loader has no governed CSV, JSON overlay, or emission-factor calculation path', () => {
   const loader = read('public-data-loader.js');
-  assert.match(loader, /KCOSMOSPublicAPI\.load/);
-  assert.match(loader, /KCOSMOSPublicAPI\.loadHistory/);
-  assert.doesNotMatch(loader, /transport_master|dg_master|lpg_master|energy_master|water_master|outreach_master|emission_factors|dashboard_master/);
+  // Every sustainability value comes from the backend timeline (PostgreSQL).
+  assert.match(loader, /KCOSMOSPublicAPI\.loadTimeline/);
+  assert.doesNotMatch(loader, /transport_master|dg_master|lpg_master|energy_master|water_master|outreach_master|emission_factors|dashboard_master|population_master/);
   assert.doesNotMatch(loader, /Calculations\.(co2e|renewableAvoidedEmissions)/);
   assert.doesNotMatch(loader, /2\.388|2\.701|0\.727|0\.71|1\.5571|2\.939/);
   assert.match(loader, /lpg_consumption_litres/);
@@ -161,19 +161,17 @@ test('active loader has no governed CSV, JSON overlay, or emission-factor calcul
   for (const file of ['public-api.js', 'public-data-loader.js', 'app.js']) {
     assert.doesNotMatch(read(file), /2\.388|2\.701|0\.727|0\.71|1\.5571|2\.939/, file);
   }
-  assert.match(loader, /waste_master\.csv/);
   assert.match(loader, /green_master\.csv/);
 });
 
-test('staging helper proxies both public routes and nothing else', () => {
+test('staging helper proxies the public routes and nothing else', () => {
   const server = read('serve-staging.py');
-  // Both routes the adapter consumes must reach the Main API; the history
-  // route was previously missing, which silently emptied every trend.
-  for (const route of ['/api/public/dashboard', '/api/public/dashboard/history']) {
+  const routes = ['/api/public/dashboard', '/api/public/dashboard/history', '/api/public/dashboard/timeline'];
+  for (const route of routes) {
     assert.ok(server.includes(`"${route}"`), `serve-staging.py must proxy ${route}`);
   }
   const adapter = read('public-api.js');
-  for (const route of ['/api/public/dashboard', '/api/public/dashboard/history']) {
+  for (const route of routes) {
     assert.ok(adapter.includes(`'${route}'`), `public-api.js must request ${route}`);
   }
   // The proxy stays narrow: no authenticated or admin path may pass through.
@@ -181,17 +179,14 @@ test('staging helper proxies both public routes and nothing else', () => {
   assert.match(server, /PUBLIC_ROUTES/);
 });
 
-test('governed waste comes from the published release, never waste_master.csv', () => {
+test('governed waste comes from the backend timeline, never waste_master.csv', () => {
   const loader = read('public-data-loader.js');
-  // Waste is a governed Manager domain now: the loader neither fetches the CSV
-  // nor keeps a parser for it. (Comments may still explain why it is gone.)
   const code = loader.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
   assert.doesNotMatch(code, /waste_master\.csv/);
   assert.doesNotMatch(code, /staticWaste/);
   assert.match(loader, /wet_waste_generated_kg/);
   assert.match(loader, /dry_waste_generated_kg/);
   assert.match(loader, /total_waste_generated_kg/);
-  assert.match(loader, /publication\.domains\.waste/);
   // Green cover remains legitimately static.
   assert.match(loader, /green_master\.csv/);
 
@@ -306,6 +301,89 @@ function publishedPayload(overrides = {}) {
     ...overrides
   };
 }
+// ---- Timeline fixtures ------------------------------------------------------
+// The dashboard reads GET /api/public/dashboard/timeline. These fixtures mirror
+// its contract: one entry per genuine period, values keyed by governed code.
+
+const TL_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function tv(value, domain, extra = {}) {
+  return {
+    status: value == null ? 'unavailable' : 'available', value, unit: extra.unit || '', domain,
+    kind: extra.kind || 'metric', qualifier: extra.qualifier || 'EXACT', reason: extra.reason || null,
+    source_kind: extra.source_kind || 'historical_verified', granularity: extra.granularity || 'MONTHLY',
+    coverage_status: extra.coverage_status || 'complete', months_covered: extra.months_covered || [],
+    provenance: extra.provenance || {}
+  };
+}
+function tlMonth(year, month, values, extra = {}) {
+  const key = `${year}-${String(month).padStart(2, '0')}`;
+  const domains = Object.fromEntries(['transport', 'energy', 'lpg', 'water', 'waste', 'outreach'].map(domain => [
+    domain,
+    Object.values(values).some(item => item.domain === domain && item.status === 'available')
+      ? { state: 'available' }
+      : (extra.domains || {})[domain] || { state: 'unavailable', message: `${domain} not available` }
+  ]));
+  return {
+    key, label: `${TL_MONTHS[month - 1]} ${year}`, year, month, granularity: 'MONTHLY',
+    coverage_start: `${key}-01`, coverage_end: `${key}-28`, coverage_status: 'complete',
+    source_kind: extra.source_kind || 'historical_verified', release_version: extra.release_version || null,
+    population: { status: 'available', value: 6991 }, domains, values
+  };
+}
+function tlAggregate(key, year, granularity, endMonth, values, label) {
+  return {
+    key, label, year, month: null, granularity, coverage_start: `${year}-01-01`,
+    coverage_end: `${year}-${String(endMonth).padStart(2, '0')}-28`, coverage_status: 'complete',
+    source_kind: 'historical_aggregate', release_version: null, population: { status: 'available', value: 6991 },
+    domains: {}, values
+  };
+}
+function timelineOf(periods, defaultKey) {
+  const byYear = {};
+  periods.forEach(period => {
+    (byYear[period.year] ||= []).push({
+      key: period.key, granularity: period.granularity,
+      label: period.granularity === 'MONTHLY' ? TL_MONTHS[period.month - 1]
+        : (period.granularity === 'ANNUAL' ? 'Full Year' : period.label.split(' ').slice(1).join(' '))
+    });
+  });
+  Object.values(byYear).forEach(options => options.sort((a, b) => (a.granularity === 'MONTHLY') - (b.granularity === 'MONTHLY')));
+  return {
+    schema_version: 'timeline-1.0', default_key: defaultKey,
+    selector: Object.keys(byYear).sort().map(year => ({ year: Number(year), options: byYear[year] })),
+    periods: Object.fromEntries(periods.map(period => [period.key, period])),
+    labels: { 'material:PET': 'PET' },
+    static_references: { landfill_diversion_pct: { value: 88.1, unit: '%' } }
+  };
+}
+async function loadDashboardFromTimeline(timeline) {
+  const requested = [];
+  const window = { location: { hostname: '127.0.0.1', port: '3001' } };
+  const fetchImpl = async url => {
+    requested.push(String(url).split('?')[0]);
+    return url === '/api/public/dashboard/timeline'
+      ? { ok: true, json: async () => timeline, text: async () => '' }
+      : { ok: true, json: async () => ({}), text: async () => '' };
+  };
+  const sandbox = { window, fetch: fetchImpl, Object, Number, String, Error, Array, Math, Date, Promise, JSON };
+  vm.runInNewContext(read('public-api.js'), sandbox);
+  vm.runInNewContext(read('public-data-loader.js'), sandbox);
+  const result = await window.loadDashboardData();
+  return { ...result, requested };
+}
+const septemberValues = () => ({
+  transport_petrol_litres: tv(3443, 'transport', { unit: 'L' }),
+  transport_petrol_emissions: tv(8.221884, 'transport', { kind: 'calculation', provenance: { factor_value: '2.388' } }),
+  transport_diesel_emissions: tv(0.332223, 'transport', { kind: 'calculation', provenance: { factor_value: '2.701' } }),
+  dg_diesel_emissions: tv(0.632034, 'transport', { kind: 'calculation', provenance: { factor_value: '2.701' } }),
+  lpg_emissions: tv(0.003114, 'lpg', { kind: 'calculation', provenance: { factor_value: '1.5571' } }),
+  grid_electricity_emissions: tv(2.569945, 'energy', { kind: 'calculation', provenance: { factor_value: '0.727' } }),
+  scope1_tco2e: tv(9.189255, 'ghg', { kind: 'calculation' }),
+  scope2_tco2e: tv(2.569945, 'ghg', { kind: 'calculation' }),
+  operational_ghg_tco2e: tv(11.7592, 'ghg', { kind: 'calculation' }),
+  operational_ghg_per_capita_kgco2e: tv(1.682048, 'ghg', { kind: 'calculation' })
+});
+
 async function loadDashboardWith(payload, history = [payload]) {
   const routes = { '/api/public/dashboard': payload, '/api/public/dashboard/history': history };
   const window = { location: { hostname: '127.0.0.1', port: '3001' } };
@@ -318,10 +396,9 @@ async function loadDashboardWith(payload, history = [payload]) {
   return window.loadDashboardData();
 }
 
-test('governed emission components reach the dashboard arrays from the frozen release', async () => {
-  const { data, history } = await loadDashboardWith(publishedPayload());
+test('governed emission components reach the dashboard arrays from the timeline month only', async () => {
+  const { data } = await loadDashboardFromTimeline(timelineOf([tlMonth(2026, 9, septemberValues())], '2026-09'));
   const item = data['2026'], sep = 8;
-  assert.equal(history.releases.length, 1, 'one genuinely published month is not a history failure');
   assert.equal(item.petrolEm[sep], 8.221884);
   assert.equal(item.trDieselEm[sep], 0.332223);
   assert.equal(item.dgEm[sep], 0.632034);
@@ -333,25 +410,19 @@ test('governed emission components reach the dashboard arrays from the frozen re
   item.publishedMonths.forEach((value, index) => assert.equal(value, index === sep));
 });
 
-test('calculation factors stay attached to the published month that supplied each result', async () => {
-  const september = publishedPayload();
-  const august = publishedPayload();
-  august.period.month = 8;
-  august.transport.calculations[0].factor_value = 2.4;
-  august.transport.calculations[1].factor_value = 2.7;
-  august.transport.calculations[2].factor_value = 2.7;
-  august.energy.calculations[0].factor_value = 0.73;
-  august.lpg.calculations[0].factor_value = 1.6;
-  const { data } = await loadDashboardWith(september, [august, september]);
+test('calculation factors stay attached to the month that supplied each result', async () => {
+  const august = septemberValues();
+  august.transport_petrol_emissions.provenance.factor_value = '2.4';
+  august.grid_electricity_emissions.provenance.factor_value = '0.73';
+  august.lpg_emissions.provenance.factor_value = '1.6';
+  const { data } = await loadDashboardFromTimeline(timelineOf([tlMonth(2026, 8, august), tlMonth(2026, 9, septemberValues())], '2026-09'));
   const item = data['2026'];
   assert.equal(item.petrolEF[7], 2.4);
-  assert.equal(item.petrolEF[8], 1);
-  assert.equal(item.trDieselEF[7], 2.7);
-  assert.equal(item.dgEF[7], 2.7);
+  assert.equal(item.petrolEF[8], 2.388);
   assert.equal(item.gridEF[7], 0.73);
-  assert.equal(item.gridEF[8], 1);
+  assert.equal(item.gridEF[8], 0.727);
   assert.equal(item.lpgEF[7], 1.6);
-  assert.equal(item.lpgEF[8], 1);
+  assert.equal(item.lpgEF[8], 1.5571);
   const app = read('app.js');
   for (const field of ['petrolEF', 'trDieselEF', 'dgEF', 'gridEF', 'lpgEF']) {
     assert.match(app, new RegExp(`d\\.${field}\\[i\\]`));
@@ -380,19 +451,20 @@ test('published zero, missing values, and methodology-unavailable remain distinc
   assert.equal(unavailableMethod.reason, 'methodology_under_review');
 });
 
-test('month-bound scalar release blocks are hidden for unpublished months', () => {
+test('month-bound values are hidden for months without genuine records', () => {
   const app = read('app.js');
   assert.match(app, /function selectionHasPublication\(d, month\)/);
   assert.match(app, /published\[\+month\] === true/);
   assert.match(app, /const publishedWaste = hasPublication &&/);
   assert.match(app, /hasPublication \? waterRecycled : null/);
-  assert.match(app, /outreach\.month === \+month \+ 1/);
+  // Outreach follows the selected period; annual outreach is never a month.
+  assert.match(app, /outreach = outreachFor\(\+yearFilter\.value, monthFilter\.value\)/);
   assert.match(app, /outreachForPeriod \? outreach\.participantsServed : null/);
-  assert.match(app, /No published operational release/);
+  assert.match(app, /No published or verified data/);
 });
 
-test('Scope 1 and Operational GHG use backend-published indicators, with component values preserved', async () => {
-  const { data } = await loadDashboardWith(publishedPayload());
+test('Scope 1 and Operational GHG use backend-published values, with component values preserved', async () => {
+  const { data } = await loadDashboardFromTimeline(timelineOf([tlMonth(2026, 9, septemberValues())], '2026-09'));
   const item = data['2026'], sep = 8;
   assert.equal(item.scope1Full[sep], 9.189255);
   assert.equal('dieselCombo' in item, false, 'do not publish a browser-derived emissions subtotal');
@@ -400,15 +472,13 @@ test('Scope 1 and Operational GHG use backend-published indicators, with compone
   assert.equal(item.perCapita[sep], 1.682048);
   // A broad all-scope total remains unavailable.
   assert.equal(item.totalGHG, null);
-  assert.equal(item.avoided, null);
-  assert.equal(item.reShare, null);
 });
 
 test('a missing component leaves Scope 1 missing instead of treating it as zero', async () => {
-  const payload = publishedPayload();
-  payload.lpg = { metrics: { lpg_consumption_litres: { value: 2, unit: 'L' } }, calculations: [] };
-  payload.indicators.scope1_tco2e = { status: 'unavailable', value: null, unit: 'tCO2e' };
-  const { data } = await loadDashboardWith(payload);
+  const values = septemberValues();
+  delete values.lpg_emissions;
+  values.scope1_tco2e = tv(null, 'ghg', { kind: 'calculation', reason: 'inputs_missing:lpg_emissions' });
+  const { data } = await loadDashboardFromTimeline(timelineOf([tlMonth(2026, 9, values)], '2026-09'));
   const item = data['2026'], sep = 8;
   assert.equal(item.lpgEm[sep], null);
   assert.equal(item.scope1Full[sep], null);
@@ -426,82 +496,34 @@ test('GHG charts use the governed grid aggregate, not an unpublished per-connect
   }
 });
 
-test('the official Total GHG, avoided emissions and renewable share stay unavailable', () => {
+test('no browser-derived official total and no population CSV', () => {
   const app = read('app.js');
   const loader = read('public-data-loader.js');
-  assert.match(loader, /item\.totalGHG = window\.KCOSMOSPublicAPI\.indicator\(publication\.raw, 'total_ghg_tco2e'\)\.value/);
   assert.doesNotMatch(app, /const net = null;/);
   assert.match(app, /Not published for this period/);
-  // Nothing in the page derives the official total from Scope 1 + Scope 2.
+  // Nothing in the page derives an official total from Scope 1 + Scope 2.
   assert.doesNotMatch(app, /Calculations\.(?:grossEmissions|netCarbonIndicator|scope1Total|scope2Total)/);
-  assert.doesNotMatch(loader, /totalGHG\s*=\s*[^w]*(?:scope1|elecEm)/);
+  assert.doesNotMatch(loader, /totalGHG\s*=\s*[^n]*(?:scope1|elecEm)/);
   assert.doesNotMatch(loader, /population_master\.csv|6991/);
 });
 
-test('schema 1.4 monthly loader maps frozen derived Energy and Water indicators without population CSV', async () => {
-  const requestedFiles = [];
-  const transport = { metrics: {}, calculations: [] };
-  const energy = { metrics: {
-    grid_ht_kwh: { value: 100, unit: 'kWh' },
-    grid_commercial_kwh: { value: 20, unit: 'kWh' },
-    grid_temporary_kwh: { value: 5, unit: 'kWh' },
-    grid_total_kwh: { value: 125, unit: 'kWh' },
-    renewable_on_campus_kwh: { value: 40, unit: 'kWh' },
-    renewable_procured_kwh: { value: 10, unit: 'kWh' },
-    solar_water_heater_kwh: { value: 7, unit: 'kWh' },
-    renewable_total_kwh: { value: 57, unit: 'kWh' }
-  }, calculations: [] };
-  const water = { metrics: {
-    water_twad_kl: { value: 10, unit: 'KL' },
-    water_borewell_kl: { value: 5, unit: 'KL' },
-    water_private_kl: { value: 2, unit: 'KL' },
-    water_consumed_kl: { value: 17, unit: 'KL' },
-    wastewater_generated_kl: { value: 3, unit: 'KL' },
-    water_recycled_kl: { value: 1, unit: 'KL' }
-  }, calculations: [] };
-  const release = {
-    state: 'published',
-    release: { version: 'sustainability-2026-09-v3' },
-    period: { year: 2026, month: 9 },
-    population: { status: 'available', value: 6991, unit: 'people', effective_year: 2026 },
-    indicators: {
-      scope1_tco2e: { status: 'available', value: 3 },
-      scope2_tco2e: { status: 'available', value: 2 },
-      operational_ghg_tco2e: { status: 'available', value: 5 },
-      operational_ghg_per_capita_kgco2e: { status: 'available', value: 0.715 },
-      waste_per_capita_kg: { status: 'available', value: 2.5 },
-      renewable_electricity_kwh: { status: 'available', value: 50 },
-      total_electricity_consumption_kwh: { status: 'available', value: 175 },
-      renewable_share_pct: { status: 'available', value: 28.571428571429 },
-      estimated_avoided_grid_emissions_tco2e: { status: 'available', value: 0.03635 },
-      water_per_capita_l: { status: 'available', value: 2.4316978973 },
-      total_ghg_tco2e: { status: 'unavailable', value: null },
-      avoided_emissions_tco2e: { status: 'unavailable', value: null },
-      renewable_share_percent: { status: 'unavailable', value: null }
-    },
-    domains: { transport, energy, lpg: { metrics: {}, calculations: [] }, water, outreach: null, waste: null },
-    raw: { static_references: { landfill_diversion_pct: { value: 88.1 } } }
+test('loader maps derived Energy and Water values per month and fetches only the static green file', async () => {
+  const values = {
+    grid_ht_kwh: tv(100, 'energy'), grid_commercial_kwh: tv(20, 'energy'), grid_temporary_kwh: tv(5, 'energy'),
+    grid_total_kwh: tv(125, 'energy', { kind: 'calculation' }), renewable_on_campus_kwh: tv(40, 'energy'),
+    renewable_procured_kwh: tv(10, 'energy'), solar_water_heater_kwh: tv(7, 'energy'),
+    renewable_electricity_kwh: tv(50, 'energy', { kind: 'calculation' }),
+    total_electricity_consumption_kwh: tv(175, 'energy', { kind: 'calculation' }),
+    renewable_share_pct: tv(28.571428571429, 'energy', { kind: 'calculation' }),
+    estimated_avoided_grid_emissions_tco2e: tv(0.03635, 'energy', { kind: 'calculation' }),
+    water_twad_kl: tv(10, 'water'), water_borewell_kl: tv(5, 'water'), water_private_kl: tv(2, 'water'),
+    water_consumed_kl: tv(17, 'water', { kind: 'calculation' }), wastewater_generated_kl: tv(3, 'water'),
+    water_recycled_kl: tv(1, 'water'), water_per_capita_l: tv(2.4316978973, 'water', { kind: 'calculation' }),
+    waste_per_capita_kg: tv(2.5, 'waste', { kind: 'calculation' })
   };
-  const metric = (domain, code) => {
-    const value = domain?.metrics?.[code]?.value ?? null;
-    return { status: value == null ? 'unavailable' : 'available', value };
-  };
-  const calculation = (domain, code) => ({ value: null });
-  const api = {
-    load: async () => release,
-    loadHistory: async () => ({ releases: [release] }),
-    metric,
-    calculation,
-    indicator: (_raw, code) => ({ value: release.indicators[code]?.value ?? null }),
-    numberOrNull: value => value == null || value === '' ? null : Number(value)
-  };
-  const window = { KCOSMOSPublicAPI: api };
-  vm.runInNewContext(read('public-data-loader.js'), { window, fetch: async url => {
-    requestedFiles.push(String(url).split('?')[0]);
-    return { ok: true, text: async () => '' };
-  }, Object, Number, String, Date, Promise, Math });
-  const result = await window.loadDashboardData();
-  const year = result.data[2026];
+  const aggregate = tlAggregate('2026-YTD', 2026, 'YTD', 9, { water_consumed_kl: tv(17, 'water') }, '2026 YTD · Jan–Sep');
+  const { data, requested } = await loadDashboardFromTimeline(timelineOf([aggregate, tlMonth(2026, 9, values)], '2026-09'));
+  const year = data[2026];
   assert.equal(year.htKwh[8], 100);
   assert.equal(year.commKwh[8], 20);
   assert.equal(year.tempKwh[8], 5);
@@ -521,12 +543,9 @@ test('schema 1.4 monthly loader maps frozen derived Energy and Water indicators 
   assert.equal(year.waterKL[8], 17);
   assert.equal(year.wastewaterKL[8], 3);
   assert.equal(year.waterRecycledKL[8], 1);
-  assert.equal(year.scope1Full[8], 3);
-  assert.equal(year.operationalGHG[8], 5);
-  assert.equal(year.perCapita[8], 0.715);
   assert.equal(year.wastePerCapita[8], 2.5);
   assert.equal(year.population, 6991);
-  assert.deepEqual(requestedFiles.sort(), ['data/dashboard_metadata.csv', 'data/green_master.csv']);
+  assert.deepEqual(requested.sort(), ['/api/public/dashboard/timeline', 'data/green_master.csv']);
 });
 
 test('missing values are shown as unavailable and are never coerced to zero', () => {
@@ -595,12 +614,12 @@ test('active dashboard files hold no emission-factor formula or operational CSV 
   for (const file of ['app.js', 'public-api.js', 'public-data-loader.js', 'walkthrough.js', 'mobile.js', 'weather.js']) {
     const source = read(file).replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
     assert.doesNotMatch(source, /2\.388|2\.701|0\.727|1\.5571|2\.939/, file);
-    assert.doesNotMatch(source, /(?:transport|dg|lpg|energy|water|outreach|waste)_master\.csv/, file);
-    assert.doesNotMatch(source, /dashboard_master/, file);
+    assert.doesNotMatch(source, /(?:transport|dg|lpg|energy|water|outreach|waste|population)_master\.csv/, file);
+    assert.doesNotMatch(source, /dashboard_master|dashboard_metadata/, file);
   }
-  // Only static institutional files are still fetched by the loader.
+  // Only the static green-cover file is still fetched by the loader.
   const fetched = [...read('public-data-loader.js').matchAll(/optionalText\('([^']+)'\)/g)].map(match => match[1]).sort();
-  assert.deepEqual(fetched, ['data/dashboard_metadata.csv', 'data/green_master.csv']);
+  assert.deepEqual(fetched, ['data/green_master.csv']);
   assert.match(read('index.html'), /<script src="walkthrough\.js\?v=\d+"><\/script>/);
   assert.doesNotMatch(read('index.html'), /<script[^>]+src="calculations\.js/);
 });
@@ -661,21 +680,21 @@ test('Carbon Story restores the last-good final-staging scenes and reads current
   assert.match(css, /\.wt-ledger/);
 });
 
-test('schema 1.4 hero indicators continue to be sourced by the public API loader', () => {
+test('hero indicators are sourced from the backend timeline', () => {
   const loader = read('public-data-loader.js');
-  assert.match(loader, /indicator\(publication\.raw, 'operational_ghg_tco2e'\)/);
-  assert.match(loader, /indicator\(publication\.raw, 'operational_ghg_per_capita_kgco2e'\)/);
-  assert.match(loader, /indicator\(publication\.raw, 'estimated_avoided_grid_emissions_tco2e'\)/);
+  for (const code of ['operational_ghg_tco2e', 'operational_ghg_per_capita_kgco2e', 'estimated_avoided_grid_emissions_tco2e']) {
+    assert.match(loader, new RegExp(`'${code}'`));
+  }
 });
 
-test('new KPI cards use frozen indicators, static landfill reference, and no waste or green carbon claims', () => {
+test('KPI cards use backend values, the static landfill reference, and no waste or green carbon claims', () => {
   const app = read('app.js');
   const loader = read('public-data-loader.js');
   const html = read('index.html');
   for (const code of [
     'renewable_electricity_kwh', 'total_electricity_consumption_kwh',
     'renewable_share_pct', 'estimated_avoided_grid_emissions_tco2e', 'water_per_capita_l'
-  ]) assert.match(loader, new RegExp(`indicator\\(publication\\.raw, '${code}'\\)`));
+  ]) assert.match(loader, new RegExp(`'${code}'`));
   assert.match(loader, /static_references\?\.landfill_diversion_pct\?\.value/);
   assert.match(app, /const landfillDiversionPct = d\.landfillDiversionPct/);
   assert.match(app, /kpi\('Landfill diversion', landfillDiversionPct/);
@@ -686,4 +705,98 @@ test('new KPI cards use frozen indicators, static landfill reference, and no was
   assert.doesNotMatch(app, /kpi\('Green-cover carbon sequestration'/);
   assert.doesNotMatch(app, /kpi\('Waste emissions'|kpi\('Waste CO₂e'/);
   assert.doesNotMatch(app, /renewable_total_kwh/);
+});
+
+// ---- Historical granularity (timeline) ---------------------------------------
+
+test('annual waste and outreach are never placed into a month', async () => {
+  const march = tlMonth(2025, 3, { grid_ht_kwh: tv(10, 'energy') }, {
+    domains: {
+      waste: { state: 'aggregate_only', alternative_key: '2025-FY', message: 'Monthly Waste data unavailable. 2025 annual data is available under 2025 Full Year.' },
+      outreach: { state: 'aggregate_only', alternative_key: '2025-FY', message: 'Monthly Outreach data unavailable. 2025 annual data is available under 2025 Full Year.' }
+    }
+  });
+  const annual = tlAggregate('2025-FY', 2025, 'ANNUAL', 12, {
+    total_waste_generated_kg: tv(55339.55, 'waste', { granularity: 'ANNUAL' }),
+    'material:PET': tv(812, 'waste', { granularity: 'ANNUAL' }),
+    total_programs: tv(20, 'outreach', { granularity: 'ANNUAL', qualifier: 'AT_LEAST' }),
+    total_participants: tv(4000, 'outreach', { granularity: 'ANNUAL', qualifier: 'AT_LEAST' })
+  }, '2025 Full Year');
+  annual.domains = { waste: { state: 'available' }, outreach: { state: 'available' } };
+  const { data, outreachFor } = await loadDashboardFromTimeline(timelineOf([annual, march], '2025-03'));
+  const year = data['2025'];
+  assert.equal(year.totalWaste[2], null);
+  assert.ok(year.totalWaste.every(value => value === null), 'no monthly waste invented');
+  assert.equal(year.totalWaste.aggregate, 55339.55);
+  assert.equal(JSON.stringify(year.wasteBreakdownAggregate), JSON.stringify([{ name: 'PET', value: 812 }]));
+  assert.equal(year.domainStatus[2].waste.state, 'aggregate_only');
+  assert.match(year.domainStatus[2].waste.message, /Monthly Waste data unavailable/);
+  assert.equal(outreachFor(2025, '2').published, false);
+  const fullYear = outreachFor(2025, 'all');
+  assert.equal(fullYear.published, true);
+  assert.equal(fullYear.programsDelivered, 20);
+  assert.equal(fullYear.qualifiers.programsDelivered, 'AT_LEAST');
+});
+
+test('Full Year / YTD values are the backend aggregate, never browser sums', async () => {
+  const jan = tlMonth(2026, 1, { water_consumed_kl: tv(100, 'water') });
+  const feb = tlMonth(2026, 2, { water_consumed_kl: tv(200, 'water') });
+  // A deliberately different aggregate proves the page shows the API value.
+  const ytd = tlAggregate('2026-YTD', 2026, 'YTD', 2, {
+    water_consumed_kl: tv(299, 'water', { coverage_status: 'partial', months_covered: ['2026-01'] }),
+    renewable_share_pct: tv(41.5, 'energy', { kind: 'calculation' })
+  }, '2026 YTD · Jan–Feb');
+  const { data, selector, defaultKey } = await loadDashboardFromTimeline(timelineOf([ytd, jan, feb], '2026-02'));
+  const year = data['2026'];
+  assert.equal(year.waterKL.aggregate, 299);
+  assert.equal(year.waterKL.aggregateCoverage, 'partial');
+  assert.equal(year.renewableSharePct.aggregate, 41.5);
+  assert.equal(year.frequency, 'ytd');
+  assert.equal(year.label, '2026 YTD · Jan–Feb');
+  assert.equal(defaultKey, '2026-02');
+  assert.deepEqual(selector[0].options.map(option => option.key), ['2026-YTD', '2026-01', '2026-02']);
+  const app = read('app.js');
+  assert.match(app, /if \(m === 'all'\) return arr\.aggregate == null \? null : n\(arr\.aggregate\);/);
+  // A YTD window is never compared with a different window.
+  assert.match(app, /py\.aggregateEndMonth === d\.aggregateEndMonth/);
+});
+
+test('period controls come from the timeline selector and default to its latest official month', () => {
+  const app = read('app.js');
+  const html = read('index.html');
+  assert.match(app, /populatePeriodControls\(loaded\.defaultKey\)/);
+  assert.match(app, /function monthOptionsFor\(year\)/);
+  assert.match(app, /option\.granularity === 'MONTHLY'/);
+  // No hard-coded year or month list remains in the toolbar markup.
+  const toolbar = html.slice(html.indexOf('id="yearFilter"'), html.indexOf('id="periodText"'));
+  assert.doesNotMatch(toolbar, /value="2025"|value="2026"|value="11"/);
+  assert.match(html, /data-t="records"/);
+  assert.match(app, /tables\.records = \{/);
+  assert.match(app, /'Granularity'/);
+});
+
+test('a year with a partial YTD and a separate annual record exposes both views', async () => {
+  const march = tlMonth(2027, 3, { grid_ht_kwh: tv(10, 'energy') });
+  const ytd = tlAggregate('2027-YTD', 2027, 'YTD', 3, { grid_ht_kwh: tv(10, 'energy') }, '2027 YTD · Jan–Mar');
+  const annual = tlAggregate('2027-FY', 2027, 'ANNUAL', 12, {
+    total_waste_generated_kg: tv(900, 'waste', { granularity: 'ANNUAL' })
+  }, '2027 Full Year');
+  annual.domains = { waste: { state: 'available' } };
+  const timeline = timelineOf([ytd, annual, march], '2027-03');
+  timeline.selector[0].options = [
+    { key: '2027-YTD', label: 'YTD · Jan–Mar', granularity: 'YTD' },
+    { key: '2027-FY', label: 'Full Year', granularity: 'ANNUAL' },
+    { key: '2027-03', label: 'Mar', granularity: 'MONTHLY' }
+  ];
+  const { data, outreachFor } = await loadDashboardFromTimeline(timeline);
+  const year = data['2027'];
+  assert.equal(year.aggregateKey, '2027-YTD');
+  assert.equal(year.totalWaste.aggregate, null, 'the annual record is not merged into the YTD view');
+  const fullYear = year.secondary['2027-FY'];
+  assert.equal(fullYear.totalWaste.aggregate, 900);
+  assert.equal(fullYear.label, '2027 Full Year');
+  assert.equal(outreachFor(2027, 'agg:2027-FY').published, false);
+  const app = read('app.js');
+  assert.match(app, /value\.startsWith\('agg:'\)/);
+  assert.match(app, /`agg:\$\{option\.key\}`/);
 });

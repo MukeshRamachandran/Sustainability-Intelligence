@@ -25,6 +25,7 @@ from app.schemas.emission_factors import (
     FactorSetResponse,
     FactorSetWrite,
 )
+from app.services import sustainability_formulas as formulas
 
 CORE_FACTORS = {FactorCode.PETROL, FactorCode.DIESEL, FactorCode.GRID_ELECTRICITY}
 EXPECTED_UNITS = {
@@ -223,8 +224,10 @@ def calculate_provisional(db: Session, submission: Submission) -> list[Calculati
                 activity_unit=value.canonical_unit, formula_version=FORMULA_VERSION, provisional=True,
             ))
             continue
-        kgco2e = value.value * factor.factor_value
-        tonnes_co2e = kgco2e / Decimal(1000)
+        kgco2e = formulas.activity_emissions_kgco2e(value.value, factor.factor_value)
+        tonnes_co2e = formulas.activity_emissions_tco2e(value.value, factor.factor_value)
+        if kgco2e is None or tonnes_co2e is None:
+            continue
         results.append(CalculationResponse(
             status="available", calculation_code=calculation_code,
             activity_metric_code=definition.code, activity_value=value.value,
@@ -233,7 +236,7 @@ def calculate_provisional(db: Session, submission: Submission) -> list[Calculati
             factor_value=factor.factor_value,
             factor_unit=f"{factor.result_unit}/{factor.activity_unit}",
             result_kgco2e=kgco2e.quantize(Decimal("0.000001")),
-            result_value=tonnes_co2e.quantize(Decimal("0.000001")),
+            result_value=tonnes_co2e,
             result_unit="tCO2e", formula_version=FORMULA_VERSION,
             provisional=True,
         ))

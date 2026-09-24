@@ -26,6 +26,7 @@ PUBLIC_ROUTES = frozenset(
     {
         "/api/public/dashboard",
         "/api/public/dashboard/history",
+        "/api/public/dashboard/timeline",
     }
 )
 ROOT = Path(__file__).resolve().parent

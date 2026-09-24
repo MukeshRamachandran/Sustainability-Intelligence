@@ -1,0 +1,51 @@
+{
+  "code": "energy_legacy_public",
+  "version": 1,
+  "domain": "energy",
+  "priority": 2,
+  "source_reference": "apps/public-dashboard/data/energy_master.csv",
+  "parser": "year_block_monthly",
+  "description": "Older public-dashboard energy copy with year header rows. Competing copy used for reconciliation.",
+  "options": {
+    "header_row": 0,
+    "row_sum_checks": [
+      {
+        "parts": [
+          1,
+          2,
+          3
+        ],
+        "total": 4,
+        "description": "printed Total Grid Consumption equals HT + Commercial + Temporary"
+      }
+    ]
+  },
+  "columns_by_index": {
+    "1": {
+      "metric_code": "grid_ht_kwh",
+      "unit": "kWh"
+    },
+    "2": {
+      "metric_code": "grid_commercial_kwh",
+      "unit": "kWh"
+    },
+    "3": {
+      "metric_code": "grid_temporary_kwh",
+      "unit": "kWh"
+    },
+    "5": {
+      "metric_code": "renewable_on_campus_kwh",
+      "unit": "kWh"
+    },
+    "6": {
+      "metric_code": "renewable_procured_kwh",
+      "unit": "kWh"
+    },
+    "10": {
+      "metric_code": "solar_water_heater_kwh",
+      "unit": "kWh",
+      "verification": "UNVERIFIED",
+      "note": "Source header states the value is the same for every month; the monthly basis is undocumented, so it is imported UNVERIFIED as thermal reference only (never electricity)."
+    }
+  }
+}

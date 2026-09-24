@@ -17,6 +17,7 @@ from app.models.sustainability import (
     SubmissionValue,
 )
 from app.schemas.emission_factors import CalculationResponse
+from app.services import sustainability_formulas as formulas
 from app.services import waste as waste_service
 from app.services.emission_factors import calculation_responses
 from app.services.outreach import aggregate_approved_outreach
@@ -235,13 +236,9 @@ def _schema_1_3_indicators(
         _decimal_calculation(transport, "dg_diesel_emissions"),
         _decimal_calculation(lpg, "lpg_emissions"),
     ]
-    scope1 = (
-        sum((part for part in scope1_parts if isinstance(part, Decimal)), Decimal("0"))
-        if all(part is not None for part in scope1_parts)
-        else None
-    )
+    scope1 = formulas.scope1_tco2e(*scope1_parts)
     scope2 = _decimal_calculation(energy, "grid_electricity_emissions")
-    operational = scope1 + scope2 if scope1 is not None and scope2 is not None else None
+    operational = formulas.operational_ghg_tco2e(scope1, scope2)
 
     reference = db.get(InstitutionalPopulationReference, period.year)
     population_is_usable = reference is not None and reference.population > 0
@@ -258,16 +255,8 @@ def _schema_1_3_indicators(
     }
 
     waste_total = _decimal_metric(waste, "total_waste_generated_kg")
-    per_capita_ghg = (
-        operational * Decimal("1000") / Decimal(population)
-        if operational is not None and population is not None
-        else None
-    )
-    waste_per_capita = (
-        waste_total / Decimal(population)
-        if waste_total is not None and population is not None
-        else None
-    )
+    per_capita_ghg = formulas.operational_ghg_per_capita_kgco2e(operational, population)
+    waste_per_capita = formulas.waste_per_capita_kg(waste_total, population)
     indicators: dict[str, object] = {
         "scope1_tco2e": _indicator(scope1, "tCO2e", "required_scope1_component_unavailable"),
         "scope2_tco2e": _indicator(scope2, "tCO2e", "grid_electricity_unavailable"),
@@ -357,16 +346,12 @@ def _schema_1_4_indicators(payload: dict[str, object]) -> dict[str, object]:
     procured = _nonnegative_metric(energy, "renewable_procured_kwh")
     grid = _nonnegative_metric(energy, "grid_total_kwh")
     water_kl = _nonnegative_metric(water, "water_consumed_kl")
-    renewable = on_campus + procured if on_campus is not None and procured is not None else None
-    total = grid + renewable if grid is not None and renewable is not None else None
+    renewable = formulas.renewable_electricity_kwh(on_campus, procured)
+    total = formulas.total_electricity_consumption_kwh(grid, renewable)
     factor, provenance = _grid_factor_provenance(energy)
-    share = renewable * 100 / total if renewable is not None and total is not None and total > 0 else None
-    avoided = renewable * factor / 1000 if renewable is not None and factor is not None else None
-    per_capita = (
-        water_kl * 1000 / population
-        if water_kl is not None and population is not None and population > 0
-        else None
-    )
+    share = formulas.renewable_share_pct(renewable, total)
+    avoided = formulas.estimated_avoided_grid_emissions_tco2e(renewable, factor)
+    per_capita = formulas.water_per_capita_l(water_kl, population)
     avoided_indicator = _indicator(avoided, "tCO2e", "renewable_or_governed_grid_factor_missing", places=12)
     if avoided is not None:
         avoided_indicator["provenance"] = provenance
