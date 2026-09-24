@@ -79,6 +79,22 @@ function n(v) { return v == null || Number.isNaN(+v) ? 0 : +v }
 function sum(a, s = 0, e = 12) { const values = a.slice(s, e).filter(value => value != null); return values.length ? values.reduce((x, y) => x + n(y), 0) : null }
 /* Indian-locale number formatting at d decimals. */
 function fmt(v, d = 0) { return v == null ? 'Unavailable' : n(v).toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d }) }
+/* Waste is published in kg. Tonnes hide small real values (0.38 kg reads as
+   "0.0 tons"), so a figure below one tonne is shown in kg. Presentation only. */
+function wasteDisplay(tons) { return tons != null && tons < 1 ? { factor: 1000, unit: 'kg', dec: 2 } : { factor: 1, unit: 'tons', dec: 1 } }
+/* Underscore codes from the published outreach payload as readable labels. */
+function humanizeCode(code) { const text = String(code).replace(/_/g, ' '); return text.length <= 4 ? text.toUpperCase() : text.charAt(0).toUpperCase() + text.slice(1) }
+const HISTORY_NOTE = 'Insufficient published history: only one month has been published so far. Trends and year comparisons appear as more months are published.';
+/* Status line under a chart. Zero published points -> emptyText; exactly one
+   -> the insufficient-history note; otherwise nothing. Missing months are
+   never drawn as zero, and an unpublished year is never implied to exist. */
+function chartNote(canvasId, arrays, emptyText) {
+  const canvas = document.getElementById(canvasId), host = canvas && canvas.closest('.chart'); if (!host) return;
+  const points = arrays.reduce((total, arr) => total + arr.filter(v => v != null).length, 0);
+  const text = points === 0 ? emptyText : (points === 1 ? HISTORY_NOTE : '');
+  let note = host.nextElementSibling; if (!(note && note.classList.contains('chart-note'))) { if (!text) return; note = document.createElement('p'); note.className = 'hint chart-note'; host.after(note); }
+  note.textContent = text; note.style.display = text ? '' : 'none';
+}
 /* Percent change vs a baseline (0 when there is no baseline). Doc §17/§18/§20/§27. */
 function pct(cur, prev) { return Calculations.percentageChange(cur, prev) }
 /* How many leading months a metric actually has readings for - sources don't
@@ -130,6 +146,7 @@ function makeKpis() {
     : null;
   // Diverted = the itemised dry-waste stream - see the Waste block below for why.
   const wasteDiverted = d.dryWaste == null ? null : d.dryWaste / 1000;
+  const wasteShow = wasteDisplay(wasteTot);
   const waterMonths = monthsWithData(d.waterKL);
   const waterKL = month === 'all'
     ? (d.waterTotalAnnual != null ? d.waterTotalAnnual : sum(d.waterKL, 0, waterMonths))
@@ -149,11 +166,13 @@ function makeKpis() {
     kpi('Renewable energy used', re, 'kWh', colors.emerald, 'sun', previousValue('reKwh'), false, 0, 'solarvideo'),
     kpi('Total grid electricity consumed', elec, 'kWh', colors.cyan, 'bolt', previousValue('elecKwh'), true, 0, 'elecmetervideo'),
     kpi('Total water recycled', d.waterRecycledKL, 'KL', colors.cyan, 'repeat', null, false, 0, 'rewatervideo'),
-    kpi('Total waste generated', wasteTot, 'tons', colors.orange, 'trash', null, true, 1, 'convwastevideo'),
+    kpi('Total waste generated', wasteTot == null ? null : wasteTot * wasteShow.factor, wasteShow.unit, colors.orange, 'trash', null, true, wasteShow.dec, 'convwastevideo'),
     kpi('Landfill diversion', wasteTot > 0 ? Calculations.safeRatioPct(wasteDiverted, wasteTot) : null, '%', colors.lime, 'shield', null, false, 1, 'landfillvideo'),
     kpi('Total water usage', waterKL, 'KL', colors.cyan, 'droplet', null, true, 0, 'watervideo'),
     kpi('Total green cover', green.totalGreenCoverPct, '%', colors.emerald, 'tree', null, false, 0, 'leavesvideo'),
-    kpi('Outreach impact', outreach.participantsServed, 'people', colors.gold, 'users', null, false, 0, 'earthvideo')
+    kpi('Outreach impact', outreach.participantsServed, 'people', colors.gold, 'users', null, false, 0, 'earthvideo'),
+    kpi('Scope 1 emissions', scope1, 'tCO₂e', colors.orange, 'cloud', previousValue('scope1Full'), true),
+    kpi('Scope 2 emissions', scope2, 'tCO₂e', colors.cyan, 'bolt', previousValue('elecEm'), true)
   ].join('');
   document.getElementById('ghgKpis').innerHTML = [
     `<style>
@@ -240,13 +259,19 @@ function makeKpis() {
               <span class="counter-val" data-val="${scope2}" data-dec="2">0</span>
               <span style="font-size:13px; font-weight:500; color:var(--muted);">tCO₂e</span>
             </div>
-            <div class="ghg-split-note">* Grid HT, Grid Commercial, Grid Temporary</div>
+            <div class="ghg-split-note">* Grid electricity</div>
           </div>
         </div>
 
       </div>
 
     </div>`,
+    /* Governed component results straight from the frozen release. */
+    kpi('Petrol emissions', petrol, 'tCO₂e', colors.teal, 'fuel', previousValue('petrolEm'), true),
+    kpi('Fleet diesel emissions', valFor(d, d.trDieselEm, month), 'tCO₂e', colors.gold, 'cloud', previousValue('trDieselEm'), true),
+    kpi('DG diesel emissions', valFor(d, d.dgEm, month), 'tCO₂e', colors.orange, 'factory', previousValue('dgEm'), true),
+    kpi('LPG emissions', valFor(d, d.lpgEm, month), 'tCO₂e', colors.violet, 'flame', previousValue('lpgEm'), true),
+    kpi('Grid electricity emissions', scope2, 'tCO₂e', colors.cyan, 'bolt', previousValue('elecEm'), true),
     kpi('Per capita emissions', d.perCapita, 'tCO₂e/person', colors.blue, 'users', null, true, 3),
     kpi('Reduction through renewables', avoid, 'tCO₂e', colors.emerald, 'leaf', previousValue('avoidEm'), true),
     kpi('Carbon saved by green cover', null, 'tCO₂e', colors.emerald, 'tree', null, true)
@@ -323,9 +348,14 @@ function makeKpis() {
     const lpg = valFor(d, d.lpgEm, month);
     const petrolEm = valFor(d, d.petrolEm, month);
     const dieselEm = valFor(d, d.dieselCombo, month);
-    const dieselPct = 'Unavailable';
-    const petrolPct = 'Unavailable';
-    const lpgPct = 'Unavailable';
+    // Display ratio of already-published governed component results (share of
+    // the published fuel components). Needs every component; no factors used.
+    const fuelParts = [petrolEm, dieselEm, lpg];
+    const fuelTotal = fuelParts.every(v => v != null) ? fuelParts.reduce((a, b) => a + b, 0) : null;
+    const share = v => (fuelTotal > 0 && v != null) ? `${(v / fuelTotal * 100).toFixed(1)}%` : 'Unavailable';
+    const dieselPct = share(dieselEm);
+    const petrolPct = share(petrolEm);
+    const lpgPct = share(lpg);
 
     fuelMixWidget.innerHTML = `
       <div class="elec-mix-widget">
@@ -368,8 +398,8 @@ function makeKpis() {
     const perPerson = d.population && wasteTot != null ? (wasteTot * 1000 / d.population) : null;
 
     wasteKpisEl.innerHTML = [
-      kpi('Total waste generated', wasteTot, 'tons', colors.orange, 'trash', null, true, 1),
-      kpi('Total waste diverted from landfill', wasteDiverted, 'tons', colors.emerald, 'shield', null, false, 1),
+      kpi('Total waste generated', wasteTot == null ? null : wasteTot * wasteShow.factor, wasteShow.unit, colors.orange, 'trash', null, true, wasteShow.dec),
+      kpi('Total waste diverted from landfill', wasteDiverted == null ? null : wasteDiverted * wasteShow.factor, wasteShow.unit, colors.emerald, 'shield', null, false, wasteShow.dec),
       kpi('Waste contribution per person', perPerson, 'kg/person', colors.teal, 'users', null, true, 1)
     ].join('');
   }
@@ -846,9 +876,11 @@ function drawCharts() {
     ghgColors.push(colors.gold, colors.orange, colors.teal, colors.violet);
   }
   if (view === 'all' || view === 's2') {
-    ghgLabels.push('HT Grid', 'Comm Grid', 'Temp Grid');
-    ghgData.push(sum(sl(d.htEm)), sum(sl(d.commEm)), sum(sl(d.tempEm)));
-    ghgColors.push(colors.cyan, '#6e97c7', '#4f9a8c');
+    // The release publishes one governed grid-electricity result; the
+    // HT / Commercial / Temporary split is not published, so it is not shown.
+    ghgLabels.push('Grid electricity');
+    ghgData.push(sum(sl(d.elecEm)));
+    ghgColors.push(colors.cyan);
   }
   mk('ghgProfileChart', { type: 'doughnut', data: { labels: ghgLabels, datasets: [{ data: ghgData, backgroundColor: ghgColors, borderWidth: 2, borderColor: dborder }] }, options: dleg });
 
@@ -963,10 +995,11 @@ function drawCharts() {
     }
   });
 
-  const dgVal = sum(sl(d.dgEm)) || 0;
-  const trDieselVal = sum(sl(d.trDieselEm)) || 0;
-  const petrolVal = sum(sl(d.petrolEm)) || 0;
-  const lpgVal = sum(sl(d.lpgEm)) || 0;
+  // A missing component stays missing (null), never a measured 0.
+  const dgVal = sum(sl(d.dgEm));
+  const trDieselVal = sum(sl(d.trDieselEm));
+  const petrolVal = sum(sl(d.petrolEm));
+  const lpgVal = sum(sl(d.lpgEm));
 
   mk('fuelMixChartCanvas', {
     type: 'doughnut',
@@ -994,7 +1027,7 @@ function drawCharts() {
           callbacks: {
             title: function (context) { return context[0].chart.data.labels[context[0].dataIndex]; },
             label: function (context) {
-              return ' ' + context.chart.data.labels[context.dataIndex] + ': ' + Number(context.raw).toLocaleString() + ' tCO₂e';
+              return ' ' + context.chart.data.labels[context.dataIndex] + ': ' + (context.raw == null ? 'Not published' : Number(context.raw).toLocaleString() + ' tCO₂e');
             }
           }
         }
@@ -1003,6 +1036,7 @@ function drawCharts() {
   });
 
   let hStack = null;
+  chartNote('ghgTrendChart', [sl(d.petrolEm).map((_, i) => [d.petrolEm, d.trDieselEm, d.dgEm, d.lpgEm, d.elecEm].some(a => a[i] != null) ? 1 : null)], 'Not published in the current release.');
   mk('ghgTrendChart', {
     type: 'bar',
     data: {
@@ -1012,9 +1046,7 @@ function drawCharts() {
         { label: 'S1: Tr. Diesel', data: sl(d.trDieselEm), backgroundColor: colors.gold, borderRadius: 0, stack: 'Scope1' },
         { label: 'S1: DG Diesel', data: sl(d.dgEm), backgroundColor: colors.orange, borderRadius: 0, stack: 'Scope1' },
         { label: 'S1: LPG', data: sl(d.lpgEm), backgroundColor: colors.violet, borderRadius: 0, stack: 'Scope1' },
-        { label: 'S2: HT Grid', data: sl(d.htEm), backgroundColor: colors.cyan, borderRadius: 0, stack: 'Scope2' },
-        { label: 'S2: Comm Grid', data: sl(d.commEm), backgroundColor: '#6e97c7', borderRadius: 0, stack: 'Scope2' },
-        { label: 'S2: Temp Grid', data: sl(d.tempEm), backgroundColor: '#4f9a8c', borderRadius: 0, stack: 'Scope2' }
+        { label: 'S2: Grid electricity', data: sl(d.elecEm), backgroundColor: colors.cyan, borderRadius: 0, stack: 'Scope2' }
       ]
     },
     options: {
@@ -1047,9 +1079,8 @@ function drawCharts() {
 
   /* Unpublished waste stays absent rather than being coerced to zero, so the
      chart cannot imply a measured 0 kg for a month that was never published. */
-  const wWet = d.wetWaste == null ? null : d.wetWaste / 1000;
-  const wDry = d.dryWaste == null ? null : d.dryWaste / 1000;
-  mk('wastePieChartCanvas', { type: 'pie', data: { labels: ['Wet waste', 'Dry waste'], datasets: [{ data: [wWet, wDry], backgroundColor: [colors.blue, colors.gold], borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: function (context) { return ' ' + context.label + ': ' + (context.raw == null ? 'Not published' : context.raw.toFixed(1) + ' tons'); } } } } } });
+  const wWet = d.wetWaste, wDry = d.dryWaste;  // kg, as published
+  mk('wastePieChartCanvas', { type: 'pie', data: { labels: ['Wet waste', 'Dry waste'], datasets: [{ data: [wWet, wDry], backgroundColor: [colors.blue, colors.gold], borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: function (context) { return ' ' + context.label + ': ' + (context.raw == null ? 'Not published' : (context.raw < 1000 ? context.raw.toFixed(2) + ' kg' : (context.raw / 1000).toFixed(1) + ' tons')); } } } } } });
 
   // Link to the main top bar year selection
   const tmD = d || { wasteBreakdown: [] };
@@ -1110,6 +1141,7 @@ function drawCharts() {
   const waterLabels = months.slice(0, waterMonths);
   const wsl = arr => arr.slice(0, waterMonths);
 
+  chartNote('waterTrendChartCanvas', [wsl(d.waterKL)], 'Not published in the current release.');
   mk('waterTrendChartCanvas', {
     type: 'bar',
     data: {
@@ -1211,14 +1243,14 @@ function drawCharts() {
       const audience = (outreach.audienceReach || []).filter(a => a.reach != null);
       mk('outreachAudienceChart', {
         type: 'doughnut',
-        data: { labels: audience.map(a => a.category), datasets: [{ data: audience.map(a => a.reach), backgroundColor: palette, borderWidth: 2, borderColor: '#fff' }] },
+        data: { labels: audience.map(a => humanizeCode(a.category)), datasets: [{ data: audience.map(a => a.reach), backgroundColor: palette, borderWidth: 2, borderColor: '#fff' }] },
         options: sliceOpts('reach', '62%') // a true donut, per the ask
       });
 
       const thematic = outreach.thematicAreas || [];
       mk('outreachThematicChart', {
         type: 'pie',
-        data: { labels: thematic.map(t => t.category), datasets: [{ data: thematic.map(t => t.programs), backgroundColor: palette, borderWidth: 2, borderColor: '#fff' }] },
+        data: { labels: thematic.map(t => humanizeCode(t.category)), datasets: [{ data: thematic.map(t => t.programs), backgroundColor: palette, borderWidth: 2, borderColor: '#fff' }] },
         options: sliceOpts('programmes', '0%') // a solid pie - Chart.js applies `cutout` to pie too, so this must be explicit
       });
 
@@ -1244,9 +1276,12 @@ function drawCharts() {
   }
 
   // Compute full-year arrays for Energy line charts
-  const cleanZero = arr => arr.map(v => v === 0 ? null : v);
-  const total25 = cleanZero(d25.elecKwh.map((v, i) => v + (d25.reKwh[i] || 0)));
-  const total26 = cleanZero(d26.elecKwh.map((v, i) => v + (d26.reKwh[i] || 0)));
+  // Published zeros stay zeros and missing months stay missing (null).
+  const cleanZero = arr => arr.slice();
+  // Grid + renewable is shown only for a month where the grid figure is published.
+  const totalOf = (grid, re) => grid.map((v, i) => v == null ? null : v + (re[i] == null ? 0 : re[i]));
+  const total25 = totalOf(d25.elecKwh, d25.reKwh);
+  const total26 = totalOf(d26.elecKwh, d26.reKwh);
   // Real on-campus/procured columns from energy_master.csv - no longer an
   // estimated 60/30 split of the combined reKwh total.
   const solar25 = cleanZero(d25.reOnCampusKwh);
@@ -1262,48 +1297,52 @@ function drawCharts() {
   const ds25Opts = { borderColor: '#a1b0a8', backgroundColor: 'transparent', tension: 0.4, borderWidth: 2, borderDash: [4, 4], pointRadius: 0 };
   const ds26Opts = (color, bg) => ({ borderColor: color, backgroundColor: bg, fill: true, tension: 0.4, borderWidth: 3, pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: '#fff', pointBorderColor: color, pointBorderWidth: 2 });
 
+  chartNote('energyTotalLineChart', [total25, total26], 'Not published in the current release.');
   mk('energyTotalLineChart', {
     type: 'line',
     data: {
       labels: months,
       datasets: [
-        { label: '2025', data: total25, ...ds25Opts },
+        ...(total25.some(v => v != null) ? [{ label: '2025', data: total25, ...ds25Opts }] : []),
         { label: '2026', data: total26, ...ds26Opts(colors.lime, 'rgba(90,165,82,.08)') }
       ]
     },
     options: lineOpts
   });
 
+  chartNote('energyGridLineChart', [cleanZero(d25.elecKwh), cleanZero(d26.elecKwh)], 'Not published in the current release.');
   mk('energyGridLineChart', {
     type: 'line',
     data: {
       labels: months,
       datasets: [
-        { label: '2025', data: cleanZero(d25.elecKwh), ...ds25Opts },
+        ...(cleanZero(d25.elecKwh).some(v => v != null) ? [{ label: '2025', data: cleanZero(d25.elecKwh), ...ds25Opts }] : []),
         { label: '2026', data: cleanZero(d26.elecKwh), ...ds26Opts(colors.cyan, 'rgba(58,111,168,.08)') }
       ]
     },
     options: lineOpts
   });
 
+  chartNote('energySolarLineChart', [solar25, solar26], 'Not published separately in the current release.');
   mk('energySolarLineChart', {
     type: 'line',
     data: {
       labels: months,
       datasets: [
-        { label: '2025', data: solar25, ...ds25Opts },
+        ...(solar25.some(v => v != null) ? [{ label: '2025', data: solar25, ...ds25Opts }] : []),
         { label: '2026', data: solar26, ...ds26Opts('#63b3ed', 'rgba(99,179,237,.08)') }
       ]
     },
     options: lineOpts
   });
 
+  chartNote('energyProcuredLineChart', [procured25, procured26], 'Not published separately in the current release.');
   mk('energyProcuredLineChart', {
     type: 'line',
     data: {
       labels: months,
       datasets: [
-        { label: '2025', data: procured25, ...ds25Opts },
+        ...(procured25.some(v => v != null) ? [{ label: '2025', data: procured25, ...ds25Opts }] : []),
         { label: '2026', data: procured26, ...ds26Opts(colors.emerald, 'rgba(28,122,75,.08)') }
       ]
     },
@@ -1482,21 +1521,21 @@ const tables = {};
 /* Flatten the master data into the five explorer views (built once at
    startup - filtering and sorting happen in renderTable). */
 function buildTables() {
-  const rows = []; for (const [year, d] of Object.entries(data)) { months.forEach((m, i) => { if (d.petrolL[i] != null) { rows.push([year, m, 'S1', 'Petrol', d.petrolL[i], 'L', EF.petrol, d.petrolEm[i]]); rows.push([year, m, 'S1', 'Fleet Diesel', d.trDieselL[i], 'L', EF.diesel, d.trDieselEm[i]]); rows.push([year, m, 'S1', 'DG Diesel', d.dgL[i], 'L', EF.diesel, d.dgEm[i]]); rows.push([year, m, 'S2', 'Grid Electricity', d.elecKwh[i], 'kWh', EF.grid, d.elecEm[i]]); } if (d.lpgL[i] != null) rows.push([year, m, 'S1', 'LPG', d.lpgL[i], 'L', EF.lpg, d.lpgEm[i]]); }) }
+  const rows = []; for (const [year, d] of Object.entries(data)) { months.forEach((m, i) => { if (d.petrolL[i] != null) rows.push([year, m, 'S1', 'Petrol', d.petrolL[i], 'L', EF.petrol, d.petrolEm[i]]); if (d.trDieselL[i] != null) rows.push([year, m, 'S1', 'Fleet Diesel', d.trDieselL[i], 'L', EF.diesel, d.trDieselEm[i]]); if (d.dgL[i] != null) rows.push([year, m, 'S1', 'DG Diesel', d.dgL[i], 'L', EF.diesel, d.dgEm[i]]); if (d.elecKwh[i] != null) rows.push([year, m, 'S2', 'Grid Electricity', d.elecKwh[i], 'kWh', EF.grid, d.elecEm[i]]); if (d.lpgL[i] != null) rows.push([year, m, 'S1', 'LPG', d.lpgL[i], 'L', EF.lpg, d.lpgEm[i]]); }) }
   tables.unified = { cols: ['Year', 'Month', 'Scope', 'Source', 'Quantity', 'Unit', 'EF', 'Emissions tCO₂e'], rows };
   tables.fleet = { cols: ['Year', 'Month', 'Petrol L', 'Petrol tCO₂e', 'Diesel L', 'Diesel tCO₂e'], rows: Object.entries(data).flatMap(([year, d]) => months.map((m, i) => d.petrolL[i] != null ? [year, m, d.petrolL[i], d.petrolEm[i], d.trDieselL[i], d.trDieselEm[i]] : null).filter(Boolean)) };
   tables.dg = { cols: ['Year', 'Month', 'DG Diesel L', 'DG Emissions tCO₂e'], rows: Object.entries(data).flatMap(([year, d]) => months.map((m, i) => d.dgL[i] != null ? [year, m, d.dgL[i], d.dgEm[i]] : null).filter(Boolean)) };
-  tables.electricity = { cols: ['Year', 'Month', 'HT kWh', 'Commercial kWh', 'Temporary kWh', 'Emissions tCO₂e'], rows: Object.entries(data).flatMap(([year, d]) => months.map((m, i) => d.htKwh[i] != null ? [year, m, d.htKwh[i], d.commKwh[i], d.tempKwh[i], d.elecEm[i]] : null).filter(Boolean)) };
+  tables.electricity = { cols: ['Year', 'Month', 'Grid kWh', 'Emissions tCO₂e'], rows: Object.entries(data).flatMap(([year, d]) => months.map((m, i) => d.elecKwh[i] != null ? [year, m, d.elecKwh[i], d.elecEm[i]] : null).filter(Boolean)) };
   tables.re = { cols: ['Year', 'Month', 'RE kWh', 'Emission Avoided tCO₂e'], rows: Object.entries(data).flatMap(([year, d]) => months.map((m, i) => d.reKwh[i] != null ? [year, m, d.reKwh[i], d.avoidEm[i]] : null).filter(Boolean)) };
 }
 let curTable = 'unified', sortCol = null, sortDir = 1;
 /* Render the current explorer view through the live search box filter
    and any active column sort. */
-function renderTable() { if (!tables.unified) return; const t = tables[curTable], q = (document.getElementById('search')?.value || '').toLowerCase(); let rows = t.rows.filter(r => r.some(c => String(c).toLowerCase().includes(q))); if (sortCol !== null) { rows = [...rows].sort((a, b) => { let x = a[sortCol], y = b[sortCol]; let nx = parseFloat(String(x).replace(/,/g, '')), ny = parseFloat(String(y).replace(/,/g, '')); return (!isNaN(nx) && !isNaN(ny) ? nx - ny : String(x).localeCompare(String(y))) * sortDir }) } const head = document.querySelector('#dataTable thead'), body = document.querySelector('#dataTable tbody'); if (!head) return; head.innerHTML = '<tr>' + t.cols.map((c, i) => `<th data-c="${i}">${c}${sortCol === i ? (sortDir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('') + '</tr>'; body.innerHTML = rows.map(r => '<tr>' + r.map((c, i) => `<td class="${typeof c === 'number' ? 'num' : ''}">${t.cols[i] === 'Scope' ? `<span class="pill ${c === 'S1' ? 's1' : 's2'}">${c}</span>` : typeof c === 'number' ? fmt(c, Math.abs(c) < 10 ? 3 : 2) : c}</td>`).join('') + '</tr>').join(''); head.querySelectorAll('th').forEach(th => th.onclick = () => { const c = +th.dataset.c; if (sortCol === c) sortDir *= -1; else { sortCol = c; sortDir = 1 } renderTable() }); }
+function renderTable() { if (!tables.unified) return; const t = tables[curTable], q = (document.getElementById('search')?.value || '').toLowerCase(); let rows = t.rows.filter(r => r.some(c => String(c).toLowerCase().includes(q))); if (sortCol !== null) { rows = [...rows].sort((a, b) => { let x = a[sortCol], y = b[sortCol]; let nx = parseFloat(String(x).replace(/,/g, '')), ny = parseFloat(String(y).replace(/,/g, '')); return (!isNaN(nx) && !isNaN(ny) ? nx - ny : String(x).localeCompare(String(y))) * sortDir }) } const head = document.querySelector('#dataTable thead'), body = document.querySelector('#dataTable tbody'); if (!head) return; head.innerHTML = '<tr>' + t.cols.map((c, i) => `<th data-c="${i}">${c}${sortCol === i ? (sortDir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('') + '</tr>'; body.innerHTML = rows.map(r => '<tr>' + r.map((c, i) => `<td class="${typeof c === 'number' ? 'num' : ''}">${t.cols[i] === 'Scope' ? `<span class="pill ${c === 'S1' ? 's1' : 's2'}">${c}</span>` : typeof c === 'number' ? fmt(c, Math.abs(c) < 10 ? 3 : 2) : c == null ? 'Unavailable' : c}</td>`).join('') + '</tr>').join(''); head.querySelectorAll('th').forEach(th => th.onclick = () => { const c = +th.dataset.c; if (sortCol === c) sortDir *= -1; else { sortCol = c; sortDir = 1 } renderTable() }); }
 document.getElementById('search')?.addEventListener('input', renderTable);
 document.querySelectorAll('#tableTabs button').forEach(b => b.onclick = () => { document.querySelectorAll('#tableTabs button').forEach(x => x.classList.remove('active')); b.classList.add('active'); curTable = b.dataset.t; sortCol = null; renderTable(); });
 /* Download the current explorer view as CSV. */
-document.getElementById('exportBtn').onclick = () => { const t = tables[curTable] || tables.unified; const csv = [t.cols.join(',')].concat(t.rows.map(r => r.map(c => `"${c}"`).join(','))).join('\n'); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `kct_${curTable}.csv`; a.click(); };
+document.getElementById('exportBtn').onclick = () => { const t = tables[curTable] || tables.unified; const csv = [t.cols.join(',')].concat(t.rows.map(r => r.map(c => `"${c == null ? '' : c}"`).join(','))).join('\n'); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `kct_${curTable}.csv`; a.click(); };
 
 /* Green Cover zone map: hover/focus pins showing per-zone tree+species
    counts (from green.zones, keyed by the pin's data-zone) plus a cursor-tilt

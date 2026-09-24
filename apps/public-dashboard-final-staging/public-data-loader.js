@@ -115,6 +115,16 @@
     item.reEnergy = item.reKwh[month];
     setMetric(item.lpgL, month, lpg, 'lpg_consumption_litres');
     setCalculation(item.lpgEm, month, lpg, 'lpg_emissions');
+    /* Additive display of already-published governed component results (the
+       project's existing Scope 1 definition: petrol + fleet diesel + DG + LPG).
+       It needs every component: one missing result leaves the subtotal missing
+       rather than treating that component as zero. It is NOT the official
+       total GHG, which stays unavailable while its methodology is under review. */
+    const sumAll = values => values.every(value => value != null)
+      ? Number(values.reduce((total, value) => total + value, 0).toFixed(6)) : null;
+    item.scope1Full[month] = sumAll([item.petrolEm[month], item.trDieselEm[month], item.dgEm[month], item.lpgEm[month]]);
+    item.scope1Selected[month] = item.scope1Full[month];
+    item.dieselCombo[month] = sumAll([item.trDieselEm[month], item.dgEm[month]]);
     /* Governed waste comes from the published release only. The static
        waste_master.csv is historical reference and must never overwrite a
        published month. */

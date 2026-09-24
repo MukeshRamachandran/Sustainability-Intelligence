@@ -222,3 +222,156 @@ test('active display marks full GHG and unresolved methodology values unavailabl
   assert.doesNotMatch(app, /lpgKg/);
   assert.match(app, /'LPG consumption', valFor\(d, d\.lpgL, month\), 'L'/);
 });
+
+// ---- Public dashboard completeness audit --------------------------------
+
+const calc = (code, value, unit = 'tCO2e') => ({
+  calculation_code: code, status: 'available', result_value: value, result_unit: unit, reason: null,
+  activity_value: 1, activity_unit: 'L', factor_value: 1, factor_unit: 'kgCO2e/L'
+});
+function publishedPayload(overrides = {}) {
+  return {
+    release: { version: 'sustainability-2026-09-v1', published_at: '2026-09-24T05:34:32Z', checksum_sha256: 'f'.repeat(64) },
+    schema_version: '1.2', period: { id: 'p', year: 2026, month: 9 },
+    publication_status: {},
+    indicators: {
+      total_ghg_tco2e: { status: 'unavailable', value: null, unit: 'tCO2e', reason: 'methodology_under_review' },
+      avoided_emissions_tco2e: { status: 'unavailable', value: null, unit: 'tCO2e', reason: 'methodology_under_review' },
+      renewable_share_percent: { status: 'unavailable', value: null, unit: '%', reason: 'methodology_under_review' }
+    },
+    transport: {
+      metrics: {
+        transport_petrol_litres: { value: 3443, unit: 'L' }, transport_diesel_litres: { value: 123, unit: 'L' },
+        dg_diesel_litres: { value: 234, unit: 'L' }
+      },
+      calculations: [
+        calc('transport_petrol_emissions', 8.221884), calc('transport_diesel_emissions', 0.332223),
+        calc('dg_diesel_emissions', 0.632034)
+      ]
+    },
+    energy: {
+      metrics: { grid_total_kwh: { value: 3535, unit: 'kWh' }, renewable_total_kwh: { value: 92, unit: 'kWh' } },
+      calculations: [calc('grid_electricity_emissions', 2.569945, 'tCO2e')]
+    },
+    lpg: {
+      metrics: { lpg_consumption_litres: { value: 2, unit: 'L' } },
+      emissions: { status: 'available', value: 0.003114, unit: 'tCO2e', reason: null },
+      calculations: [calc('lpg_emissions', 0.003114)]
+    },
+    water: null, outreach: null, waste: null,
+    ...overrides
+  };
+}
+async function loadDashboardWith(payload) {
+  const routes = { '/api/public/dashboard': payload, '/api/public/dashboard/history': [payload] };
+  const window = { location: { hostname: '127.0.0.1', port: '3001' } };
+  const fetchImpl = async url => (routes[url]
+    ? { ok: true, json: async () => routes[url], text: async () => '' }
+    : { ok: false, text: async () => '' });
+  const sandbox = { window, fetch: fetchImpl, Object, Number, String, Error, Array, Math, Date, Promise, JSON };
+  vm.runInNewContext(read('public-api.js'), sandbox);
+  vm.runInNewContext(read('public-data-loader.js'), sandbox);
+  return window.loadDashboardData();
+}
+
+test('governed emission components reach the dashboard arrays from the frozen release', async () => {
+  const { data, history } = await loadDashboardWith(publishedPayload());
+  const item = data['2026'], sep = 8;
+  assert.equal(history.releases.length, 1, 'one genuinely published month is not a history failure');
+  assert.equal(item.petrolEm[sep], 8.221884);
+  assert.equal(item.trDieselEm[sep], 0.332223);
+  assert.equal(item.dgEm[sep], 0.632034);
+  assert.equal(item.lpgEm[sep], 0.003114);
+  assert.equal(item.elecEm[sep], 2.569945);
+  // Every other month is missing, never zero.
+  item.petrolEm.forEach((value, index) => { if (index !== sep) assert.equal(value, null); });
+  item.elecEm.forEach((value, index) => { if (index !== sep) assert.equal(value, null); });
+});
+
+test('Scope 1 and combined diesel are additive displays of published components, never official totals', async () => {
+  const { data } = await loadDashboardWith(publishedPayload());
+  const item = data['2026'], sep = 8;
+  assert.equal(item.scope1Full[sep], 9.189255);
+  assert.equal(item.dieselCombo[sep], 0.964257);
+  // The official inventory indicators stay unavailable: nothing sums into them.
+  assert.equal(item.totalGHG, null);
+  assert.equal(item.avoided, null);
+  assert.equal(item.reShare, null);
+});
+
+test('a missing component leaves Scope 1 missing instead of treating it as zero', async () => {
+  const payload = publishedPayload();
+  payload.lpg = { metrics: { lpg_consumption_litres: { value: 2, unit: 'L' } }, calculations: [] };
+  const { data } = await loadDashboardWith(payload);
+  const item = data['2026'], sep = 8;
+  assert.equal(item.lpgEm[sep], null);
+  assert.equal(item.scope1Full[sep], null);
+  assert.equal(item.scope1Selected[sep], null);
+  // Diesel does not depend on LPG, so it is still derived.
+  assert.equal(item.dieselCombo[sep], 0.964257);
+});
+
+test('GHG charts use the governed grid aggregate, not an unpublished per-connection split', () => {
+  const app = read('app.js');
+  assert.match(app, /ghgLabels\.push\('Grid electricity'\)/);
+  assert.match(app, /label: 'S2: Grid electricity', data: sl\(d\.elecEm\)/);
+  assert.doesNotMatch(app, /sl\(d\.(?:htEm|commEm|tempEm)\)/);
+  for (const title of ['Petrol emissions', 'Fleet diesel emissions', 'DG diesel emissions', 'LPG emissions', 'Grid electricity emissions']) {
+    assert.ok(app.includes(`kpi('${title}'`), `${title} card must exist on the GHG page`);
+  }
+});
+
+test('the official Total GHG, avoided emissions and renewable share stay unavailable', () => {
+  const app = read('app.js');
+  const loader = read('public-data-loader.js');
+  assert.match(loader, /item\.totalGHG = window\.KCOSMOSPublicAPI\.indicator\(publication\.raw, 'total_ghg_tco2e'\)\.value/);
+  assert.match(app, /const net = null;/);
+  assert.match(app, /Methodology under review/);
+  // Nothing in the page derives the official total from Scope 1 + Scope 2.
+  assert.doesNotMatch(app, /Calculations\.(?:grossEmissions|netCarbonIndicator|scope1Total|scope2Total)/);
+  assert.doesNotMatch(loader, /totalGHG\s*=\s*[^w]*(?:scope1|elecEm)/);
+});
+
+test('missing values are shown as unavailable and are never coerced to zero', () => {
+  const app = read('app.js');
+  assert.doesNotMatch(app, /const (?:dgVal|trDieselVal|petrolVal|lpgVal) = [^;]*\|\| 0/);
+  assert.match(app, /c == null \? 'Unavailable' : c/);
+  assert.match(app, /"\$\{c == null \? '' : c\}"/);
+  assert.doesNotMatch(app, /const cleanZero = arr => arr\.map\(v => v === 0/);
+  assert.match(app, /v == null \? null : v \+ \(re\[i\] == null \? 0 : re\[i\]\)/);
+});
+
+test('single-month history is explained rather than implying unpublished months', () => {
+  const app = read('app.js');
+  assert.match(app, /Insufficient published history/);
+  for (const chart of ['ghgTrendChart', 'energyTotalLineChart', 'energyGridLineChart', 'waterTrendChartCanvas']) {
+    assert.ok(app.includes(`chartNote('${chart}'`), chart);
+  }
+  // An all-empty prior-year series is dropped instead of drawn as a legend entry.
+  assert.match(app, /\.some\(v => v != null\) \? \[\{ label: '2025'/);
+});
+
+test('waste below one tonne is shown in kg so a real value is not rounded to 0.0 tons', () => {
+  const app = read('app.js');
+  assert.match(app, /function wasteDisplay\(tons\)/);
+  assert.match(app, /unit: 'kg', dec: 2/);
+  assert.doesNotMatch(app, /'Total waste generated', wasteTot, 'tons'/);
+});
+
+test('Data Explorer builds each source row on its own published value', () => {
+  const app = read('app.js');
+  assert.match(app, /if \(d\.elecKwh\[i\] != null\) rows\.push\(\[year, m, 'S2', 'Grid Electricity'/);
+  assert.match(app, /tables\.electricity = \{ cols: \['Year', 'Month', 'Grid kWh'/);
+});
+
+test('active dashboard files hold no emission-factor formula or operational CSV authority', () => {
+  for (const file of ['app.js', 'public-api.js', 'public-data-loader.js', 'calculations.js', 'walkthrough.js', 'mobile.js', 'weather.js']) {
+    const source = read(file).replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    assert.doesNotMatch(source, /2\.388|2\.701|0\.727|1\.5571|2\.939/, file);
+    assert.doesNotMatch(source, /(?:transport|dg|lpg|energy|water|outreach|waste)_master\.csv/, file);
+    assert.doesNotMatch(source, /dashboard_master/, file);
+  }
+  // Only static institutional files are still fetched by the loader.
+  const fetched = [...read('public-data-loader.js').matchAll(/optionalText\('([^']+)'\)/g)].map(match => match[1]).sort();
+  assert.deepEqual(fetched, ['data/dashboard_metadata.csv', 'data/green_master.csv', 'data/population_master.csv']);
+});
