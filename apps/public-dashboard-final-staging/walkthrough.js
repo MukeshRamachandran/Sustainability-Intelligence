@@ -21,37 +21,6 @@
   var REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var FINE_POINTER = window.matchMedia('(pointer: fine)').matches;
 
-  /* ------------------------------------------------------------------
-     Equivalency factors — every "in other words" line is computed live
-     from these. Correct a factor here and every act updates.
-     ------------------------------------------------------------------ */
-  var WT_EQUIV = {
-    treeKgYr: 21,      // kg CO₂ absorbed per mature tree per year
-    homeKwhYr: 1200,   // kWh consumed per Indian household per year
-    carKgKm: 0.17,     // kg CO₂e per km, average petrol car
-    indiaPerCap: 2.0   // tCO₂e per person per year, India average
-  };
-
-  // n = act number 1..8, v = the live card value. Returns {sign, html} or null.
-  function equivFor(n, v) {
-    if (v == null || isNaN(v)) return null;
-    var f = WT_EQUIV;
-    function b(x, dec) { return '<b>' + fmtNum(x, dec || 0) + '</b>'; }
-    switch (n) {
-      case 1: return 'the yearly absorption work of ' + b(v * 1000 / f.treeKgYr) + ' mature trees';
-      case 2: return 'enough to run ' + b(v / f.homeKwhYr) + ' Indian homes for a year';
-      case 3: return 'a full year of clean power for ' + b(v / f.homeKwhYr) + ' homes';
-      case 4: return b(v * 1000 / f.carKgKm) + ' km of petrol driving that never happened';
-      case 5: return 'equal to driving a petrol car ' + b(v * 1000 / f.carKgKm) + ' km';
-      case 6: return 'it would take ' + b(v * 1000 / f.treeKgYr) + ' mature trees a year to absorb this';
-      case 7: return 'about ' + b(v / f.indiaPerCap * 100) + '% of the average Indian’s annual footprint';
-      case 8: return v < 0
-        ? 'a net removal — the yearly work of ' + b(Math.abs(v) * 1000 / f.treeKgYr) + ' mature trees'
-        : 'still ' + b(v * 1000 / f.treeKgYr) + ' mature trees of absorption away from zero';
-    }
-    return null;
-  }
-
   // mix two hex colours; used to tint the letterbox bars toward each accent
   function hexMix(a, b, t) {
     var pa = /^#([0-9a-f]{6})$/i.exec(a), pb = /^#([0-9a-f]{6})$/i.exec(b);
@@ -75,64 +44,60 @@
 
   var WT_STORY = [
     {
-      title: 'Total carbon footprint (gross)',
-      video: 'media/industrynew.mp4',
-      head: ['The Weight of', 'What We Make'],
-      def: 'Every litre of fuel burned and every unit of electricity drawn, converted into a single number — the total greenhouse gas this campus released before a single offset is counted.',
-      chips: ['Scope 1 + Scope 2', 'Before offsets']
-    },
-    {
-      title: 'Total electricity consumption',
-      video: 'media/elecmeter.mp4',
-      head: ['The Current', 'Beneath Everything'],
-      def: 'The aggregate electrical energy drawn by every building, laboratory, hostel and streetlight on campus. It is the quiet constant standing behind almost everything else measured here.',
-      chips: ['Grid + on-site solar', 'Metered at source']
-    },
-    {
       title: 'Renewable energy used',
-      video: 'media/solar-kpi.mp4',
-      storyVideo: 'media/solarbuild.mp4',
-      head: ['Light, Borrowed', 'and Returned'],
-      def: 'Energy generated from sources that replenish themselves — here, overwhelmingly the sun. Every unit produced on campus is a unit the grid never had to burn coal to supply.',
-      chips: ['Solar generation', 'Displaces grid power']
+      video: 'media/solarbuild.mp4',
+      head: ['Energy from', 'Renewable Sources'],
+      def: 'The renewable energy value published for the selected period. This story does not estimate emissions avoided from energy use.',
+      chips: ['Public release value', 'No emissions estimate']
     },
     {
-      title: 'Emission avoided',
+      title: 'Total grid electricity consumed',
+      video: 'media/elecmeter.mp4',
+      head: ['Electricity from', 'the Grid'],
+      def: 'The grid electricity total published for the selected reporting period.',
+      chips: ['Public release value', 'Selected period']
+    },
+    {
+      title: 'Total water recycled',
+      video: 'media/rewater.mp4',
+      head: ['Water Given', 'Another Use'],
+      def: 'The recycled-water total reported in the public release for the selected period.',
+      chips: ['Public release value', 'Selected period']
+    },
+    {
+      title: 'Total waste generated',
+      video: 'media/waste2.mp4',
+      head: ['Waste Recorded', 'for This Period'],
+      def: 'The total waste value reported in the public release. This story does not estimate waste emissions.',
+      chips: ['Public release value', 'No emissions estimate']
+    },
+    {
+      title: 'Landfill diversion',
+      video: 'media/convwaste.mp4',
+      head: ['Landfill', 'Diversion'],
+      def: 'This story preserves the Overview card’s existing presentation and does not calculate or infer a diversion percentage.',
+      chips: ['Existing dashboard presentation']
+    },
+    {
+      title: 'Total water usage',
+      video: 'media/water.mp4',
+      head: ['Water Used', 'Across Campus'],
+      def: 'The water-usage total published for the selected reporting period.',
+      chips: ['Public release value', 'Selected period']
+    },
+    {
+      title: 'Total green cover',
       video: 'media/leavesfall.mp4',
-      storyVideo: 'media/natureview.mp4',
-      head: ['The Carbon', 'That Never Was'],
-      def: 'The greenhouse gas that would have entered the atmosphere had the campus drawn this same energy from the grid instead of generating it cleanly. It is measured in absence — emissions that never happened.',
-      chips: ['Methodology under review', 'No published result']
+      head: ['Green Cover', 'Reference'],
+      def: 'The existing green-cover reference value shown by the dashboard. No carbon-sequestration value is derived in this story.',
+      chips: ['Existing reference presentation', 'No sequestration estimate']
     },
     {
-      title: 'Scope 1 emissions',
-      video: 'media/fuelpour.mp4',
-      storyVideo: 'media/busdepot.mp4',
-      head: ['What We', 'Burn Ourselves'],
-      def: 'Direct emissions from sources the institution owns and controls: the diesel in its buses, the petrol in its vehicles, the fuel feeding its generators. These cannot be purchased away, only designed away.',
-      chips: ['Petrol · Diesel · DG sets', 'Direct combustion']
-    },
-    {
-      title: 'Scope 2 emissions',
-      video: 'media/electricspark.mp4',
-      storyVideo: 'media/electri.mp4',
-      head: ['The Grid', 'We Inherit'],
-      def: 'Indirect emissions embedded in the electricity the campus buys. The carbon was released somewhere else, at a power station, on this campus’s behalf — which makes the grid’s fuel mix part of our footprint.',
-      chips: ['Purchased electricity', 'Governed result · published API only']
-    },
-    {
-      title: 'Per capita emissions',
-      video: 'media/queper.mp4',
-      head: ['One Campus, Divided', 'by Its People'],
-      def: 'The total footprint shared across every student and staff member. It normalises the picture: an institution can grow in size and still, by this measure, grow lighter on the world.',
-      chips: ['Footprint ÷ population', 'Growth-adjusted']
-    },
-    {
-      title: 'Net carbon impact',
+      title: 'Outreach impact',
       video: 'media/earth.mp4',
-      head: ['What', 'Remains'],
-      def: 'Gross emissions less the emissions avoided — the honest, settled figure. Everything the campus released, set against everything it prevented. This is the number that moves an institution toward carbon neutrality.',
-      chips: ['Gross − avoided', 'The bottom line']
+      head: ['People and', 'Community'],
+      def: 'The outreach participant total published for the selected reporting period.',
+      chips: ['Public release value', 'Selected period']
     }
   ];
 
@@ -150,13 +115,10 @@
     kind: 'outro',
     accent: '#1c7a4b',
     video: 'media/micronew.mp4',
-    eyebrow: 'The ledger, closed',
-    head: ['Where', 'We Stand'],
-    lead: 'Everything released, set against everything prevented.',
-    // the closing sentence depends on which way the ledger actually fell
-    below: 'The figure above is below zero: over this period the campus kept more carbon out of the atmosphere than it put in.',
-    above: 'The figure above is still above zero: over this period the campus released more carbon than it managed to prevent.',
-    mirrors: 'Net carbon impact'
+    eyebrow: 'Publication note',
+    head: ['A Clear View', 'of Published Data'],
+    def: 'Values in this story follow the public dashboard for the selected period. Unavailable indicators remain unavailable; no substitute emissions or equivalency estimates are derived.',
+    chips: ['Published data', 'No frontend emissions calculations']
   };
 
   /* ------------------------------------------------------------------ */
@@ -227,6 +189,7 @@
         dec: counter ? parseInt(counter.getAttribute('data-dec'), 10) || 0 : 0,
         unit: unit,
         na: unavailable || unit === 'N/A',
+        statusText: s ? s.textContent.trim() : '',
         accent: (card.style.getPropertyValue('--a') || '#1c7a4b').trim(),
         video: src ? src.getAttribute('src') : null,
         trend: trend
@@ -294,7 +257,7 @@
     var haze = el('div', 'wt-haze');
     plate.appendChild(haze);
     var shafts = [];
-    if (cfg.kind === 'kpi' && (cfg.n === 2 || cfg.n === 3)) {   // the two energy acts
+    if (cfg.kind === 'kpi' && (cfg.n === 1 || cfg.n === 2)) {   // the two energy acts
       for (var si = 0; si < 2; si++) {
         var sh = el('div', 'wt-shaft');
         sh.style.left = (18 + si * 34) + '%';
@@ -333,40 +296,10 @@
     });
     copy.appendChild(head);
 
-    var valEl = null, valLine = null, ledger = null;
-    if (cfg.ledger) {
-      // closing card: animated arithmetic instead of a single number
-      var lg = el('div', 'wt-ledger');
-      var rows = [
-        { k: 'Gross emissions', v: cfg.ledger.gross },
-        { k: '− Avoided', v: cfg.ledger.avoided }
-      ];
-      ledger = { nums: [], vals: [cfg.ledger.gross, cfg.ledger.avoided, cfg.ledger.net], rows: [], rule: null, netRow: null };
-      rows.forEach(function (r) {
-        var row = el('div', 'wt-ledger-row');
-        row.appendChild(el('span', 'k', r.k));
-        var num = el('span', 'n', fmtNum(0, cfg.dec));
-        row.appendChild(num);
-        lg.appendChild(row);
-        ledger.rows.push(row);
-        ledger.nums.push(num);
-      });
-      ledger.rule = el('div', 'wt-ledger-rule');
-      lg.appendChild(ledger.rule);
-      var netRow = el('div', 'wt-ledger-row wt-ledger-net');
-      netRow.appendChild(el('span', 'k', 'Net impact'));
-      var netNum = el('span', 'n', fmtNum(0, cfg.dec));
-      netNum.appendChild(el('small', null, ' ' + cfg.unit));
-      netRow.appendChild(netNum);
-      lg.appendChild(netRow);
-      ledger.rows.push(netRow);
-      ledger.nums.push(netNum);
-      ledger.netRow = netRow;
-      copy.appendChild(lg);
-      ledger.root = lg;
-    } else if (cfg.value != null || cfg.na) {
+    var valEl = null, valLine = null;
+    if (cfg.value != null || cfg.na) {
       var metric = el('div', 'wt-metric');
-      valEl = el('span', 'wt-val', cfg.na ? '—' : fmtNum(0, cfg.dec));
+      valEl = el('span', 'wt-val', cfg.na ? 'Unavailable' : fmtNum(0, cfg.dec));
       metric.appendChild(valEl);
       if (!cfg.na) metric.appendChild(el('span', 'wt-unit', cfg.unit));
       valLine = el('div', 'wt-val-line');
@@ -380,16 +313,6 @@
       def.appendChild(el('span', 'wt-w', w));
     });
     copy.appendChild(def);
-
-    var equiv = null;
-    if (cfg.equiv) {
-      equiv = el('div', 'wt-equiv');
-      equiv.appendChild(el('span', 'wt-equiv-sign', '≈'));
-      var eqText = el('span');
-      eqText.innerHTML = cfg.equiv;      // built by equivFor(); only <b> tags inside
-      equiv.appendChild(eqText);
-      copy.appendChild(equiv);
-    }
 
     var chipList = (cfg.chips || []).slice();
     if (cfg.trend) chipList.push(cfg.trend);
@@ -419,9 +342,9 @@
 
     return {
       cfg: cfg, stage: stage, plate: plate, media: media, mediaWrap: mediaWrap, copy: copy,
-      haze: haze, edge: edge, shafts: shafts, equiv: equiv,
-      valEl: valEl, valLine: valLine, ledger: ledger,
-      value: (cfg.ledger || cfg.na) ? null : (cfg.value != null ? cfg.value : null),
+      haze: haze, edge: edge, shafts: shafts,
+      valEl: valEl, valLine: valLine,
+      value: cfg.na ? null : (cfg.value != null ? cfg.value : null),
       dec: cfg.dec || 0, centered: centered,
       eyebrow: eyebrow, head: head, def: def,
       rule: copy.querySelector('.wt-rule'),
@@ -451,36 +374,18 @@
         title: s.title,
         head: s.head,
         def: s.def,
-        chips: s.chips,
+        chips: na ? [(c && c.statusText) || 'Unavailable'] : s.chips,
         video: s.storyVideo || (c && c.video) || s.video,
         accent: (c && c.accent) || '#1c7a4b',
         value: c ? c.value : null,
         dec: c ? c.dec : 2,
         unit: c ? c.unit : '',
         na: na,
-        equiv: (c && !na) ? equivFor(i + 1, c.value) : null,
         trend: c ? c.trend : null
       });
     });
 
-    var net = cards[OUTRO.mirrors];
-    var netVal = net ? net.value : null;
-    var grossC = cards['Total carbon footprint (gross)'];
-    var avoidC = cards['Emission avoided'];
-    var outro = Object.assign({}, OUTRO, {
-      value: netVal,
-      dec: net ? net.dec : 2,
-      unit: net ? net.unit : 'tCO₂e',
-      na: net ? net.na : false,
-      accent: (net && net.accent) || '#1c7a4b',
-      def: OUTRO.lead + ' ' + (netVal < 0 ? OUTRO.below : OUTRO.above),
-      ledger: {
-        gross: grossC ? grossC.value : null,
-        avoided: avoidC ? avoidC.value : null,
-        net: netVal
-      }
-    });
-    list.push(outro);
+    list.push(Object.assign({}, OUTRO));
 
     return list;
   }
@@ -495,8 +400,6 @@
       words: a.def.querySelectorAll('.wt-w'),
       chips: a.copy.querySelectorAll('.wt-chip'),   // .wt-chips and the intro's .wt-sub
       metric: a.metric,
-      equiv: a.equiv,
-      ledger: a.ledger,
       eyebrow: a.eyebrow,
       hair: a.hair,
       rule: a.rule,
@@ -510,7 +413,6 @@
     gsap.set(p.words, { y: 16, opacity: 0, filter: 'blur(6px)' });
     if (p.chips.length) gsap.set(p.chips, { y: 14, opacity: 0 });
     if (p.metric) gsap.set(p.metric, { y: 26, opacity: 0 });
-    if (p.ledger) gsap.set(p.ledger.rows, { y: 18, opacity: 0 });
     if (p.cta) gsap.set(p.cta, { y: 18, opacity: 0 });
     gsap.set(p.eyebrow, { clipPath: 'inset(0 100% 0 0)' });
     gsap.set(p.hair, { width: 0 });
@@ -534,16 +436,12 @@
 
     if (REDUCED) {
       var tl0 = gsap.timeline();
-      tl0.set(nodes(p.lines, p.words, p.chips, p.metric, p.cta, p.ledger && p.ledger.rows),
+      tl0.set(nodes(p.lines, p.words, p.chips, p.metric, p.cta),
         { yPercent: 0, y: 0, rotate: 0, opacity: 1, filter: 'blur(0px)' });
       tl0.set(p.eyebrow, { clipPath: 'inset(0 0% 0 0)' });
       tl0.set(p.hair, { width: hairTo });
       tl0.set(p.rule, { scaleY: 1 });
-      if (p.ledger) {
-        p.ledger.nums.forEach(function (numEl, k) {
-          numEl.childNodes[0].nodeValue = fmtNum(p.ledger.vals[k], a.dec);
-        });
-      } else if (a.value != null && a.valEl) {
+      if (a.value != null && a.valEl) {
         a.valEl.childNodes[0].nodeValue = fmtNum(a.value, a.dec);
       }
       return tl0;
@@ -555,7 +453,7 @@
       .to(p.hair, { width: hairTo, duration: 1.25 }, .12)
       .to(p.lines, { yPercent: 0, rotate: 0, opacity: 1, duration: 1.15, stagger: .09 }, .10);
     if (p.metric) tl.to(p.metric, { y: 0, opacity: 1, duration: .95, ease: 'power3.out' }, .40);
-    if (!p.ledger && a.value != null && a.valEl) {
+    if (a.value != null && a.valEl) {
       // Counts up once, on the discrete section-enter reveal - not tied to
       // scroll position, so the number never shows an intermediate/"wrong"
       // value while scrolling around inside the act. Settles and stays put
@@ -566,22 +464,9 @@
       }), .40);
     }
     tl.to(p.words, { y: 0, opacity: 1, filter: 'blur(0px)', duration: .8, stagger: .012, ease: 'power2.out' }, .48);
-    if (p.equiv) tl.to(p.equiv, { clipPath: 'inset(0 0% 0 0)', duration: .9, ease: 'power2.inOut' }, .78);
     if (p.chips.length) tl.to(p.chips, { y: 0, opacity: 1, duration: .7, stagger: .06, ease: 'power2.out' }, .74);
     if (p.cta) tl.to(p.cta, { y: 0, opacity: 1, duration: .8, ease: 'power3.out' }, .86);
 
-    if (p.ledger) {
-      // the arithmetic reveal: rows enter, gross counts, avoided counts,
-      // the rule draws, then the net figure lands and takes the accent
-      var lg = p.ledger;
-      tl.to(lg.rows, { y: 0, opacity: 1, duration: .7, stagger: .14, ease: 'power3.out' }, .35)
-        .add(countTween(lg.nums[0], lg.vals[0], a.dec, .8), .55)
-        .add(countTween(lg.nums[1], lg.vals[1], a.dec, .8), 1.05)
-        .to(lg.rule, { scaleX: 1, duration: .7, ease: 'power2.inOut' }, 1.45)
-        .add(countTween(lg.nums[2], lg.vals[2], a.dec, 1.0), 1.7)
-        .fromTo(lg.netRow, { scale: .96, transformOrigin: '0% 50%' },
-          { scale: 1, duration: .6, ease: 'back.out(1.6)' }, 2.45);
-    }
     return tl;
   }
 
@@ -651,8 +536,8 @@
       // depth-ordered layers rather than as one slab.
       var exitLayers = [
         [a.eyebrow, -104], [a.head, -92],
-        [a.ledger ? a.ledger.root : a.metric, -74],
-        [a.def, -56], [a.equiv, -48], [a.chipsEl, -40]
+        [a.metric, -74],
+        [a.def, -56], [a.chipsEl, -40]
       ];
       tl.to(a.mediaWrap || a.media, { scale: 1.12, duration: .42, immediateRender: false }, .58)
         .to(a.stage, { opacity: 0, duration: .42, ease: 'power1.in', immediateRender: false }, .58)
@@ -1848,8 +1733,8 @@
     if (window.location.search.indexOf('story=true') !== -1 || window.location.hash === '#story') {
       var checkReady = setInterval(function() {
         // Also wait for the overview KPI grid to actually have rendered
-        // cards - data now loads asynchronously (data-loader.js fetches
-        // the CSVs), so introGone()/page-active can both be true before
+        // cards - the published data loads asynchronously through the public
+        // API, so introGone()/page-active can both be true before
         // makeKpis() has run even once, which would otherwise open the
         // story onto an empty readCards() map (every act showing 0).
         var kpisReady = document.querySelectorAll('#overviewKpis .kpi').length > 0;

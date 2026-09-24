@@ -191,17 +191,12 @@ function makeKpis() {
   document.getElementById('overviewKpis').innerHTML = [
     kpi('Renewable energy used', re, 'kWh', colors.emerald, 'sun', previousValue('reKwh'), false, 0, 'solarvideo'),
     kpi('Total grid electricity consumed', elec, 'kWh', colors.cyan, 'bolt', previousValue('elecKwh'), true, 0, 'elecmetervideo'),
-    kpi('Operational GHG emissions — Scope 1 + Scope 2', gross, 'tCO₂e', colors.orange, 'cloud', null, true, 3),
-    kpi('Operational GHG per capita', operationalPerCapita, 'kgCO₂e/person', colors.blue, 'users', null, true, 3),
-    kpi('Waste per person', valFor(d, d.wastePerCapita, month), 'kg/person', colors.teal, 'users', null, true, 2),
     kpi('Total water recycled', hasPublication ? waterRecycled : null, 'KL', colors.cyan, 'repeat', null, false, 0, 'rewatervideo'),
     kpi('Total waste generated', wasteTot == null ? null : wasteTot * wasteShow.factor, wasteShow.unit, colors.orange, 'trash', null, true, wasteShow.dec, 'convwastevideo'),
     kpi('Landfill diversion', null, '%', colors.lime, 'shield', null, false, 1, 'landfillvideo'),
     kpi('Total water usage', waterKL, 'KL', colors.cyan, 'droplet', null, true, 0, 'watervideo'),
     kpi('Total green cover', green.totalGreenCoverPct, '%', colors.emerald, 'tree', null, false, 0, 'leavesvideo'),
-    kpi('Outreach impact', outreachForPeriod ? outreach.participantsServed : null, 'people', colors.gold, 'users', null, false, 0, 'earthvideo'),
-    kpi('Scope 1 emissions', scope1, 'tCO₂e', colors.orange, 'cloud', previousValue('scope1Full'), true),
-    kpi('Scope 2 emissions', scope2, 'tCO₂e', colors.cyan, 'bolt', previousValue('elecEm'), true)
+    kpi('Outreach impact', outreachForPeriod ? outreach.participantsServed : null, 'people', colors.gold, 'users', null, false, 0, 'earthvideo')
   ].join('');
   document.getElementById('ghgKpis').innerHTML = [
     `<style>
@@ -784,14 +779,14 @@ function makeKpis() {
 
 }
 /* Which figure the hero balance card is showing: gross / net / avoid. */
-let currentHeroView = 'gross';
+let currentHeroView = 'net';
 
 /* Fill the hero balance card and wire its three tabs; every call replays
    the count-up and the indicator-line sweep for the active tab. */
 function heroGHG(gross, year, month, d, avoid, operationalPerCapita) {
   // static figures on the card
-  document.getElementById('balGrossVal').textContent = fmt(gross, 1);
-  document.getElementById('balNetVal').textContent = fmt(operationalPerCapita, 2);
+  document.getElementById('balGrossVal').textContent = fmt(gross, 3);
+  document.getElementById('balNetVal').textContent = fmt(operationalPerCapita, 3);
   document.getElementById('balAvoidVal').textContent = fmt(avoid, 1);
   document.getElementById('balPeriod').textContent = periodLabel(year, month);
 
@@ -809,17 +804,17 @@ function heroGHG(gross, year, month, d, avoid, operationalPerCapita) {
     // pick the figure for the active view; the bar's fill never changes, only which slice is emphasized (via CSS)
     if (currentHeroView === 'net') {
       targetValue = operationalPerCapita;
-      labelEl.textContent = "Operational GHG per Person";
+      labelEl.textContent = "Operational GHG per person";
       unitEl.textContent = "kgCO₂e/person";
       document.getElementById('tab-net').classList.add('active');
     } else if (currentHeroView === 'avoid') {
       targetValue = avoid;
-      labelEl.textContent = "Emissions Avoided by Renewables";
-      unitEl.textContent = "tCO₂e";
+      labelEl.textContent = "Reduction by renewables";
+      unitEl.textContent = "Methodology under review";
       document.getElementById('tab-avoid').classList.add('active');
     } else {
       targetValue = gross;
-      labelEl.textContent = "Operational GHG Emissions — Scope 1 + Scope 2";
+      labelEl.textContent = "Operational GHG";
       unitEl.textContent = "tCO₂e";
       document.getElementById('tab-gross').classList.add('active');
     }
@@ -828,18 +823,18 @@ function heroGHG(gross, year, month, d, avoid, operationalPerCapita) {
       mainValueEl.textContent = 'Unavailable';
       unitEl.textContent = currentHeroView === 'avoid'
         ? 'Methodology under review'
-        : (currentHeroView === 'net' ? 'Population or emissions unavailable' : 'Required Scope 1/2 data unavailable');
+        : (currentHeroView === 'net' ? 'Population or emissions unavailable' : 'Unavailable');
     } else if (typeof reduceMotion !== 'undefined' && !reduceMotion) {
       let obj = { val: 0 };
       gsap.to(obj, {
         val: targetValue,
         duration: 1.5,
         ease: 'power2.out',
-        onUpdate: () => { mainValueEl.textContent = fmt(obj.val, 2); },
-        onComplete: () => { mainValueEl.textContent = fmt(targetValue, 2); }
+        onUpdate: () => { mainValueEl.textContent = fmt(obj.val, 3); },
+        onComplete: () => { mainValueEl.textContent = fmt(targetValue, 3); }
       });
     } else {
-      mainValueEl.textContent = fmt(targetValue, 2);
+      mainValueEl.textContent = fmt(targetValue, 3);
     }
   }
 

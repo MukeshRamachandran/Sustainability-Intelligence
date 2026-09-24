@@ -22,7 +22,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
   <script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
   <link rel="stylesheet" href="styles.css?v=23">
-  <link rel="stylesheet" href="walkthrough.css?v=11">
+  <link rel="stylesheet" href="walkthrough.css?v=12">
   <link rel="stylesheet" href="mobile.css?v=1">
 </head>
 
@@ -101,7 +101,7 @@
     <div class="hero-row">
       <section class="balance square-kpi" style="flex: 1; max-width: 50%;">
         <div class="bal-top">
-          <span id="balLabel">Operational GHG Emissions — Scope 1 + Scope 2</span>
+          <span id="balLabel">Operational GHG per person</span>
           <span id="balPeriod">—</span>
         </div>
 
@@ -115,22 +115,22 @@
 
           <div class="bal-legend" role="tablist">
             <div class="bal-item active" id="tab-net" style="cursor: pointer;">
-              <span class="k"><i class="dot" style="background:var(--blue)"></i>Per Capita Operational GHG</span>
+              <span class="k"><i class="dot" style="background:var(--blue)"></i>Per capita</span>
               <span class="v" id="balNetVal">--</span>
             </div>
             <div class="bal-item" id="tab-gross" style="cursor: pointer;">
-              <span class="k"><i class="dot" style="background:var(--orange)"></i>Operational GHG · Scope 1 + 2</span>
+              <span class="k"><i class="dot" style="background:var(--orange)"></i>Operational GHG</span>
               <span class="v" id="balGrossVal">--</span>
             </div>
             <div class="bal-item" id="tab-avoid" style="cursor: pointer;">
-              <span class="k"><i class="dot" style="background:var(--green)"></i>Avoided emissions · under review</span>
+              <span class="k"><i class="dot" style="background:var(--green)"></i>Reduction by renewables · Methodology under review</span>
               <span class="v" id="balAvoidVal">--</span>
             </div>
           </div>
         </div>
         <div class="bal-footer"
           style="font-size: 11px; color: var(--muted, #8a988f); margin-top: auto; padding-top: 12px;">
-          *This operational indicator includes Scope 1 + Scope 2 only; Scope 3 is not included.
+          *Operational GHG covers the governed Scope 1 and Scope 2 boundary only. Scope 3 is not included.
         </div>
       </section>
 
@@ -690,10 +690,10 @@
   <script src="calculations.js?v=2"></script>
   <script src="public-api.js?v=2"></script>
   <script src="public-data-loader.js?v=4"></script>
-  <script src="app.js?v=24"></script>
+  <script src="app.js?v=25"></script>
   <script src="weather.js?v=6"></script>
   <script src="vendor/gsap-scrolltrigger.min.js"></script>
-  <!-- Carbon Story is disabled for this production staging contract until its illustrative equivalents are governed. -->
+  <script src="walkthrough.js?v=1"></script>
   <script src="mobile.js?v=1"></script>
 </body>
 

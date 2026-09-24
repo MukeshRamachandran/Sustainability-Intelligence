@@ -267,7 +267,7 @@ const calc = (code, value, unit = 'tCO2e') => ({
 });
 function publishedPayload(overrides = {}) {
   return {
-    release: { version: 'sustainability-2026-09-v1', published_at: '2026-09-24T05:34:32Z', checksum_sha256: 'f'.repeat(64) },
+    release: { version: 'sustainability-2026-09-v2', published_at: '2026-09-24T05:34:32Z', checksum_sha256: 'f'.repeat(64) },
     schema_version: '1.3', period: { id: 'p', year: 2026, month: 9 },
     population: { status: 'available', value: 6991, unit: 'people', effective_year: 2026 },
     publication_status: {},
@@ -513,5 +513,48 @@ test('active dashboard files hold no emission-factor formula or operational CSV 
   // Only static institutional files are still fetched by the loader.
   const fetched = [...read('public-data-loader.js').matchAll(/optionalText\('([^']+)'\)/g)].map(match => match[1]).sort();
   assert.deepEqual(fetched, ['data/dashboard_metadata.csv', 'data/green_master.csv']);
-  assert.doesNotMatch(read('index.html'), /<script[^>]+src="walkthrough\.js/);
+  assert.match(read('index.html'), /<script src="walkthrough\.js\?v=\d+"><\/script>/);
+});
+
+test('Overview contains exactly the eight governed presentation KPIs and keeps Scope 1/2 on GHG', () => {
+  const app = read('app.js');
+  const overview = app.match(/document\.getElementById\('overviewKpis'\)\.innerHTML = \[([\s\S]*?)\]\.join\(''\);/);
+  assert.ok(overview, 'Overview KPI renderer must be present');
+  const titles = [...overview[1].matchAll(/kpi\('([^']+)'/g)].map(match => match[1]);
+  assert.deepEqual(titles, [
+    'Renewable energy used',
+    'Total grid electricity consumed',
+    'Total water recycled',
+    'Total waste generated',
+    'Landfill diversion',
+    'Total water usage',
+    'Total green cover',
+    'Outreach impact'
+  ]);
+  assert.ok(!titles.includes('Scope 1 emissions'));
+  assert.ok(!titles.includes('Scope 2 emissions'));
+  assert.match(app, /kpi\('Scope 1 emissions'/);
+  assert.match(app, /kpi\('Scope 2 emissions'/);
+});
+
+test('Carbon Story assets load and remain presentation-only without equivalence or emissions math', () => {
+  const html = read('index.html');
+  const story = read('walkthrough.js').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+  assert.match(html, /walkthrough\.css\?v=12/);
+  assert.ok(html.indexOf('vendor/gsap-scrolltrigger.min.js') < html.indexOf('walkthrough.js'));
+  assert.match(story, /document\.querySelectorAll\('#overviewKpis \.kpi'\)/);
+  assert.match(story, /title: 'Total grid electricity consumed'/);
+  assert.match(story, /title: 'Total water recycled'/);
+  assert.match(story, /title: 'Landfill diversion'/);
+  assert.doesNotMatch(story, /WT_EQUIV|equivFor|treeKgYr|homeKwhYr|carKgKm|indiaPerCap/);
+  assert.doesNotMatch(story, /Scope 1 emissions|Scope 2 emissions|Net carbon impact|Gross emissions|Avoided emissions/);
+  assert.doesNotMatch(story, /scope1_tco2e|scope2_tco2e|operational_ghg_tco2e|avoided_emissions_tco2e|waste_per_capita_kg/);
+  assert.doesNotMatch(story, /wt-ledger|wt-equiv|Gross\s*[−-]\s*Avoided/);
+});
+
+test('schema 1.3 hero indicators continue to be sourced by the public API loader', () => {
+  const loader = read('public-data-loader.js');
+  assert.match(loader, /indicator\(publication\.raw, 'operational_ghg_tco2e'\)/);
+  assert.match(loader, /indicator\(publication\.raw, 'operational_ghg_per_capita_kgco2e'\)/);
+  assert.match(loader, /indicator\(publication\.raw, 'avoided_emissions_tco2e'\)/);
 });
