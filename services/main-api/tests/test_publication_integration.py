@@ -190,6 +190,12 @@ def test_multidomain_release_snapshot_privacy_checksum_and_publish(postgres_engi
         period = _period(db, 2160)
         admin = _account(db, RoleCode.ADMIN)
         managers = {domain: _account(db, RoleCode.MANAGER, domain) for domain in OperationalDomain}
+        db.add(InstitutionalPopulationReference(
+            effective_year=period.year,
+            population=1000,
+            unit="people",
+            source_reference="Synthetic publication contract reference",
+        ))
         transport = _submission(
             db,
             period,
@@ -351,7 +357,7 @@ def test_multidomain_release_snapshot_privacy_checksum_and_publish(postgres_engi
         candidate_same = _prepare(client, csrf, period, f"publication-{uuid4().hex}")
         payload = candidate_one["payload"]
 
-        assert payload["schema_version"] == "1.3"
+        assert payload["schema_version"] == "1.4"
         assert payload["period"] == {"id": str(period_id), "year": period.year, "month": period.month}
         assert payload["publication_status"] == {domain.value: "approved" for domain in OperationalDomain}
         assert set(payload["transport"]["metrics"]) == {
@@ -361,6 +367,10 @@ def test_multidomain_release_snapshot_privacy_checksum_and_publish(postgres_engi
         }
         assert payload["energy"]["metrics"]["grid_total_kwh"]["value"] == 30
         assert payload["energy"]["metrics"]["renewable_total_kwh"]["value"] == 10
+        assert payload["indicators"]["renewable_electricity_kwh"]["value"] == 5
+        assert payload["indicators"]["total_electricity_consumption_kwh"]["value"] == 35
+        assert payload["indicators"]["estimated_avoided_grid_emissions_tco2e"]["value"] == 0.003635
+        assert payload["indicators"]["water_per_capita_l"]["value"] == 11
         assert payload["lpg"]["metrics"] == {"lpg_consumption_litres": {"value": 52, "unit": "L"}}
         assert payload["lpg"]["emissions"] == {
             "status": "available",
@@ -376,7 +386,8 @@ def test_multidomain_release_snapshot_privacy_checksum_and_publish(postgres_engi
         assert payload["indicators"]["total_ghg_tco2e"]["status"] == "unavailable"
         assert payload["indicators"]["scope1_tco2e"]["status"] == "unavailable"
         assert payload["indicators"]["operational_ghg_tco2e"]["status"] == "unavailable"
-        assert payload["indicators"]["avoided_emissions_tco2e"]["reason"] == "methodology_under_review"
+        legacy_avoided = payload["indicators"]["avoided_emissions_tco2e"]
+        assert legacy_avoided["reason"] == "superseded_by_estimated_avoided_grid_emissions_tco2e"
         assert payload["water"]["metrics"]["water_consumed_kl"]["value"] == 11
         assert payload["water"]["metrics"]["water_recycled_kl"]["value"] == 4
         assert payload["outreach"]["total_programs"] == 1
@@ -629,7 +640,7 @@ def _frozen_calculation(
     )
 
 
-def test_schema_1_3_publishes_governed_aggregates_and_backend_indicators(postgres_engine: Engine) -> None:
+def test_schema_1_4_publishes_governed_aggregates_and_backend_indicators(postgres_engine: Engine) -> None:
     with Session(postgres_engine) as db:
         period = _period(db, 2190, 9)
         admin = _account(db, RoleCode.ADMIN)
@@ -741,11 +752,16 @@ def test_schema_1_3_publishes_governed_aggregates_and_backend_indicators(postgre
         db.flush()
 
         payload = build_release_payload(db, period)
-        assert payload["schema_version"] == "1.3"
+        assert payload["schema_version"] == "1.4"
         assert payload["energy"]["metrics"]["grid_ht_kwh"] == {"value": 10, "unit": "kWh"}  # type: ignore[index]
         assert payload["energy"]["metrics"]["grid_total_kwh"] == {"value": 30, "unit": "kWh"}  # type: ignore[index]
         assert payload["energy"]["metrics"]["renewable_on_campus_kwh"]["value"] == 50  # type: ignore[index]
         assert payload["energy"]["metrics"]["renewable_total_kwh"]["value"] == 180  # type: ignore[index]
+        assert payload["indicators"]["renewable_electricity_kwh"]["value"] == 110  # type: ignore[index]
+        assert payload["indicators"]["total_electricity_consumption_kwh"]["value"] == 140  # type: ignore[index]
+        assert payload["indicators"]["renewable_share_pct"]["value"] == 78.571428571429  # type: ignore[index]
+        assert payload["indicators"]["estimated_avoided_grid_emissions_tco2e"]["value"] == 1.833333333337  # type: ignore[index]
+        assert payload["indicators"]["water_per_capita_l"]["value"] == 11  # type: ignore[index]
         assert payload["water"]["metrics"]["water_twad_kl"]["value"] == 5  # type: ignore[index]
         assert payload["water"]["metrics"]["water_borewell_kl"]["value"] == 6  # type: ignore[index]
         assert payload["water"]["metrics"]["water_private_kl"]["value"] == 0  # type: ignore[index]
@@ -763,8 +779,9 @@ def test_schema_1_3_publishes_governed_aggregates_and_backend_indicators(postgre
         assert payload["indicators"]["operational_ghg_tco2e"]["value"] == 1.5  # type: ignore[index]
         assert payload["indicators"]["operational_ghg_per_capita_kgco2e"]["value"] == 1.5  # type: ignore[index]
         assert payload["indicators"]["waste_per_capita_kg"]["value"] == 0.15  # type: ignore[index]
-        assert payload["indicators"]["avoided_emissions_tco2e"]["reason"] == "methodology_under_review"  # type: ignore[index]
-        assert payload["indicators"]["renewable_share_percent"]["reason"] == "methodology_under_review"  # type: ignore[index]
+        legacy_avoided = payload["indicators"]["avoided_emissions_tco2e"]  # type: ignore[index]
+        assert legacy_avoided["reason"] == "superseded_by_estimated_avoided_grid_emissions_tco2e"  # type: ignore[index]
+        assert payload["indicators"]["renewable_share_percent"]["reason"] == "superseded_by_renewable_share_pct"  # type: ignore[index]
         serialized = json.dumps(payload, sort_keys=True).casefold()
         assert "username" not in serialized
         assert "created_by" not in serialized

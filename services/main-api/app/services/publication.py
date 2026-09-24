@@ -22,10 +22,9 @@ from app.services.emission_factors import calculation_responses
 from app.services.outreach import aggregate_approved_outreach
 from app.services.publication_readiness import REQUIRED_PUBLICATION_DOMAINS
 
-# 1.3 adds approved Energy/Water aggregates, a safe population reference, and
-# backend-derived Scope 1/2 and operational indicators. Frozen older payloads
-# remain immutable and are served with the schema version stored in each one.
-RELEASE_SCHEMA_VERSION = "1.3"
+# Older frozen payloads remain immutable and retain their stored schema version.
+RELEASE_SCHEMA_VERSION = "1.4"
+LANDFILL_DIVERSION_STATIC_REFERENCE_PCT = Decimal("88.1")
 GENERIC_PUBLICATION_DOMAINS = (
     OperationalDomain.TRANSPORT,
     OperationalDomain.ENERGY,
@@ -194,6 +193,11 @@ def _decimal_metric(domain_payload: object, code: str) -> Decimal | None:
     return None if value is None else Decimal(str(value))
 
 
+def _nonnegative_metric(domain_payload: object, code: str) -> Decimal | None:
+    value = _decimal_metric(domain_payload, code)
+    return value if value is not None and value.is_finite() and value >= 0 else None
+
+
 def _decimal_calculation(domain_payload: object, code: str) -> Decimal | None:
     if not isinstance(domain_payload, dict):
         return None
@@ -210,10 +214,10 @@ def _decimal_calculation(domain_payload: object, code: str) -> Decimal | None:
     return None
 
 
-def _indicator(value: Decimal | None, unit: str, reason: str) -> dict[str, object]:
+def _indicator(value: Decimal | None, unit: str, reason: str, *, places: int = 6) -> dict[str, object]:
     if value is None:
         return {"status": "unavailable", "reason": reason, "value": None, "unit": unit}
-    rounded = value.quantize(Decimal("0.000001"))
+    rounded = value.quantize(Decimal(1).scaleb(-places))
     return {"status": "available", "reason": None, "value": _json_number(rounded), "unit": unit}
 
 
@@ -306,6 +310,107 @@ def _schema_1_3_indicators(
     return indicators, population_payload
 
 
+DERIVED_INDICATOR_UNITS = {
+    "renewable_electricity_kwh": "kWh",
+    "total_electricity_consumption_kwh": "kWh",
+    "renewable_share_pct": "%",
+    "estimated_avoided_grid_emissions_tco2e": "tCO2e",
+    "water_per_capita_l": "L/person",
+}
+
+
+def _grid_factor_provenance(energy: object) -> tuple[Decimal | None, dict[str, object]]:
+    if not isinstance(energy, dict) or not isinstance(energy.get("calculations"), list):
+        return None, {}
+    for row in energy["calculations"]:
+        if not isinstance(row, dict) or row.get("calculation_code") != "grid_electricity_emissions":
+            continue
+        if (
+            row.get("status") != "available"
+            or row.get("factor_code") != "GRID_ELECTRICITY"
+            or row.get("factor_unit") != "kgCO2e/kWh"
+            or row.get("factor_value") is None
+            or not row.get("factor_set_version")
+        ):
+            return None, {}
+        factor = Decimal(str(row["factor_value"]))
+        if not factor.is_finite() or factor <= 0:
+            return None, {}
+        return factor, {
+            "source_calculation_code": "grid_electricity_emissions",
+            "factor_code": row["factor_code"],
+            "factor_value": row["factor_value"],
+            "factor_unit": row["factor_unit"],
+            "factor_set_version": row["factor_set_version"],
+            "formula_version": row.get("formula_version"),
+        }
+    return None, {}
+
+
+def _schema_1_4_indicators(payload: dict[str, object]) -> dict[str, object]:
+    energy = payload.get("energy")
+    water = payload.get("water")
+    population_block = payload.get("population")
+    population_value = population_block.get("value") if isinstance(population_block, dict) else None
+    population = Decimal(str(population_value)) if population_value is not None else None
+    on_campus = _nonnegative_metric(energy, "renewable_on_campus_kwh")
+    procured = _nonnegative_metric(energy, "renewable_procured_kwh")
+    grid = _nonnegative_metric(energy, "grid_total_kwh")
+    water_kl = _nonnegative_metric(water, "water_consumed_kl")
+    renewable = on_campus + procured if on_campus is not None and procured is not None else None
+    total = grid + renewable if grid is not None and renewable is not None else None
+    factor, provenance = _grid_factor_provenance(energy)
+    share = renewable * 100 / total if renewable is not None and total is not None and total > 0 else None
+    avoided = renewable * factor / 1000 if renewable is not None and factor is not None else None
+    per_capita = (
+        water_kl * 1000 / population
+        if water_kl is not None and population is not None and population > 0
+        else None
+    )
+    avoided_indicator = _indicator(avoided, "tCO2e", "renewable_or_governed_grid_factor_missing", places=12)
+    if avoided is not None:
+        avoided_indicator["provenance"] = provenance
+    indicators: dict[str, object] = {
+        "renewable_electricity_kwh": _indicator(renewable, "kWh", "renewable_electricity_source_missing"),
+        "total_electricity_consumption_kwh": _indicator(total, "kWh", "electricity_source_missing"),
+        "renewable_share_pct": _indicator(share, "%", "electricity_total_missing_or_zero", places=12),
+        "estimated_avoided_grid_emissions_tco2e": avoided_indicator,
+        "water_per_capita_l": _indicator(per_capita, "L/person", "water_or_population_missing_or_zero", places=12),
+        # Legacy 1.3 keys are kept for compatibility but must not contradict
+        # the governed 1.4 indicators that replace them.
+        "avoided_emissions_tco2e": {
+            "status": "unavailable",
+            "reason": "superseded_by_estimated_avoided_grid_emissions_tco2e",
+            "value": None,
+            "unit": "tCO2e",
+        },
+        "renewable_share_percent": {
+            "status": "unavailable",
+            "reason": "superseded_by_renewable_share_pct",
+            "value": None,
+            "unit": "%",
+        },
+    }
+    return indicators
+
+
+def derived_payload_blockers(payload: dict[str, object]) -> list[dict[str, str]]:
+    """Block newly prepared governed releases with incomplete derived sources."""
+    if payload.get("schema_version") != RELEASE_SCHEMA_VERSION:
+        return []
+    indicators = payload.get("indicators")
+    if not isinstance(indicators, dict):
+        return [{"domain": "release", "status": "invalid", "reason": "indicators_missing"}]
+    blockers = []
+    for code in DERIVED_INDICATOR_UNITS:
+        entry = indicators.get(code)
+        if not isinstance(entry, dict) or entry.get("status") != "available":
+            reason = entry.get("reason", "indicator_missing") if isinstance(entry, dict) else "indicator_missing"
+            domain = "water" if code == "water_per_capita_l" else "energy"
+            blockers.append({"domain": domain, "status": "invalid", "reason": f"{code}:{reason}"})
+    return blockers
+
+
 def build_release_payload(db: Session, period: ReportingPeriod) -> dict[str, object]:
     approved = {
         domain: _approved_submission(db, period.id, domain)
@@ -331,6 +436,15 @@ def build_release_payload(db: Session, period: ReportingPeriod) -> dict[str, obj
     indicators, population = _schema_1_3_indicators(db, period, payload)
     payload["indicators"] = indicators
     payload["population"] = population
+    indicators.update(_schema_1_4_indicators(payload))
+    payload["static_references"] = {
+        "landfill_diversion_pct": {
+            "value": _json_number(LANDFILL_DIVERSION_STATIC_REFERENCE_PCT),
+            "unit": "%",
+            "kind": "static_institutional_reference",
+            "source_reference": "Legacy institutional dashboard reference; not derived from monthly waste",
+        }
+    }
     return payload
 
 
@@ -355,6 +469,7 @@ def empty_public_dashboard(*, year: int | None = None, month: int | None = None)
             ("total_ghg_tco2e", "tCO2e"),
             ("avoided_emissions_tco2e", "tCO2e"),
             ("renewable_share_percent", "%"),
+            *DERIVED_INDICATOR_UNITS.items(),
         )
     }
     payload["population"] = {
@@ -365,6 +480,7 @@ def empty_public_dashboard(*, year: int | None = None, month: int | None = None)
         "effective_year": year,
         "source_reference": None,
     }
+    payload["static_references"] = None
     return payload
 
 

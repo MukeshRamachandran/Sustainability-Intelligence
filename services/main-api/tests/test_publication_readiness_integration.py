@@ -10,12 +10,13 @@ from sqlalchemy.orm import Session
 from app.models.enums import OperationalDomain, ReleaseStatus, RoleCode, SubmissionStatus
 from app.models.identity import User
 from app.models.publication import PublicRelease, PublicReleasePayload
-from app.models.sustainability import ReportingPeriod, Submission
+from app.models.sustainability import InstitutionalPopulationReference, ReportingPeriod, Submission
 from app.services.publication import build_release_payload, payload_checksum
 from tests.test_publication_integration import (
     _account,
     _approve,
     _client,
+    _frozen_calculation,
     _login,
     _outreach_programme,
     _period,
@@ -30,16 +31,33 @@ def _domain_submissions(
     statuses: dict[OperationalDomain, SubmissionStatus],
 ) -> dict[OperationalDomain, Submission]:
     result: dict[OperationalDomain, Submission] = {}
+    db.add(InstitutionalPopulationReference(
+        effective_year=period.year,
+        population=1000,
+        unit="people",
+        source_reference="Synthetic readiness-test reference",
+    ))
     for domain, status in statuses.items():
         manager = _account(db, RoleCode.MANAGER, domain)
         initial_status = SubmissionStatus.DRAFT if domain == OperationalDomain.OUTREACH else status
         # Waste needs its wet value so the database trigger derives dry/total;
         # a payload missing them is correctly refused at prepare.
-        values = (
-            {"wet_waste_generated_kg": Decimal("40")}
-            if domain == OperationalDomain.WASTE
-            else None
-        )
+        values = {
+            OperationalDomain.WASTE: {"wet_waste_generated_kg": Decimal("40")},
+            OperationalDomain.ENERGY: {
+                "grid_ht_kwh": Decimal("40"),
+                "grid_commercial_kwh": Decimal("50"),
+                "grid_temporary_kwh": Decimal("10"),
+                "renewable_on_campus_kwh": Decimal("20"),
+                "renewable_procured_kwh": Decimal("30"),
+                "solar_water_heater_kwh": Decimal("5"),
+            },
+            OperationalDomain.WATER: {
+                "water_twad_kl": Decimal("20"),
+                "water_borewell_kl": Decimal("30"),
+                "water_private_kl": Decimal("50"),
+            },
+        }.get(domain)
         submission = _submission(
             db,
             period,
@@ -55,6 +73,12 @@ def _domain_submissions(
                 _approve(submission, admin)
             else:
                 submission.status = status
+            db.flush()
+        if domain == OperationalDomain.ENERGY:
+            db.add(_frozen_calculation(
+                submission, "grid_electricity_emissions", "grid_total_kwh",
+                Decimal("100"), "kWh", Decimal("0.07"),
+            ))
             db.flush()
         result[domain] = submission
     return result

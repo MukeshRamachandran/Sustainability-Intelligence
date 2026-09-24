@@ -23,7 +23,6 @@ const colors = {
   muted: 'rgba(21,32,26,.16)',
   grid: 'rgba(21,32,26,.07)'
 };
-const EF = { petrol: null, diesel: null, grid: null, lpg: null };
 
 /* ---- clean line-icon set (replaces emoji) ---- */
 const ICONS = {
@@ -79,6 +78,8 @@ function n(v) { return v == null || Number.isNaN(+v) ? 0 : +v }
 function sum(a, s = 0, e = 12) { const values = a.slice(s, e).filter(value => value != null); return values.length ? values.reduce((x, y) => x + n(y), 0) : null }
 /* Indian-locale number formatting at d decimals. */
 function fmt(v, d = 0) { return v == null ? 'Unavailable' : n(v).toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d }) }
+/* Show published positive sub-centitonne values without rounding them to 0.00. */
+function emissionDecimals(value) { return value != null && value > 0 && value < 0.01 ? 6 : 2 }
 /* Waste is published in kg. Tonnes hide small real values (0.38 kg reads as
    "0.0 tons"), so a figure below one tonne is shown in kg. Presentation only. */
 function wasteDisplay(tons) { return tons != null && tons < 1 ? { factor: 1000, unit: 'kg', dec: 2 } : { factor: 1, unit: 'tons', dec: 1 } }
@@ -95,8 +96,8 @@ function chartNote(canvasId, arrays, emptyText) {
   let note = host.nextElementSibling; if (!(note && note.classList.contains('chart-note'))) { if (!text) return; note = document.createElement('p'); note.className = 'hint chart-note'; host.after(note); }
   note.textContent = text; note.style.display = text ? '' : 'none';
 }
-/* Percent change vs a baseline (0 when there is no baseline). Doc §17/§18/§20/§27. */
-function pct(cur, prev) { return Calculations.percentageChange(cur, prev) }
+/* Display-only percent change; trendHtml calls this only with a nonzero baseline. */
+function pct(cur, prev) { return ((cur - prev) / prev) * 100 }
 /* How many leading months a metric actually has readings for - sources don't
    all report the same number of months for a YTD year (fuel/Fleet still
    stop at April 2026, energy/water now run through June), so each array's
@@ -105,6 +106,15 @@ function monthsWithData(arr) { let last = 0; for (let i = 0; i < 12; i++) if (ar
 /* Value of a monthly metric under the month filter ('all' = whole period, summed
    only over the months that array actually has; a specific month otherwise). */
 function valFor(d, arr, m) { return m === 'all' ? sum(arr, 0, d.frequency === 'ytd' ? monthsWithData(arr) : 12) : (arr[+m] == null ? null : n(arr[+m])) }
+/* A single factor is meaningful for an all-month view only when every
+   published calculation in that selection used the same factor. */
+function factorFor(d, arr, m) {
+  if (!d || !Array.isArray(arr)) return null;
+  if (m !== 'all') return arr[+m] == null ? null : n(arr[+m]);
+  const end = d.frequency === 'ytd' ? monthsWithData(arr) : 12;
+  const values = arr.slice(0, end).filter(value => value != null);
+  return values.length && values.every(value => value === values[0]) ? n(values[0]) : null;
+}
 /* The active toolbar selection plus its year dataset. */
 function currentPeriod() { return { year: +yearFilter.value, month: monthFilter.value, d: data[yearFilter.value] } }
 /* True when at least one monthly immutable release contributes to the
@@ -136,10 +146,7 @@ function kpi(title, value, unit, accent, icon, prev, lowerGood = true, dec = 2, 
 const renderNumericKpi = kpi;
 kpi = function (title, value, unit, accent, icon, prev, lowerGood = true, dec = 2, fxType = null) {
   if (value != null) return renderNumericKpi(title, value, unit, accent, icon, prev, lowerGood, dec, fxType);
-  const reason = title === 'Emissions avoided by renewables' || title === 'Reduction through renewables'
-    || title === 'Landfill diversion' || title === 'Total waste diverted from landfill'
-    || title === 'Consumption per capita' || title === 'Green-cover carbon sequestration'
-    ? 'Methodology under review' : 'Not published';
+  const reason = 'Not published for this period';
   return `<article class="kpi" style="--a:${accent}"><div class="icon">${ic(icon)}</div><div class="label">${title}</div><div class="value">Unavailable<small>${unit}</small></div><div class="trend"><b class="neutral">pending</b><span>${reason}</span></div></article>`;
 };
 
@@ -150,8 +157,10 @@ function makeKpis() {
   const hasPublication = selectionHasPublication(d, month);
   const outreachForPeriod = outreach.published && outreach.year === year
     && (month === 'all' || outreach.month === +month + 1);
-  const scope1 = valFor(d, d.scope1Full, month), diesel = valFor(d, d.dieselCombo, month), petrol = valFor(d, d.petrolEm, month), scope2 = valFor(d, d.elecEm, month), elec = valFor(d, d.elecKwh, month);
-  const re = valFor(d, d.reKwh, month), avoid = d.avoided;
+  const scope1 = valFor(d, d.scope1Full, month), petrol = valFor(d, d.petrolEm, month), scope2 = valFor(d, d.elecEm, month), elec = valFor(d, d.elecKwh, month);
+  const re = valFor(d, d.reKwh, month), avoid = valFor(d, d.avoidEm, month);
+  const totalElec = valFor(d, d.totalElectricityKwh, month);
+  const reShare = month === 'all' ? null : d.renewableSharePct[+month];
   const gross = valFor(d, d.operationalGHG, month);
   const operationalPerCapita = valFor(d, d.perCapita, month);
 
@@ -161,16 +170,12 @@ function makeKpis() {
     ? (d.wastePublishedMonths || []).some(Boolean)
     : Boolean(d.wastePublishedMonths?.[+month]));
   const wasteTotalKg = valFor(d, d.totalWaste, month);
-  const wetWasteKg = valFor(d, d.wetWaste, month);
-  const dryWasteKg = valFor(d, d.dryWaste, month);
-  const wasteHasData = publishedWaste && (wasteTotalKg != null || (wetWasteKg != null && dryWasteKg != null));
-  /* total_waste_generated_kg is published by the backend, so it is used as-is
-     when present - including a legitimate zero. */
-  const wasteTot = wasteHasData
-    ? (wasteTotalKg != null ? wasteTotalKg : (wetWasteKg + dryWasteKg)) / 1000
-    : null;
-  // Diversion is not inferred from dry waste; no approved public diversion indicator exists.
-  const wasteDiverted = null;
+  const wasteHasData = publishedWaste && wasteTotalKg != null;
+  /* Only the frozen total is authoritative; a missing total is not rebuilt
+     from its inputs in the browser. */
+  const wasteTot = wasteHasData ? wasteTotalKg / 1000 : null;
+  // Static institutional reference; never inferred from monthly waste.
+  const landfillDiversionPct = d.landfillDiversionPct;
   const wasteShow = wasteDisplay(wasteTot);
   const waterMonths = monthsWithData(d.waterKL);
   const waterRecycled = valFor(d, d.waterRecycledKL, month);
@@ -193,7 +198,7 @@ function makeKpis() {
     kpi('Total grid electricity consumed', elec, 'kWh', colors.cyan, 'bolt', previousValue('elecKwh'), true, 0, 'elecmetervideo'),
     kpi('Total water recycled', hasPublication ? waterRecycled : null, 'KL', colors.cyan, 'repeat', null, false, 0, 'rewatervideo'),
     kpi('Total waste generated', wasteTot == null ? null : wasteTot * wasteShow.factor, wasteShow.unit, colors.orange, 'trash', null, true, wasteShow.dec, 'convwastevideo'),
-    kpi('Landfill diversion', null, '%', colors.lime, 'shield', null, false, 1, 'landfillvideo'),
+    kpi('Landfill diversion', landfillDiversionPct, '%', colors.lime, 'shield', null, false, 1, 'landfillvideo'),
     kpi('Total water usage', waterKL, 'KL', colors.cyan, 'droplet', null, true, 0, 'watervideo'),
     kpi('Total green cover', green.totalGreenCoverPct, '%', colors.emerald, 'tree', null, false, 0, 'leavesvideo'),
     kpi('Outreach impact', outreachForPeriod ? outreach.participantsServed : null, 'people', colors.gold, 'users', null, false, 0, 'earthvideo')
@@ -236,7 +241,7 @@ function makeKpis() {
         <div>
           <div class="ghg-title-row">
             <div class="icon">${ic('globe')}</div>
-            Gross Organizational Emissions
+            Operational GHG Emissions — Scope 1 + Scope 2
           </div>
           <div class="ghg-value-row">
             <span class="counter-val" data-val="${gross}" data-dec="2">0</span>
@@ -294,15 +299,14 @@ function makeKpis() {
     kpi('Petrol emissions', petrol, 'tCO₂e', colors.teal, 'fuel', previousValue('petrolEm'), true),
     kpi('Fleet diesel emissions', valFor(d, d.trDieselEm, month), 'tCO₂e', colors.gold, 'cloud', previousValue('trDieselEm'), true),
     kpi('DG diesel emissions', valFor(d, d.dgEm, month), 'tCO₂e', colors.orange, 'factory', previousValue('dgEm'), true),
-    kpi('LPG emissions', valFor(d, d.lpgEm, month), 'tCO₂e', colors.violet, 'flame', previousValue('lpgEm'), true),
+    kpi('LPG emissions', valFor(d, d.lpgEm, month), 'tCO₂e', colors.violet, 'flame', previousValue('lpgEm'), true, emissionDecimals(valFor(d, d.lpgEm, month))),
     kpi('Grid electricity emissions', scope2, 'tCO₂e', colors.cyan, 'bolt', previousValue('elecEm'), true),
     kpi('Operational GHG per capita', operationalPerCapita, 'kgCO₂e/person', colors.blue, 'users', null, true, 3),
-    kpi('Reduction through renewables', avoid, 'tCO₂e', colors.emerald, 'leaf', previousValue('avoidEm'), true),
-    kpi('Green-cover carbon sequestration', null, 'tCO₂e', colors.emerald, 'tree', null, true)
+    kpi('Estimated avoided grid emissions', avoid, 'tCO₂e', colors.emerald, 'leaf', previousValue('avoidEm'), true, 3)
   ].join('');
 
-  const gridPctStr = 'Unavailable';
-  const rePctStr = d.reShare == null ? 'Unavailable' : `${d.reShare.toFixed(1)}%`;
+  const gridPctStr = '';
+  const rePctStr = reShare == null ? 'Unavailable' : `${reShare.toFixed(1)}%`;
   // These source metrics are the values frozen in the active public release.
   const onSiteVal = valFor(d, d.reOnCampusKwh, month);
   const procuredVal = valFor(d, d.reProcuredKwh, month);
@@ -363,8 +367,8 @@ function makeKpis() {
         </div>
       </div>
     `;
-    if (d.reShare == null) {
-      elecMixWidget.innerHTML = `<div class="card" style="min-height:220px;display:flex;align-items:center;justify-content:center;text-align:center"><div><strong>Renewable share unavailable</strong><br><span style="color:var(--muted)">Institutional denominator methodology is under review.</span></div></div>`;
+    if (reShare == null) {
+      elecMixWidget.innerHTML = `<div class="card" style="min-height:220px;display:flex;align-items:center;justify-content:center;text-align:center"><div><strong>Renewable share unavailable for this selection</strong></div></div>`;
     }
   }
 
@@ -372,12 +376,17 @@ function makeKpis() {
   if (fuelMixWidget) {
     const lpg = valFor(d, d.lpgEm, month);
     const petrolEm = valFor(d, d.petrolEm, month);
-    const dieselEm = valFor(d, d.dieselCombo, month);
+    const dieselComponents = [valFor(d, d.trDieselEm, month), valFor(d, d.dgEm, month)];
+    const dieselEm = dieselComponents.every(value => value != null)
+      ? dieselComponents[0] + dieselComponents[1] : null;
     // Display ratio of already-published governed component results (share of
     // the published fuel components). Needs every component; no factors used.
-    const fuelParts = [petrolEm, dieselEm, lpg];
-    const fuelTotal = fuelParts.every(v => v != null) ? fuelParts.reduce((a, b) => a + b, 0) : null;
-    const share = v => (fuelTotal > 0 && v != null) ? `${(v / fuelTotal * 100).toFixed(1)}%` : 'Unavailable';
+    const fuelTotal = scope1;
+    const share = v => {
+      if (!(fuelTotal > 0) || v == null) return 'Unavailable';
+      const percentage = v / fuelTotal * 100;
+      return `${percentage.toFixed(percentage > 0 && percentage < 0.1 ? 3 : 1)}%`;
+    };
     const dieselPct = share(dieselEm);
     const petrolPct = share(petrolEm);
     const lpgPct = share(lpg);
@@ -437,18 +446,19 @@ function makeKpis() {
 
   const wasteKpisEl = document.getElementById('wasteKpis');
   if (wasteKpisEl) {
-    const perPerson = valFor(d, d.wastePerCapita, month);
+    const perPersonKg = valFor(d, d.wastePerCapita, month);
+    const perPersonGrams = perPersonKg == null ? null : perPersonKg * 1000;
 
     wasteKpisEl.innerHTML = [
       kpi('Total waste generated', wasteTot == null ? null : wasteTot * wasteShow.factor, wasteShow.unit, colors.orange, 'trash', null, true, wasteShow.dec),
-      kpi('Total waste diverted from landfill', wasteDiverted == null ? null : wasteDiverted * wasteShow.factor, wasteShow.unit, colors.emerald, 'shield', null, false, wasteShow.dec),
-      kpi('Waste generated per person', perPerson, 'kg/person', colors.teal, 'users', null, true, 2)
+      kpi('Landfill diversion', landfillDiversionPct, '%', colors.emerald, 'shield', null, false, 1),
+      kpi('Waste generated per person', perPersonGrams, 'g/person', colors.teal, 'users', null, true, 3)
     ].join('');
   }
 
   const waterKpisEl = document.getElementById('waterKpis');
   if (waterKpisEl) {
-    const waterPerCapitaL = null;
+    const waterPerCapitaL = month === 'all' ? null : d.waterPerCapitaL[+month];
     const waterPy = data[year - 1];
     /* The trend chip needs a same-window comparison (this year's month count
        against last year's), so it always uses the monthly arrays even when
@@ -458,7 +468,7 @@ function makeKpis() {
     const waterPrev = waterPy ? (month === 'all' ? sum(waterPy.waterKL, 0, waterMonths) : valFor(waterPy, waterPy.waterKL, month)) : null;
     waterKpisEl.innerHTML = [
       kpi('Total water consumption', waterKL, 'KL', colors.cyan, 'droplet', waterPrev, true, 0),
-      kpi('Consumption per capita', waterPerCapitaL, 'L/person', colors.teal, 'users', null, true, 0),
+      kpi('Consumption per capita', waterPerCapitaL, 'L/person', colors.teal, 'users', null, true, 2),
       kpi('Total water recycled', hasPublication ? waterRecycled : null, 'KL', colors.emerald, 'repeat', null, false, 0),
       kpi('TWAD water supply', valFor(d, d.waterTWAD, month), 'KL', colors.cyan, 'droplet', null, false, 0),
       kpi('Borewell water supply', valFor(d, d.waterBorewell, month), 'KL', colors.teal, 'droplet', null, false, 0),
@@ -526,8 +536,8 @@ function makeKpis() {
       kpi('DG diesel consumption', valFor(d, d.dgL, month), 'L', colors.orange, 'gear', previousValue('dgL'), true, 0),
       kpi('DG diesel emissions', valFor(d, d.dgEm, month), 'tCO₂e', colors.orange, 'factory', previousValue('dgEm'), true),
       kpi('LPG consumption', valFor(d, d.lpgL, month), 'L', colors.violet, 'battery', previousValue('lpgL'), true, 0),
-      kpi('LPG emissions', valFor(d, d.lpgEm, month), 'tCO₂e', colors.violet, 'flame', previousValue('lpgEm'), true),
-      kpi('Combined diesel emissions', diesel, 'tCO₂e', colors.red, 'flame', previousValue('dieselCombo'), true)
+      kpi('LPG emissions', valFor(d, d.lpgEm, month), 'tCO₂e', colors.violet, 'flame', previousValue('lpgEm'), true, emissionDecimals(valFor(d, d.lpgEm, month))),
+      kpi('Combined diesel emissions', null, 'tCO₂e', colors.red, 'flame', null, true)
     ].join('');
   }
   const scope2KpisEl = document.getElementById('scope2Kpis');
@@ -538,17 +548,17 @@ function makeKpis() {
       kpi('HT connection', valFor(d, d.htKwh, month), 'kWh', colors.blue, 'building', previousValue('htKwh'), true, 0),
       kpi('Commercial connection', valFor(d, d.commKwh, month), 'kWh', colors.cyan, 'store', previousValue('commKwh'), true, 0),
       kpi('Temporary connection', valFor(d, d.tempKwh, month), 'kWh', colors.lime, 'battery', previousValue('tempKwh'), true, 0),
-      kpi('Grid emission factor', EF.grid, 'kgCO₂e/kWh', colors.gold, 'ruler', null, true, 3),
+      kpi('Grid emission factor', factorFor(d, d.gridEF, month), 'kgCO₂e/kWh', colors.gold, 'ruler', null, true, 3),
       kpi('Electricity contribution', null, '%', colors.cyan, 'chart', null, true),
       kpi('Scope 2 offset', null, '%', colors.emerald, 'check', null, false)
     ].join('');
   }
   const energyProgressWidget = document.getElementById('energyProgressWidget');
   if (energyProgressWidget) {
-    const reProgressPct = d.reShare;
+    const reProgressPct = reShare;
 
     if (reProgressPct == null) {
-      energyProgressWidget.innerHTML = `<div class="card" style="min-height:220px;display:flex;align-items:center;justify-content:center;text-align:center"><div><strong>Renewable share unavailable</strong><br><span style="color:var(--muted)">Institutional denominator methodology is under review.</span></div></div>`;
+      energyProgressWidget.innerHTML = `<div class="card" style="min-height:220px;display:flex;align-items:center;justify-content:center;text-align:center"><div><strong>Renewable share unavailable for this selection</strong></div></div>`;
     } else {
 
     energyProgressWidget.innerHTML = `
@@ -734,8 +744,8 @@ function makeKpis() {
               <div class="ep-tt-val">${Intl.NumberFormat('en-US').format(Math.round(re))} <span>kWh</span></div>
             </div>
             <div class="ep-tt-item">
-              <div class="ep-tt-label">Total Demand</div>
-              <div class="ep-tt-val">${Intl.NumberFormat('en-US').format(Math.round(totalElec))} <span>kWh</span></div>
+              <div class="ep-tt-label">Grid total</div>
+              <div class="ep-tt-val">${Intl.NumberFormat('en-US').format(Math.round(elec))} <span>kWh</span></div>
             </div>
           </div>
         </div>
@@ -765,15 +775,17 @@ function makeKpis() {
   const energyKpisEl = document.getElementById('energyKpis');
   if (energyKpisEl) {
     energyKpisEl.innerHTML = [
-      kpi('Total electricity consumption', elec == null || re == null ? null : elec + re, 'kWh', colors.cyan, 'bolt', null, true, 0),
+      kpi('Total electricity consumption', totalElec, 'kWh', colors.cyan, 'bolt', null, true, 0),
       kpi('Total grid electricity consumption', elec, 'kWh', colors.cyan, 'plug', previousValue('elecKwh'), true, 0),
       kpi('Grid HT connection', valFor(d, d.htKwh, month), 'kWh', colors.blue, 'building', null, false, 0),
       kpi('Grid commercial connection', valFor(d, d.commKwh, month), 'kWh', colors.cyan, 'store', null, false, 0),
       kpi('Grid temporary connection', valFor(d, d.tempKwh, month), 'kWh', colors.lime, 'battery', null, false, 0),
       kpi('On-campus renewable energy', onSiteVal, 'kWh', colors.emerald, 'sun', null, false, 0),
       kpi('Procured renewable energy', procuredVal, 'kWh', colors.emerald, 'leaf', null, false, 0),
-      kpi('Solar water heater', valFor(d, d.solarWaterHeaterKwh, month), 'kWh', colors.gold, 'sun', null, false, 0),
-      kpi('Total renewable energy', re, 'kWh', colors.emerald, 'leaf', null, false, 0)
+      kpi('Solar water heater — thermal reference, excluded from electricity totals', valFor(d, d.solarWaterHeaterKwh, month), 'kWh-equivalent thermal', colors.gold, 'sun', null, false, 0),
+      kpi('Renewable electricity', re, 'kWh', colors.emerald, 'leaf', null, false, 0),
+      kpi('Renewable share', reShare, '%', colors.emerald, 'chart', null, false, 2),
+      kpi('Estimated avoided grid emissions', avoid, 'tCO₂e', colors.emerald, 'leaf', null, false, 5)
     ].join('');
   }
 
@@ -787,7 +799,7 @@ function heroGHG(gross, year, month, d, avoid, operationalPerCapita) {
   // static figures on the card
   document.getElementById('balGrossVal').textContent = fmt(gross, 3);
   document.getElementById('balNetVal').textContent = fmt(operationalPerCapita, 3);
-  document.getElementById('balAvoidVal').textContent = fmt(avoid, 1);
+  document.getElementById('balAvoidVal').textContent = fmt(avoid, 3);
   document.getElementById('balPeriod').textContent = periodLabel(year, month);
 
   // repaint the big number for the selected tab
@@ -809,8 +821,8 @@ function heroGHG(gross, year, month, d, avoid, operationalPerCapita) {
       document.getElementById('tab-net').classList.add('active');
     } else if (currentHeroView === 'avoid') {
       targetValue = avoid;
-      labelEl.textContent = "Reduction by renewables";
-      unitEl.textContent = "Methodology under review";
+      labelEl.textContent = "Estimated Avoided Grid Emissions";
+      unitEl.textContent = "tCO₂e";
       document.getElementById('tab-avoid').classList.add('active');
     } else {
       targetValue = gross;
@@ -821,9 +833,8 @@ function heroGHG(gross, year, month, d, avoid, operationalPerCapita) {
 
     if (targetValue == null) {
       mainValueEl.textContent = 'Unavailable';
-      unitEl.textContent = currentHeroView === 'avoid'
-        ? 'Methodology under review'
-        : (currentHeroView === 'net' ? 'Population or emissions unavailable' : 'Unavailable');
+      unitEl.textContent = currentHeroView === 'net'
+        ? 'Population or emissions not published' : 'Not published for this period';
     } else if (typeof reduceMotion !== 'undefined' && !reduceMotion) {
       let obj = { val: 0 };
       gsap.to(obj, {
@@ -1140,7 +1151,7 @@ function drawCharts() {
   mk('s2Stack', { type: 'bar', data: { labels, datasets: [{ label: 'HT', data: sl(d.htKwh), backgroundColor: colors.cyan, borderRadius: 4 }, { label: 'Commercial', data: sl(d.commKwh), backgroundColor: '#6e97c7', borderRadius: 4 }, { label: 'Temporary', data: sl(d.tempKwh), backgroundColor: colors.teal, borderRadius: 4 }] }, options: { ...chartOptions('kWh'), scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, grid: { color: colors.grid }, border: { display: false }, title: { display: true, text: 'kWh', color: '#8a988f' } } } } });
   mk('s2Trend', { type: 'line', data: { labels, datasets: [{ label: 'Scope 2 emissions', data: sl(d.elecEm), borderColor: colors.cyan, backgroundColor: 'rgba(58,111,168,.1)', fill: true, tension: .35, pointRadius: 0, borderWidth: 2 }] }, options: chartOptions('tCO₂e') });
   mk('s2Share', { type: 'doughnut', data: { labels: ['HT', 'Commercial', 'Temporary'], datasets: [{ data: [sum(sl(d.htKwh)), sum(sl(d.commKwh)), sum(sl(d.tempKwh))], backgroundColor: [colors.cyan, '#6e97c7', colors.teal], borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '64%', plugins: { legend: { position: 'bottom' } } } });
-  mk('s2VsRE', { type: 'doughnut', data: { labels: ['Electricity CO₂ emitted', 'RE CO₂ avoided'], datasets: [{ data: [sum(sl(d.elecEm)), d.avoided], backgroundColor: [colors.cyan, colors.emerald], borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '64%', plugins: { legend: { position: 'bottom' } } } });
+  mk('s2VsRE', { type: 'doughnut', data: { labels: ['Electricity CO₂ emitted', 'Estimated grid CO₂e avoided'], datasets: [{ data: [sum(sl(d.elecEm)), sum(sl(d.avoidEm))], backgroundColor: [colors.cyan, colors.emerald], borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '64%', plugins: { legend: { position: 'bottom' } } } });
 
 
   /* Unpublished waste stays absent rather than being coerced to zero, so the
@@ -1233,26 +1244,34 @@ function drawCharts() {
   });
 
   /* 2026 rows split consumption by source per month (TWAD / borewell /
-     procured) - waterSourceTotal (monthly) also gates the 3-card monthly
-     trend row further down, so it must stay strictly "do we have monthly
-     source data", not fall back to the annual-only split below it. 2025
+     private supply). Source presence, not a positive sum, gates the monthly
+     source chart so published zeros remain distinct from missing values. 2025
      instead reports TWAD/Borewell as one annual total (waterTWADAnnual/
      waterBorewellAnnual, see data-loader.js) with no monthly resolution,
      so the donut falls back to that when there's no monthly split; only
      when NEITHER exists does it fall back further to a single
      "Total consumption" slice. */
   const waterTWAD = sum(wsl(d.waterTWAD)), waterBorewell = sum(wsl(d.waterBorewell)), waterProcured = sum(wsl(d.waterProcured));
-  const waterSourceTotal = waterTWAD + waterBorewell + waterProcured;
+  const hasMonthlySourceData = [waterTWAD, waterBorewell, waterProcured].some(value => value != null);
   const hasAnnualSourceSplit = d.waterTWADAnnual != null || d.waterBorewellAnnual != null;
   let waterSourceLabels, waterSourceData, waterSourceColors;
-  if (waterSourceTotal > 0) {
-    waterSourceLabels = ['TWAD supply', 'Borewell', 'Procured'];
-    waterSourceData = [waterTWAD, waterBorewell, waterProcured];
-    waterSourceColors = [colors.cyan, colors.teal, colors.gold];
+  if (hasMonthlySourceData) {
+    const monthlySources = [
+      ['TWAD supply', waterTWAD, colors.cyan],
+      ['Borewell', waterBorewell, colors.teal],
+      ['Private water supply', waterProcured, colors.gold]
+    ].filter(([, value]) => value != null);
+    waterSourceLabels = monthlySources.map(([label]) => label);
+    waterSourceData = monthlySources.map(([, value]) => value);
+    waterSourceColors = monthlySources.map(([, , color]) => color);
   } else if (hasAnnualSourceSplit) {
-    waterSourceLabels = ['TWAD supply', 'Borewell'];
-    waterSourceData = [d.waterTWADAnnual || 0, d.waterBorewellAnnual || 0];
-    waterSourceColors = [colors.cyan, colors.teal];
+    const annualSources = [
+      ['TWAD supply', d.waterTWADAnnual, colors.cyan],
+      ['Borewell', d.waterBorewellAnnual, colors.teal]
+    ].filter(([, value]) => value != null);
+    waterSourceLabels = annualSources.map(([label]) => label);
+    waterSourceData = annualSources.map(([, value]) => value);
+    waterSourceColors = annualSources.map(([, , color]) => color);
   } else {
     waterSourceLabels = ['Total consumption'];
     waterSourceData = [sum(wsl(d.waterKL))];
@@ -1271,13 +1290,13 @@ function drawCharts() {
     }
   });
 
-  /* Per-source monthly trend only exists where waterSourceTotal > 0 (2026
+  /* Per-source monthly trend exists where monthly source values are published (2026
      onward) - swap the three trend cards for a plain-language empty state on
      years that only ever recorded a single monthly total (2025). */
   const wstRow = document.getElementById('waterSourceTrendRow');
   const wstEmptyRow = document.getElementById('waterSourceTrendEmptyRow');
   if (wstRow && wstEmptyRow) {
-    const hasSourceTrend = waterSourceTotal > 0;
+    const hasSourceTrend = hasMonthlySourceData;
     wstRow.style.display = hasSourceTrend ? '' : 'none';
     wstEmptyRow.style.display = hasSourceTrend ? 'none' : '';
     if (hasSourceTrend) {
@@ -1294,7 +1313,7 @@ function drawCharts() {
       });
       mk('waterProcuredTrendCanvas', {
         type: 'line',
-        data: { labels: waterLabels, datasets: [{ label: 'Procured', data: wsl(d.waterProcured), borderColor: colors.gold, backgroundColor: 'rgba(193,138,46,.1)', fill: true, tension: .35, borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#fff', pointBorderWidth: 2 }] },
+        data: { labels: waterLabels, datasets: [{ label: 'Private water supply', data: wsl(d.waterProcured), borderColor: colors.gold, backgroundColor: 'rgba(193,138,46,.1)', fill: true, tension: .35, borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#fff', pointBorderWidth: 2 }] },
         options: singleTrendOpts()
       });
     }
@@ -1354,10 +1373,9 @@ function drawCharts() {
   // Compute full-year arrays for Energy line charts
   // Published zeros stay zeros and missing months stay missing (null).
   const cleanZero = arr => arr.slice();
-  // Grid + renewable is shown only for a month where the grid figure is published.
-  const totalOf = (grid, re) => grid.map((v, i) => v == null ? null : v + (re[i] == null ? 0 : re[i]));
-  const total25 = totalOf(d25.elecKwh, d25.reKwh);
-  const total26 = totalOf(d26.elecKwh, d26.reKwh);
+  // The backend freezes each monthly combined total; the chart only displays it.
+  const total25 = cleanZero(d25.totalElectricityKwh);
+  const total26 = cleanZero(d26.totalElectricityKwh);
   // Real on-campus/procured columns from energy_master.csv - no longer an
   // estimated 60/30 split of the combined reKwh total.
   const solar25 = cleanZero(d25.reOnCampusKwh);
@@ -1373,7 +1391,7 @@ function drawCharts() {
   const ds25Opts = { borderColor: '#a1b0a8', backgroundColor: 'transparent', tension: 0.4, borderWidth: 2, borderDash: [4, 4], pointRadius: 0 };
   const ds26Opts = (color, bg) => ({ borderColor: color, backgroundColor: bg, fill: true, tension: 0.4, borderWidth: 3, pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: '#fff', pointBorderColor: color, pointBorderWidth: 2 });
 
-  chartNote('energyTotalLineChart', [total25, total26], 'Not published in the current release.');
+  chartNote('energyTotalLineChart', [total25, total26], 'Combined electricity consumption is not published for this period.');
   mk('energyTotalLineChart', {
     type: 'line',
     data: {
@@ -1597,17 +1615,68 @@ const tables = {};
 /* Flatten the master data into the five explorer views (built once at
    startup - filtering and sorting happen in renderTable). */
 function buildTables() {
-  const rows = []; for (const [year, d] of Object.entries(data)) { months.forEach((m, i) => { if (d.petrolL[i] != null) rows.push([year, m, 'S1', 'Petrol', d.petrolL[i], 'L', EF.petrol, d.petrolEm[i]]); if (d.trDieselL[i] != null) rows.push([year, m, 'S1', 'Fleet Diesel', d.trDieselL[i], 'L', EF.diesel, d.trDieselEm[i]]); if (d.dgL[i] != null) rows.push([year, m, 'S1', 'DG Diesel', d.dgL[i], 'L', EF.diesel, d.dgEm[i]]); if (d.elecKwh[i] != null) rows.push([year, m, 'S2', 'Grid Electricity', d.elecKwh[i], 'kWh', EF.grid, d.elecEm[i]]); if (d.lpgL[i] != null) rows.push([year, m, 'S1', 'LPG', d.lpgL[i], 'L', EF.lpg, d.lpgEm[i]]); }) }
+  const rows = [];
+  for (const [year, d] of Object.entries(data)) {
+    months.forEach((m, i) => {
+      if (d.petrolL[i] != null) rows.push([year, m, 'S1', 'Petrol', d.petrolL[i], 'L', d.petrolEF[i], d.petrolEm[i]]);
+      if (d.trDieselL[i] != null) rows.push([year, m, 'S1', 'Fleet Diesel', d.trDieselL[i], 'L', d.trDieselEF[i], d.trDieselEm[i]]);
+      if (d.dgL[i] != null) rows.push([year, m, 'S1', 'DG Diesel', d.dgL[i], 'L', d.dgEF[i], d.dgEm[i]]);
+      if (d.elecKwh[i] != null) rows.push([year, m, 'S2', 'Grid Electricity', d.elecKwh[i], 'kWh', d.gridEF[i], d.elecEm[i]]);
+      if (d.lpgL[i] != null) rows.push([year, m, 'S1', 'LPG', d.lpgL[i], 'L', d.lpgEF[i], d.lpgEm[i]]);
+    });
+  }
   tables.unified = { cols: ['Year', 'Month', 'Scope', 'Source', 'Quantity', 'Unit', 'EF', 'Emissions tCO₂e'], rows };
   tables.fleet = { cols: ['Year', 'Month', 'Petrol L', 'Petrol tCO₂e', 'Diesel L', 'Diesel tCO₂e'], rows: Object.entries(data).flatMap(([year, d]) => months.map((m, i) => d.petrolL[i] != null ? [year, m, d.petrolL[i], d.petrolEm[i], d.trDieselL[i], d.trDieselEm[i]] : null).filter(Boolean)) };
   tables.dg = { cols: ['Year', 'Month', 'DG Diesel L', 'DG Emissions tCO₂e'], rows: Object.entries(data).flatMap(([year, d]) => months.map((m, i) => d.dgL[i] != null ? [year, m, d.dgL[i], d.dgEm[i]] : null).filter(Boolean)) };
   tables.electricity = { cols: ['Year', 'Month', 'Grid kWh', 'Emissions tCO₂e'], rows: Object.entries(data).flatMap(([year, d]) => months.map((m, i) => d.elecKwh[i] != null ? [year, m, d.elecKwh[i], d.elecEm[i]] : null).filter(Boolean)) };
   tables.re = { cols: ['Year', 'Month', 'RE kWh', 'Emission Avoided tCO₂e'], rows: Object.entries(data).flatMap(([year, d]) => months.map((m, i) => d.reKwh[i] != null ? [year, m, d.reKwh[i], d.avoidEm[i]] : null).filter(Boolean)) };
+  const derivedFields = [
+    ['Total Electricity Consumption', 'totalElectricityKwh', 'kWh'],
+    ['Renewable Electricity', 'reKwh', 'kWh'],
+    ['Renewable Share', 'renewableSharePct', '%'],
+    ['Estimated Avoided Grid Emissions', 'avoidEm', 'tCO₂e'],
+    ['Water per Person', 'waterPerCapitaL', 'L/person']
+  ];
+  tables.derived = {
+    cols: ['Year', 'Month', 'Indicator', 'Published value', 'Unit'],
+    rows: Object.entries(data).flatMap(([year, d]) => months.flatMap((m, i) =>
+      derivedFields.map(([label, key, unit]) => d[key][i] == null ? null : [year, m, label, d[key][i], unit]).filter(Boolean)))
+  };
 }
 let curTable = 'unified', sortCol = null, sortDir = 1;
+function tableDecimals(column, value) {
+  return column.includes('tCO₂e') && value > 0 && value < 0.01 ? 6 : (Math.abs(value) < 10 ? 3 : 2);
+}
 /* Render the current explorer view through the live search box filter
    and any active column sort. */
-function renderTable() { if (!tables.unified) return; const t = tables[curTable], q = (document.getElementById('search')?.value || '').toLowerCase(); let rows = t.rows.filter(r => r.some(c => String(c).toLowerCase().includes(q))); if (sortCol !== null) { rows = [...rows].sort((a, b) => { let x = a[sortCol], y = b[sortCol]; let nx = parseFloat(String(x).replace(/,/g, '')), ny = parseFloat(String(y).replace(/,/g, '')); return (!isNaN(nx) && !isNaN(ny) ? nx - ny : String(x).localeCompare(String(y))) * sortDir }) } const head = document.querySelector('#dataTable thead'), body = document.querySelector('#dataTable tbody'); if (!head) return; head.innerHTML = '<tr>' + t.cols.map((c, i) => `<th data-c="${i}">${c}${sortCol === i ? (sortDir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('') + '</tr>'; body.innerHTML = rows.map(r => '<tr>' + r.map((c, i) => `<td class="${typeof c === 'number' ? 'num' : ''}">${t.cols[i] === 'Scope' ? `<span class="pill ${c === 'S1' ? 's1' : 's2'}">${c}</span>` : typeof c === 'number' ? fmt(c, Math.abs(c) < 10 ? 3 : 2) : c == null ? 'Unavailable' : c}</td>`).join('') + '</tr>').join(''); head.querySelectorAll('th').forEach(th => th.onclick = () => { const c = +th.dataset.c; if (sortCol === c) sortDir *= -1; else { sortCol = c; sortDir = 1 } renderTable() }); }
+function renderTable() {
+  if (!tables.unified) return;
+  const t = tables[curTable], q = (document.getElementById('search')?.value || '').toLowerCase();
+  let rows = t.rows.filter(r => r.some(c => String(c).toLowerCase().includes(q)));
+  if (sortCol !== null) {
+    rows = [...rows].sort((a, b) => {
+      const x = a[sortCol], y = b[sortCol];
+      const nx = parseFloat(String(x).replace(/,/g, '')), ny = parseFloat(String(y).replace(/,/g, ''));
+      return (!isNaN(nx) && !isNaN(ny) ? nx - ny : String(x).localeCompare(String(y))) * sortDir;
+    });
+  }
+  const head = document.querySelector('#dataTable thead'), body = document.querySelector('#dataTable tbody');
+  if (!head) return;
+  head.innerHTML = '<tr>' + t.cols.map((c, i) => `<th data-c="${i}">${c}${sortCol === i ? (sortDir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('') + '</tr>';
+  body.innerHTML = rows.map(r => '<tr>' + r.map((c, i) => {
+    const value = t.cols[i] === 'Scope'
+      ? `<span class="pill ${c === 'S1' ? 's1' : 's2'}">${c}</span>`
+      : typeof c === 'number' ? fmt(c, tableDecimals(t.cols[i], c))
+        : c == null ? 'Unavailable' : c;
+    return `<td class="${typeof c === 'number' ? 'num' : ''}">${value}</td>`;
+  }).join('') + '</tr>').join('');
+  head.querySelectorAll('th').forEach(th => th.onclick = () => {
+    const column = +th.dataset.c;
+    if (sortCol === column) sortDir *= -1;
+    else { sortCol = column; sortDir = 1; }
+    renderTable();
+  });
+}
 document.getElementById('search')?.addEventListener('input', renderTable);
 document.querySelectorAll('#tableTabs button').forEach(b => b.onclick = () => { document.querySelectorAll('#tableTabs button').forEach(x => x.classList.remove('active')); b.classList.add('active'); curTable = b.dataset.t; sortCol = null; renderTable(); });
 /* Download the current explorer view as CSV. */
@@ -1707,7 +1776,6 @@ function start() { buildTables(); refresh(); initGreenMap(); if (!reduceMotion) 
 (async function boot() {
   const loaded = await loadDashboardData();
   data = loaded.data;
-  Object.assign(EF, loaded.EF); // EF stays `const` above - mutate in place, don't reassign
   green = loaded.green;
   outreach = loaded.outreach;
   publication = loaded.publication;
@@ -1775,11 +1843,6 @@ const kpiDescriptions = {
     def: "The frozen published grid-electricity CO₂e result for the selected reporting period.",
     impact: "Scope 2 is unavailable when the required published grid-electricity result is missing.",
     trend: "No target or trend narrative is asserted here."
-  },
-  "Green-cover carbon sequestration": {
-    def: "Unavailable: a governed carbon-sequestration method and approved calculation are not configured.",
-    impact: "Sourced Green Cover measurements remain visible separately; they are not converted into a carbon claim.",
-    trend: "Methodology under review."
   }
 };
 

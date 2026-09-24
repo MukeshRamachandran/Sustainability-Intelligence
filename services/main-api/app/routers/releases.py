@@ -14,6 +14,7 @@ from app.security.dependencies import AdminUser, CsrfUser, DbSession, require_ad
 from app.services.audit import add_audit_log
 from app.services.publication import (
     build_release_payload,
+    derived_payload_blockers,
     empty_public_dashboard,
     payload_checksum,
     waste_payload_blockers,
@@ -98,7 +99,11 @@ def prepare_release(
     if db.scalar(select(PublicRelease.id).where(PublicRelease.version == body.version)):
         raise HTTPException(status_code=409, detail="Release version already exists.")
     payload_data = build_release_payload(db, period)
-    frozen_blockers = frozen_payload_blockers(payload_data) + waste_payload_blockers(payload_data)
+    frozen_blockers = (
+        frozen_payload_blockers(payload_data)
+        + waste_payload_blockers(payload_data)
+        + derived_payload_blockers(payload_data)
+    )
     if frozen_blockers:
         raise HTTPException(
             status_code=409,
@@ -191,7 +196,11 @@ def publish_release(release_id: UUID, request: Request, current: CsrfUser, db: D
         raise HTTPException(status_code=409, detail="Release payload checksum validation failed.")
     # Re-checked at publish so a candidate prepared before waste became
     # required cannot be published as if it were a complete six-domain release.
-    frozen_blockers = frozen_payload_blockers(payload.payload) + waste_payload_blockers(payload.payload)
+    frozen_blockers = (
+        frozen_payload_blockers(payload.payload)
+        + waste_payload_blockers(payload.payload)
+        + derived_payload_blockers(payload.payload)
+    )
     if frozen_blockers:
         raise HTTPException(
             status_code=409,

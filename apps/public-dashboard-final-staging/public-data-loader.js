@@ -55,10 +55,12 @@
       publicationState: 'unavailable', publishedMonths: Array(12).fill(false),
       totalGHG: null, operationalGHG: empty(), totalEnergy: null, gridEnergy: null,
       reEnergy: null, reShare: null, avoided: null, perCapita: empty(),
-      wastePerCapita: empty(),
+      totalElectricityKwh: empty(), renewableSharePct: empty(), waterPerCapitaL: empty(),
+      wastePerCapita: empty(), landfillDiversionPct: null,
       petrolL: empty(), trDieselL: empty(), dgL: empty(), lpgL: empty(),
       petrolEm: empty(), trDieselEm: empty(), dgEm: empty(), lpgEm: empty(),
-      dieselCombo: empty(), scope1Selected: empty(), scope1Full: empty(),
+      petrolEF: empty(), trDieselEF: empty(), dgEF: empty(), gridEF: empty(), lpgEF: empty(),
+      scope1Selected: empty(), scope1Full: empty(),
       htKwh: empty(), commKwh: empty(), tempKwh: empty(), elecKwh: empty(),
       htEm: empty(), commEm: empty(), tempEm: empty(), elecEm: empty(),
       reKwh: empty(), reOnCampusKwh: empty(), reProcuredKwh: empty(), avoidEm: empty(),
@@ -102,9 +104,9 @@
     setMetric(item.petrolL, month, transport, 'transport_petrol_litres');
     setMetric(item.trDieselL, month, transport, 'transport_diesel_litres');
     setMetric(item.dgL, month, transport, 'dg_diesel_litres');
-    setCalculation(item.petrolEm, month, transport, 'transport_petrol_emissions');
-    setCalculation(item.trDieselEm, month, transport, 'transport_diesel_emissions');
-    setCalculation(item.dgEm, month, transport, 'dg_diesel_emissions');
+    item.petrolEF[month] = setCalculation(item.petrolEm, month, transport, 'transport_petrol_emissions').factorValue;
+    item.trDieselEF[month] = setCalculation(item.trDieselEm, month, transport, 'transport_diesel_emissions').factorValue;
+    item.dgEF[month] = setCalculation(item.dgEm, month, transport, 'dg_diesel_emissions').factorValue;
     item.petrolVehicleCount = window.KCOSMOSPublicAPI.metric(transport, 'petrol_vehicle_count').value;
     item.dieselVehicleCount = window.KCOSMOSPublicAPI.metric(transport, 'diesel_vehicle_count').value;
     item.evConsumptionKwh = window.KCOSMOSPublicAPI.metric(transport, 'ev_consumption_kwh').value;
@@ -114,20 +116,24 @@
     setMetric(item.tempKwh, month, energy, 'grid_temporary_kwh');
     setMetric(item.elecKwh, month, energy, 'grid_total_kwh');
     item.gridEnergy = item.elecKwh[month];
-    setCalculation(item.elecEm, month, energy, 'grid_electricity_emissions');
+    item.gridEF[month] = setCalculation(item.elecEm, month, energy, 'grid_electricity_emissions').factorValue;
     setMetric(item.reOnCampusKwh, month, energy, 'renewable_on_campus_kwh');
     setMetric(item.reProcuredKwh, month, energy, 'renewable_procured_kwh');
     setMetric(item.solarWaterHeaterKwh, month, energy, 'solar_water_heater_kwh');
-    setMetric(item.reKwh, month, energy, 'renewable_total_kwh');
+    // Schema 1.4 indicators are frozen by the backend. The legacy renewable
+    // total includes solar thermal reference and is never an electricity KPI.
+    item.reKwh[month] = window.KCOSMOSPublicAPI.indicator(publication.raw, 'renewable_electricity_kwh').value;
+    item.totalElectricityKwh[month] = window.KCOSMOSPublicAPI.indicator(publication.raw, 'total_electricity_consumption_kwh').value;
+    item.renewableSharePct[month] = window.KCOSMOSPublicAPI.indicator(publication.raw, 'renewable_share_pct').value;
+    item.avoidEm[month] = window.KCOSMOSPublicAPI.indicator(publication.raw, 'estimated_avoided_grid_emissions_tco2e').value;
+    item.waterPerCapitaL[month] = window.KCOSMOSPublicAPI.indicator(publication.raw, 'water_per_capita_l').value;
     item.reEnergy = item.reKwh[month];
     setMetric(item.lpgL, month, lpg, 'lpg_consumption_litres');
-    setCalculation(item.lpgEm, month, lpg, 'lpg_emissions');
+    item.lpgEF[month] = setCalculation(item.lpgEm, month, lpg, 'lpg_emissions').factorValue;
     /* Headline Scope 1/2 and operational indicators are backend-produced in
        schema 1.3 from the frozen component calculations. */
     item.scope1Full[month] = window.KCOSMOSPublicAPI.indicator(publication.raw, 'scope1_tco2e').value;
     item.scope1Selected[month] = item.scope1Full[month];
-    item.dieselCombo[month] = item.trDieselEm[month] == null || item.dgEm[month] == null
-      ? null : Number((item.trDieselEm[month] + item.dgEm[month]).toFixed(6));
     /* Governed waste comes from the published release only. The static
        waste_master.csv is historical reference and must never overwrite a
        published month. */
@@ -158,10 +164,11 @@
     item.elecEm[month] = window.KCOSMOSPublicAPI.indicator(publication.raw, 'scope2_tco2e').value;
     item.perCapita[month] = window.KCOSMOSPublicAPI.indicator(publication.raw, 'operational_ghg_per_capita_kgco2e').value;
     item.wastePerCapita[month] = window.KCOSMOSPublicAPI.indicator(publication.raw, 'waste_per_capita_kg').value;
+    item.landfillDiversionPct = num(publication.raw.static_references?.landfill_diversion_pct?.value);
     const population = publication.population;
     item.population = population?.status === 'available' ? num(population.value) : null;
-    item.avoided = window.KCOSMOSPublicAPI.indicator(publication.raw, 'avoided_emissions_tco2e').value;
-    item.reShare = window.KCOSMOSPublicAPI.indicator(publication.raw, 'renewable_share_percent').value;
+    item.avoided = item.avoidEm[month];
+    item.reShare = item.renewableSharePct[month];
   }
 
   /* Waste became a governed Manager domain (0009_waste_domain). Its values now
@@ -235,16 +242,8 @@
     releases.forEach(release => applyPublication(release, data));
     if (publication.state === 'published') applyPublication(publication, data);
 
-    const petrol = window.KCOSMOSPublicAPI.calculation(publication.domains.transport, 'transport_petrol_emissions');
-    const diesel = window.KCOSMOSPublicAPI.calculation(publication.domains.transport, 'transport_diesel_emissions');
-    const grid = window.KCOSMOSPublicAPI.calculation(publication.domains.energy, 'grid_electricity_emissions');
-    const lpg = window.KCOSMOSPublicAPI.calculation(publication.domains.lpg, 'lpg_emissions');
-
     return {
-      data, EF: {
-        petrol: petrol.factorValue, diesel: diesel.factorValue,
-        grid: grid.factorValue, lpg: lpg.factorValue
-      },
+      data,
       green: staticGreen(greenText), outreach: outreachFrom(publication.domains.outreach, publication),
       publication, history
     };

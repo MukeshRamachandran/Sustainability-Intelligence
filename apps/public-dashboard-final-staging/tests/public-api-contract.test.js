@@ -251,7 +251,7 @@ test('an unpublished waste period reports unavailable rather than zero', async (
 test('active display marks full GHG and unresolved methodology values unavailable', () => {
   const app = read('app.js');
   assert.match(app, /Operational GHG Emissions — Scope 1 \+ Scope 2/);
-  assert.match(app, /Methodology under review/);
+  assert.match(app, /Not published for this period/);
   assert.match(app, /Not published/);
   assert.doesNotMatch(app, /2\.388|2\.701|0\.727|0\.71|1\.5571|2\.939/);
   assert.doesNotMatch(app, /Calculations\./);
@@ -431,14 +431,14 @@ test('the official Total GHG, avoided emissions and renewable share stay unavail
   const loader = read('public-data-loader.js');
   assert.match(loader, /item\.totalGHG = window\.KCOSMOSPublicAPI\.indicator\(publication\.raw, 'total_ghg_tco2e'\)\.value/);
   assert.doesNotMatch(app, /const net = null;/);
-  assert.match(app, /Methodology under review/);
+  assert.match(app, /Not published for this period/);
   // Nothing in the page derives the official total from Scope 1 + Scope 2.
   assert.doesNotMatch(app, /Calculations\.(?:grossEmissions|netCarbonIndicator|scope1Total|scope2Total)/);
   assert.doesNotMatch(loader, /totalGHG\s*=\s*[^w]*(?:scope1|elecEm)/);
   assert.doesNotMatch(loader, /population_master\.csv|6991/);
 });
 
-test('schema 1.3 monthly loader maps approved Energy and Water fields without population CSV', async () => {
+test('schema 1.4 monthly loader maps frozen derived Energy and Water indicators without population CSV', async () => {
   const requestedFiles = [];
   const transport = { metrics: {}, calculations: [] };
   const energy = { metrics: {
@@ -449,7 +449,7 @@ test('schema 1.3 monthly loader maps approved Energy and Water fields without po
     renewable_on_campus_kwh: { value: 40, unit: 'kWh' },
     renewable_procured_kwh: { value: 10, unit: 'kWh' },
     solar_water_heater_kwh: { value: 7, unit: 'kWh' },
-    renewable_total_kwh: { value: 50, unit: 'kWh' }
+    renewable_total_kwh: { value: 57, unit: 'kWh' }
   }, calculations: [] };
   const water = { metrics: {
     water_twad_kl: { value: 10, unit: 'KL' },
@@ -461,7 +461,7 @@ test('schema 1.3 monthly loader maps approved Energy and Water fields without po
   }, calculations: [] };
   const release = {
     state: 'published',
-    release: { version: 'sustainability-2026-09-v2' },
+    release: { version: 'sustainability-2026-09-v3' },
     period: { year: 2026, month: 9 },
     population: { status: 'available', value: 6991, unit: 'people', effective_year: 2026 },
     indicators: {
@@ -470,12 +470,17 @@ test('schema 1.3 monthly loader maps approved Energy and Water fields without po
       operational_ghg_tco2e: { status: 'available', value: 5 },
       operational_ghg_per_capita_kgco2e: { status: 'available', value: 0.715 },
       waste_per_capita_kg: { status: 'available', value: 2.5 },
+      renewable_electricity_kwh: { status: 'available', value: 50 },
+      total_electricity_consumption_kwh: { status: 'available', value: 175 },
+      renewable_share_pct: { status: 'available', value: 28.571428571429 },
+      estimated_avoided_grid_emissions_tco2e: { status: 'available', value: 0.03635 },
+      water_per_capita_l: { status: 'available', value: 2.4316978973 },
       total_ghg_tco2e: { status: 'unavailable', value: null },
       avoided_emissions_tco2e: { status: 'unavailable', value: null },
       renewable_share_percent: { status: 'unavailable', value: null }
     },
     domains: { transport, energy, lpg: { metrics: {}, calculations: [] }, water, outreach: null, waste: null },
-    raw: {}
+    raw: { static_references: { landfill_diversion_pct: { value: 88.1 } } }
   };
   const metric = (domain, code) => {
     const value = domain?.metrics?.[code]?.value ?? null;
@@ -505,6 +510,11 @@ test('schema 1.3 monthly loader maps approved Energy and Water fields without po
   assert.equal(year.reProcuredKwh[8], 10);
   assert.equal(year.solarWaterHeaterKwh[8], 7);
   assert.equal(year.reKwh[8], 50);
+  assert.equal(year.totalElectricityKwh[8], 175);
+  assert.equal(year.renewableSharePct[8], 28.571428571429);
+  assert.equal(year.avoidEm[8], 0.03635);
+  assert.equal(year.waterPerCapitaL[8], 2.4316978973);
+  assert.equal(year.landfillDiversionPct, 88.1);
   assert.equal(year.waterTWAD[8], 10);
   assert.equal(year.waterBorewell[8], 5);
   assert.equal(year.waterProcured[8], 2);
@@ -525,8 +535,8 @@ test('missing values are shown as unavailable and are never coerced to zero', ()
   assert.match(app, /c == null \? 'Unavailable' : c/);
   assert.match(app, /"\$\{c == null \? '' : c\}"/);
   assert.doesNotMatch(app, /const cleanZero = arr => arr\.map\(v => v === 0/);
-  assert.match(app, /Combined electricity consumption is not published in this release/);
-  assert.match(app, /kpi\('Total electricity consumption', null/);
+  assert.match(app, /Combined electricity consumption is not published for this period/);
+  assert.match(app, /kpi\('Total electricity consumption', totalElec/);
   assert.doesNotMatch(app, /v == null \? null : v \+ \(re\[i\] == null \? 0 : re\[i\]\)/);
 });
 
@@ -565,10 +575,11 @@ test('private water source terminology matches water_private_kl', () => {
   assert.match(html, /TWAD \/ Borewell \/ Private water supply values/);
 });
 
-test('energy total remains unavailable unless a combined value is published', () => {
+test('energy total reads the combined value published by the backend', () => {
   const app = read('app.js');
-  assert.match(app, /kpi\('Total electricity consumption', null/);
-  assert.match(app, /Combined electricity consumption is not published in this release/);
+  assert.match(app, /kpi\('Total electricity consumption', totalElec/);
+  assert.match(app, /valFor\(d, d\.totalElectricityKwh, month\)/);
+  assert.match(app, /const total26 = cleanZero\(d26\.totalElectricityKwh\)/);
   assert.doesNotMatch(app, /elec \+ re/);
 });
 
@@ -620,7 +631,7 @@ test('Carbon Story restores the last-good final-staging scenes and reads current
   const story = read('walkthrough.js').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
   const css = read('walkthrough.css');
   assert.match(html, /walkthrough\.css\?v=13/);
-  assert.match(html, /walkthrough\.js\?v=15/);
+  assert.match(html, /walkthrough\.js\?v=16/);
   assert.ok(html.indexOf('vendor/gsap-scrolltrigger.min.js') < html.indexOf('walkthrough.js'));
   assert.match(story, /document\.querySelectorAll\('\.page \.kpi'\)/);
   assert.match(story, /document\.querySelectorAll\('#ghgKpis \.ghg-split'\)/);
@@ -633,7 +644,7 @@ test('Carbon Story restores the last-good final-staging scenes and reads current
     'Scope 1 emissions',
     'Scope 2 emissions',
     'Per capita emissions',
-    'Net carbon impact'
+    'Where We Stand'
   ]);
   for (const video of [
     'industrynew.mp4', 'elecmeter.mp4', 'solar-kpi.mp4', 'solarbuild.mp4',
@@ -641,18 +652,38 @@ test('Carbon Story restores the last-good final-staging scenes and reads current
     'electricspark.mp4', 'electri.mp4', 'queper.mp4', 'earth.mp4',
     'entrykct.mp4', 'micronew.mp4'
   ]) assert.ok(story.includes(video), `last-good Carbon Story video ${video} must remain mapped`);
-  assert.match(story, /alias\('Emission avoided', 'Reduction through renewables'\)/);
+  assert.match(story, /alias\('Emission avoided', 'Estimated avoided grid emissions'\)/);
   assert.match(story, /alias\('Per capita emissions', 'Operational GHG per capita'\)/);
   assert.match(story, /document\.querySelector\('#ghgKpis \.ghg-top \.counter-val'\)/);
-  assert.match(story, /var ledgerReady = !netUnavailable/);
-  assert.match(story, /ledger: ledgerReady \?/);
+  assert.doesNotMatch(story, /Gross − avoided|Net impact|netVal|ledgerReady/);
+  assert.match(story, /Estimated avoided grid emissions/);
   assert.match(css, /\.wt-equiv/);
   assert.match(css, /\.wt-ledger/);
 });
 
-test('schema 1.3 hero indicators continue to be sourced by the public API loader', () => {
+test('schema 1.4 hero indicators continue to be sourced by the public API loader', () => {
   const loader = read('public-data-loader.js');
   assert.match(loader, /indicator\(publication\.raw, 'operational_ghg_tco2e'\)/);
   assert.match(loader, /indicator\(publication\.raw, 'operational_ghg_per_capita_kgco2e'\)/);
-  assert.match(loader, /indicator\(publication\.raw, 'avoided_emissions_tco2e'\)/);
+  assert.match(loader, /indicator\(publication\.raw, 'estimated_avoided_grid_emissions_tco2e'\)/);
+});
+
+test('new KPI cards use frozen indicators, static landfill reference, and no waste or green carbon claims', () => {
+  const app = read('app.js');
+  const loader = read('public-data-loader.js');
+  const html = read('index.html');
+  for (const code of [
+    'renewable_electricity_kwh', 'total_electricity_consumption_kwh',
+    'renewable_share_pct', 'estimated_avoided_grid_emissions_tco2e', 'water_per_capita_l'
+  ]) assert.match(loader, new RegExp(`indicator\\(publication\\.raw, '${code}'\\)`));
+  assert.match(loader, /static_references\?\.landfill_diversion_pct\?\.value/);
+  assert.match(app, /const landfillDiversionPct = d\.landfillDiversionPct/);
+  assert.match(app, /kpi\('Landfill diversion', landfillDiversionPct/);
+  assert.match(app, /kpi\('Consumption per capita', waterPerCapitaL, 'L\/person'/);
+  assert.match(app, /kpi\('Estimated avoided grid emissions', avoid/);
+  assert.match(app, /tables\.derived =/);
+  assert.match(html, /data-t="derived"/);
+  assert.doesNotMatch(app, /kpi\('Green-cover carbon sequestration'/);
+  assert.doesNotMatch(app, /kpi\('Waste emissions'|kpi\('Waste CO₂e'/);
+  assert.doesNotMatch(app, /renewable_total_kwh/);
 });

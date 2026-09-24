@@ -26,7 +26,6 @@
      from these. Correct a factor here and every act updates.
      ------------------------------------------------------------------ */
   var WT_EQUIV = {
-    treeKgYr: 21,      // kg CO₂ absorbed per mature tree per year
     homeKwhYr: 1200,   // kWh consumed per Indian household per year
     carKgKm: 0.17,     // kg CO₂e per km, average petrol car
     indiaPerCap: 2.0   // tCO₂e per person per year, India average
@@ -38,16 +37,14 @@
     var f = WT_EQUIV;
     function b(x, dec) { return '<b>' + fmtNum(x, dec || 0) + '</b>'; }
     switch (n) {
-      case 1: return 'the yearly absorption work of ' + b(v * 1000 / f.treeKgYr) + ' mature trees';
+      case 1: return null;
       case 2: return 'enough to run ' + b(v / f.homeKwhYr) + ' Indian homes for a year';
       case 3: return 'a full year of clean power for ' + b(v / f.homeKwhYr) + ' homes';
       case 4: return b(v * 1000 / f.carKgKm) + ' km of petrol driving that never happened';
       case 5: return 'equal to driving a petrol car ' + b(v * 1000 / f.carKgKm) + ' km';
-      case 6: return 'it would take ' + b(v * 1000 / f.treeKgYr) + ' mature trees a year to absorb this';
+      case 6: return null;
       case 7: return 'about ' + b(v / f.indiaPerCap * 100) + '% of the average Indian’s annual footprint';
-      case 8: return v < 0
-        ? 'a net removal — the yearly work of ' + b(Math.abs(v) * 1000 / f.treeKgYr) + ' mature trees'
-        : 'still ' + b(v * 1000 / f.treeKgYr) + ' mature trees of absorption away from zero';
+      case 8: return null;
     }
     return null;
   }
@@ -102,7 +99,7 @@
       storyVideo: 'media/natureview.mp4',
       head: ['The Carbon', 'That Never Was'],
       def: 'The greenhouse gas that would have entered the atmosphere had the campus drawn this same energy from the grid instead of generating it cleanly. It is measured in absence — emissions that never happened.',
-      chips: ['Methodology under review', 'No published result']
+      chips: ['Governed GRID factor', 'Separate from operational inventory']
     },
     {
       title: 'Scope 1 emissions',
@@ -128,11 +125,11 @@
       chips: ['Footprint ÷ population', 'Growth-adjusted']
     },
     {
-      title: 'Net carbon impact',
+      title: 'Where We Stand',
       video: 'media/earth.mp4',
-      head: ['What', 'Remains'],
-      def: 'Gross emissions less the emissions avoided — the honest, settled figure. Everything the campus released, set against everything it prevented. This is the number that moves an institution toward carbon neutrality.',
-      chips: ['Gross − avoided', 'The bottom line']
+      head: ['Where', 'We Stand'],
+      def: 'Operational greenhouse gas emissions and estimated avoided grid emissions are reported separately. Avoided emissions are not subtracted from the operational inventory.',
+      chips: ['Two distinct indicators', 'No net subtraction']
     }
   ];
 
@@ -150,13 +147,9 @@
     kind: 'outro',
     accent: '#1c7a4b',
     video: 'media/micronew.mp4',
-    eyebrow: 'The ledger, closed',
-    head: ['Where', 'We Stand'],
-    lead: 'Everything released, set against everything prevented.',
-    // the closing sentence depends on which way the ledger actually fell
-    below: 'The figure above is below zero: over this period the campus kept more carbon out of the atmosphere than it put in.',
-    above: 'The figure above is still above zero: over this period the campus released more carbon than it managed to prevent.',
-    mirrors: 'Net carbon impact'
+    eyebrow: 'The story continues',
+    head: ['A Clearer', 'Picture'],
+    lead: 'The published operational inventory and estimated avoided grid emissions remain separate measures.'
   };
 
   /* ------------------------------------------------------------------ */
@@ -262,7 +255,7 @@
     function alias(title, source) {
       if (map[source]) map[title] = Object.assign({}, map[source]);
     }
-    alias('Emission avoided', 'Reduction through renewables');
+    alias('Emission avoided', 'Estimated avoided grid emissions');
     alias('Per capita emissions', 'Operational GHG per capita');
 
     // The former gross-footprint KPI now lives in the governed hero card.
@@ -382,33 +375,23 @@
 
     var valEl = null, valLine = null, ledger = null;
     if (cfg.ledger) {
-      // closing card: animated arithmetic instead of a single number
+      // Two independent published measures; never an arithmetic ledger.
       var lg = el('div', 'wt-ledger');
       var rows = [
-        { k: 'Gross emissions', v: cfg.ledger.gross },
-        { k: '− Avoided', v: cfg.ledger.avoided }
+        { k: 'Operational GHG', v: cfg.ledger.gross },
+        { k: 'Estimated avoided grid emissions', v: cfg.ledger.avoided }
       ];
-      ledger = { nums: [], vals: [cfg.ledger.gross, cfg.ledger.avoided, cfg.ledger.net], rows: [], rule: null, netRow: null };
+      ledger = { nums: [], vals: [cfg.ledger.gross, cfg.ledger.avoided], rows: [] };
       rows.forEach(function (r) {
         var row = el('div', 'wt-ledger-row');
         row.appendChild(el('span', 'k', r.k));
         var num = el('span', 'n', fmtNum(0, cfg.dec));
+        num.appendChild(el('small', null, ' tCO₂e'));
         row.appendChild(num);
         lg.appendChild(row);
         ledger.rows.push(row);
         ledger.nums.push(num);
       });
-      ledger.rule = el('div', 'wt-ledger-rule');
-      lg.appendChild(ledger.rule);
-      var netRow = el('div', 'wt-ledger-row wt-ledger-net');
-      netRow.appendChild(el('span', 'k', 'Net impact'));
-      var netNum = el('span', 'n', fmtNum(0, cfg.dec));
-      netNum.appendChild(el('small', null, ' ' + cfg.unit));
-      netRow.appendChild(netNum);
-      lg.appendChild(netRow);
-      ledger.rows.push(netRow);
-      ledger.nums.push(netNum);
-      ledger.netRow = netRow;
       copy.appendChild(lg);
       ledger.root = lg;
     } else if (cfg.value != null || cfg.na) {
@@ -492,6 +475,17 @@
     WT_STORY.forEach(function (s, i) {
       var c = cards[s.title];
       var na = c ? c.na : true;
+      if (s.title === 'Where We Stand') {
+        var operational = cards['Total carbon footprint (gross)'];
+        var avoided = cards['Emission avoided'];
+        list.push({
+          kind: 'kpi', n: i + 1, title: s.title, head: s.head, def: s.def,
+          chips: s.chips, video: s.video, accent: '#1c7a4b', na: false,
+          dec: 3, unit: 'tCO₂e', ledger: operational && avoided && !operational.na && !avoided.na
+            ? { gross: operational.value, avoided: avoided.value } : null
+        });
+        return;
+      }
       list.push({
         kind: 'kpi',
         n: i + 1,
@@ -510,25 +504,9 @@
       });
     });
 
-    var net = cards[OUTRO.mirrors];
-    var netVal = net ? net.value : null;
-    var grossC = cards['Total carbon footprint (gross)'];
-    var avoidC = cards['Emission avoided'];
-    var netUnavailable = !net || net.na || netVal == null;
-    var ledgerReady = !netUnavailable && grossC && !grossC.na && grossC.value != null
-      && avoidC && !avoidC.na && avoidC.value != null;
     var outro = Object.assign({}, OUTRO, {
-      value: netVal,
-      dec: net ? net.dec : 2,
-      unit: net ? net.unit : 'tCO₂e',
-      na: netUnavailable,
-      accent: (net && net.accent) || '#1c7a4b',
-      def: ledgerReady ? OUTRO.lead + ' ' + (netVal < 0 ? OUTRO.below : OUTRO.above) : OUTRO.lead,
-      ledger: ledgerReady ? {
-        gross: grossC ? grossC.value : null,
-        avoided: avoidC ? avoidC.value : null,
-        net: netVal
-      } : null
+      na: false,
+      def: OUTRO.lead
     });
     list.push(outro);
 
@@ -621,16 +599,11 @@
     if (p.cta) tl.to(p.cta, { y: 0, opacity: 1, duration: .8, ease: 'power3.out' }, .86);
 
     if (p.ledger) {
-      // the arithmetic reveal: rows enter, gross counts, avoided counts,
-      // the rule draws, then the net figure lands and takes the accent
+      // Reveal each independent published figure without combining them.
       var lg = p.ledger;
       tl.to(lg.rows, { y: 0, opacity: 1, duration: .7, stagger: .14, ease: 'power3.out' }, .35)
         .add(countTween(lg.nums[0], lg.vals[0], a.dec, .8), .55)
-        .add(countTween(lg.nums[1], lg.vals[1], a.dec, .8), 1.05)
-        .to(lg.rule, { scaleX: 1, duration: .7, ease: 'power2.inOut' }, 1.45)
-        .add(countTween(lg.nums[2], lg.vals[2], a.dec, 1.0), 1.7)
-        .fromTo(lg.netRow, { scale: .96, transformOrigin: '0% 50%' },
-          { scale: 1, duration: .6, ease: 'back.out(1.6)' }, 2.45);
+        .add(countTween(lg.nums[1], lg.vals[1], a.dec, .8), 1.05);
     }
     return tl;
   }
