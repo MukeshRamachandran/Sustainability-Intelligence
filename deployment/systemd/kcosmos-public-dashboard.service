@@ -1,0 +1,21 @@
+[Unit]
+Description=K-COSMOS public sustainability dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kcosmos
+Group=kcosmos
+WorkingDirectory=@REPO_ROOT@/apps/public-dashboard
+ExecStart=/usr/bin/python3 @REPO_ROOT@/deployment/scripts/static-server.py --host 127.0.0.1 --port 3001 --directory @REPO_ROOT@/apps/public-dashboard
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kcosmos-public-dashboard
+
+[Install]
+WantedBy=multi-user.target

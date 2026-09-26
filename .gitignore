@@ -18,6 +18,13 @@ node_modules/
 .env.local
 .env.*.local
 *.secret
+services/main-api/.env
+
+# Database backups produced by deployment/scripts/backup-db.sh
+deployment/backups/
+
+# Generated PDF debug render (contains a machine-local file URI)
+services/report-generation/report_engine/exports/debug.html
 
 # Database / backup files
 *.dump

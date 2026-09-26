@@ -1,18 +1,29 @@
-/* The supported local Manager/Admin origin is port 3000, which is the only
-   origin in the backend's ALLOWED_ORIGINS (see services/main-api/.env.example
-   and compose.yaml).  These two lists must stay in agreement: a port listed
-   here but missing from ALLOWED_ORIGINS resolves the API correctly and is then
-   blocked by CORS, which is harder to diagnose than no API base at all.
+/* Production browsers use the same HTTPS origin as Nginx. API calls are
+   relative (/api/...). Port 8000 is development-only, and only when this
+   page itself is opened from a local static server on port 3000.
+   Set window.KCOSMOS_API_BASE before this script to override that.
+   Never use a wildcard origin: the session cookie is sent with credentials. */
+const DEVELOPMENT_FRONTEND_PORT = "3000";
+const PRODUCTION_HOSTS = new Set(["sustainability.kct.ac.in"]);
 
-   To serve the portal from another port, set window.KCOSMOS_API_BASE before
-   this script AND add that exact origin to ALLOWED_ORIGINS. Never use a
-   wildcard origin: the session cookie is sent with credentials. */
-const SUPPORTED_FRONTEND_PORT = "3000";
-const API_BASE = window.KCOSMOS_API_BASE || (
-    window.location.port === SUPPORTED_FRONTEND_PORT
-        ? `${window.location.protocol}//${window.location.hostname}:8000`
-        : ""
-);
+function resolveApiBase() {
+    if (window.KCOSMOS_API_BASE) {
+        return String(window.KCOSMOS_API_BASE).replace(/\/$/, "");
+    }
+
+    const host = window.location.hostname;
+    if (PRODUCTION_HOSTS.has(host)) {
+        return "";
+    }
+
+    if (window.location.port === DEVELOPMENT_FRONTEND_PORT) {
+        return `${window.location.protocol}//${host}:8000`;
+    }
+
+    return "";
+}
+
+const API_BASE = resolveApiBase();
 const CSRF_COOKIE_NAME = "microcosm_csrf";
 
 function getCookie(name) {

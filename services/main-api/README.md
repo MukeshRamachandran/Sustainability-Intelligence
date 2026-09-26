@@ -24,17 +24,20 @@ repository or container image.
 
 ## Docker
 
-Build and start the local services:
+Copy `.env.example` to `.env` and set `POSTGRES_PASSWORD` and `DATABASE_URL`
+before starting. Compose does not publish PostgreSQL and does not run migrations.
 
 ```bash
-docker compose up --build
+docker compose up -d postgres
+docker compose run --rm --no-deps api alembic upgrade head
+docker compose up -d
 ```
 
-Check:
+The API is bound to `127.0.0.1:8000` on the host. Check:
 
 ```bash
-curl http://localhost:8000/health/live
-curl http://localhost:8000/health/ready
+curl http://127.0.0.1:8000/health/live
+curl http://127.0.0.1:8000/health/ready
 ```
 
 Stop the services while preserving named volumes:
@@ -43,17 +46,18 @@ Stop the services while preserving named volumes:
 docker compose down
 ```
 
-Do not use `docker compose down --volumes` unless destruction of local database
-and evidence volumes is explicitly intended.
+Do not use `docker compose down --volumes` unless destruction of the local database
+and evidence volumes is explicitly intended. Production deployment is documented
+in `../../docs/DEPLOYMENT.md`.
 
 ### Evidence recovery
 
 Evidence audit recovery requires both a PostgreSQL backup and a backup of the
 private evidence volume. PostgreSQL contains evidence metadata, submission
 relationships and revision history; the private volume contains the actual file
-content. The current development content volume is
-`microcosm_evidence_clean`. Restoring only one side does not restore a usable
-evidence audit record.
+content. Compose stores that content in the `evidence_clean` volume. Restoring
+only one side does not restore a usable evidence audit record. Use
+`../../deployment/scripts/backup-db.sh` for the database dump.
 
 ## Local Python checks
 
@@ -76,8 +80,9 @@ pytest
 
 ## Alembic
 
-The Alembic environment is initialized, but D3 contains no application schema
-migration. Once PostgreSQL is running, inspect the current revision with:
+Migrations live in `alembic/versions/`. Apply them explicitly. The API process
+does not migrate on startup. Once PostgreSQL is running, inspect the current
+revision with:
 
 ```bash
 alembic current

@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     LOGIN_MAX_FAILURES: int = Field(default=5, ge=3, le=20)
     LOGIN_LOCK_MINUTES: int = Field(default=15, ge=1, le=1440)
     PASSWORD_MIN_LENGTH: int = Field(default=12, ge=12, le=128)
+    # None follows APP_ENV: documentation is on outside production.
+    OPENAPI_ENABLED: bool | None = None
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod
@@ -127,7 +129,17 @@ class Settings(BaseSettings):
                 raise ValueError("production evidence root must be absolute")
             if self.EVIDENCE_STORAGE_DIR is not None and not self.EVIDENCE_STORAGE_DIR.is_absolute():
                 raise ValueError("production evidence storage directory must be absolute")
+            for origin in self.ALLOWED_ORIGINS:
+                host = (urlparse(origin).hostname or "").lower()
+                if host in {"localhost", "127.0.0.1", "::1"}:
+                    raise ValueError("production allowed origins must not be loopback addresses")
         return self
+
+    @property
+    def openapi_enabled(self) -> bool:
+        if self.OPENAPI_ENABLED is None:
+            return self.APP_ENV != "production"
+        return self.OPENAPI_ENABLED
 
 
 @lru_cache

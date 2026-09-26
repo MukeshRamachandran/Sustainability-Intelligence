@@ -172,7 +172,10 @@
   }
 
   async function loadDashboardData() {
-    const localFrontend = ['3000', '5500', '8080'].includes(window.location.port);
+    /* 127.0.0.1:8000 is development-only. Production (Nginx, empty port or
+       sustainability.kct.ac.in) uses the same-origin path /api/public/... */
+    const productionHost = window.location.hostname === 'sustainability.kct.ac.in';
+    const localFrontend = !productionHost && ['3000', '5500', '8080'].includes(window.location.port);
     const apiBase = window.KCOSMOS_API_BASE || (localFrontend ? 'http://127.0.0.1:8000' : '');
     const [factorRows, transportRows, dgRows, lpgRows, popRows, metaRows, wasteText, waterText, greenText, outreachRelease, energyText] = await Promise.all([
       fetchCSV('data/emission_factors.csv'),

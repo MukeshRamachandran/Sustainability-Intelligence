@@ -88,12 +88,14 @@ def create_app(
         yield
         application.state.engine.dispose()
 
+    openapi_enabled = configured.openapi_enabled
     application = FastAPI(
         title="K-COSMOS Backend API",
         version=API_VERSION,
         lifespan=lifespan,
-        docs_url="/docs" if configured.APP_ENV != "production" else None,
-        redoc_url=None,
+        docs_url="/docs" if openapi_enabled else None,
+        redoc_url="/redoc" if openapi_enabled else None,
+        openapi_url="/openapi.json" if openapi_enabled else None,
     )
     application.state.settings = configured
     application.state.institutional_clock = institutional_clock or (lambda: datetime.now(UTC))

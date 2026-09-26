@@ -43,3 +43,33 @@ def test_production_accepts_replaced_security_values(tmp_path: Path) -> None:
         EVIDENCE_ROOT=tmp_path.resolve(),
     )
     assert settings.APP_ENV == "production"
+    assert settings.openapi_enabled is False
+
+
+def test_production_rejects_loopback_origins(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError):
+        Settings(
+            APP_ENV="production",
+            DATABASE_URL="postgresql+psycopg://app:unique-password@db.internal/microcosm",
+            PUBLIC_BASE_URL="https://sustainability.example.edu",
+            ALLOWED_ORIGINS=["http://localhost:3000"],
+            SECRET_KEY="s" * 48,
+            CSRF_SECRET="c" * 48,
+            SESSION_COOKIE_SECURE=True,
+            EVIDENCE_ROOT=tmp_path.resolve(),
+        )
+
+
+def test_openapi_can_be_enabled_explicitly_in_production(tmp_path: Path) -> None:
+    settings = Settings(
+        APP_ENV="production",
+        DATABASE_URL="postgresql+psycopg://app:unique-password@db.internal/microcosm",
+        PUBLIC_BASE_URL="https://sustainability.example.edu",
+        ALLOWED_ORIGINS=["https://sustainability.example.edu"],
+        SECRET_KEY="s" * 48,
+        CSRF_SECRET="c" * 48,
+        SESSION_COOKIE_SECURE=True,
+        EVIDENCE_ROOT=tmp_path.resolve(),
+        OPENAPI_ENABLED=True,
+    )
+    assert settings.openapi_enabled is True

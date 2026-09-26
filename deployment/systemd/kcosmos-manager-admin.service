@@ -1,0 +1,21 @@
+[Unit]
+Description=K-COSMOS manager and admin portal
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kcosmos
+Group=kcosmos
+WorkingDirectory=@REPO_ROOT@/apps/manager-admin
+ExecStart=/usr/bin/python3 @REPO_ROOT@/deployment/scripts/static-server.py --host 127.0.0.1 --port 3002 --directory @REPO_ROOT@/apps/manager-admin
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kcosmos-manager-admin
+
+[Install]
+WantedBy=multi-user.target

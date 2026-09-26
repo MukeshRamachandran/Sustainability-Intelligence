@@ -32,14 +32,33 @@
       body.innerHTML = `<tr><td colspan="7" class="text-danger">${escapeHtml(error.message)}</td></tr>`;
     }
   }
-  document.getElementById('create-manager-form').addEventListener('submit', async event => {
+  const createForm = document.getElementById('create-manager-form');
+  createForm.addEventListener('submit', async event => {
     event.preventDefault();
+    const submitButton = createForm.querySelector('button[type="submit"]');
+    const passwordInput = document.getElementById('new-password');
+    if (submitButton) submitButton.disabled = true;
     try {
-      await request('', { method: 'POST', body: JSON.stringify({ username: document.getElementById('new-username').value, display_name: document.getElementById('new-display-name').value, manager_domain: document.getElementById('new-domain').value, temporary_password: document.getElementById('new-password').value }) });
-      event.currentTarget.reset();
+      await request('', {
+        method: 'POST',
+        body: JSON.stringify({
+          username: document.getElementById('new-username').value,
+          display_name: document.getElementById('new-display-name').value,
+          email: document.getElementById('new-email') ? document.getElementById('new-email').value : undefined,
+          role: 'manager',
+          domain: document.getElementById('new-domain').value,
+          temporary_password: passwordInput.value
+        })
+      });
+      createForm.reset();
+      passwordInput.value = '';
       showMessage('Manager created. Password change is required at first sign-in.');
       await loadUsers();
-    } catch (error) { showMessage(error.message, true); }
+    } catch (error) {
+      showMessage(error.message, true);
+    } finally {
+      if (submitButton) submitButton.disabled = false;
+    }
   });
   body.addEventListener('click', async event => {
     const button = event.target.closest('button[data-action]');

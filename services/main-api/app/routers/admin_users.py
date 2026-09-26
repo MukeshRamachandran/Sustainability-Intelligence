@@ -115,12 +115,20 @@ def create_manager(
     normalized = payload.username.casefold()
     if db.scalar(select(User.id).where(User.normalized_username == normalized)) is not None:
         raise HTTPException(status_code=409, detail="Username already exists.")
+    email = payload.email
+    normalized_email = email.casefold() if email else None
+    if normalized_email is not None and db.scalar(
+        select(User.id).where(User.normalized_email == normalized_email)
+    ) is not None:
+        raise HTTPException(status_code=409, detail="Email already exists.")
     manager_role = db.scalar(select(Role).where(Role.code == RoleCode.MANAGER.value))
     if manager_role is None:
         raise HTTPException(status_code=500, detail="Manager role is not configured.")
     user = User(
         username=payload.username,
         normalized_username=normalized,
+        email=email,
+        normalized_email=normalized_email,
         display_name=payload.display_name,
         password_hash=hash_password(payload.temporary_password),
         is_active=True,

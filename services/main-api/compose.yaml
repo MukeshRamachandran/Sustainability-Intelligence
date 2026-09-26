@@ -1,16 +1,21 @@
-name: microcosm-local
+# K-COSMOS production Compose file.
+# Copy .env.example to .env and set secrets before starting.
+# PostgreSQL is reachable only on the Compose network. Do not publish 5432.
+# Alembic is an explicit deployment step. This file does not run migrations.
+
+name: kcosmos
 
 services:
   postgres:
-    image: postgres:17.6-bookworm
+    image: postgres:17
     environment:
-      POSTGRES_DB: microcosm
-      POSTGRES_USER: microcosm_app
-      POSTGRES_PASSWORD: microcosm_dev_only
+      POSTGRES_DB: ${POSTGRES_DB:-microcosm}
+      POSTGRES_USER: ${POSTGRES_USER:-microcosm_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     volumes:
-      - microcosm_postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U microcosm_app -d microcosm"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 5s
       timeout: 5s
       retries: 12
@@ -19,53 +24,46 @@ services:
   api:
     build:
       context: .
-      args:
-        INSTALL_DEV: "true"
+      dockerfile: Dockerfile
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    env_file:
+      - path: .env
+        required: false
     environment:
-      APP_ENV: development
-      # The active development database. `microcosm` was contaminated with
-      # synthetic integration-test data (772 users, 461 periods, 41 releases,
-      # an active release for a fabricated 2030-11 period) and is retained
-      # unchanged for forensics - it is never dropped. Override
-      # MICROCOSM_DATABASE_URL to point the runtime back at it.
-      DATABASE_URL: ${MICROCOSM_DATABASE_URL:-postgresql+psycopg://microcosm_app:microcosm_dev_only@postgres:5432/microcosm_clean_20260922}
-      LOG_LEVEL: INFO
-      PUBLIC_BASE_URL: http://localhost:8000
-      INSTITUTION_TIMEZONE: Asia/Kolkata
-      ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
-      SECRET_KEY: development-only-change-me
-      CSRF_SECRET: development-csrf-change-me
-      SESSION_COOKIE_NAME: microcosm_session
-      CSRF_COOKIE_NAME: microcosm_csrf
-      SESSION_IDLE_MINUTES: 60
-      SESSION_ABSOLUTE_HOURS: 8
-      SESSION_COOKIE_SECURE: "false"
-      SESSION_COOKIE_SAMESITE: lax
-      EVIDENCE_ROOT: /data/evidence
-      EVIDENCE_STORAGE_DIR: /data/evidence/clean
-      MAX_EVIDENCE_FILE_SIZE_BYTES: 10485760
-      ALLOWED_EVIDENCE_TYPES: application/pdf,image/png,image/jpeg
-      MAX_UPLOAD_BYTES: 10485760
-      LOGIN_MAX_FAILURES: 5
-      LOGIN_LOCK_MINUTES: 15
-      PASSWORD_MIN_LENGTH: 12
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
-      - microcosm_evidence_quarantine:/data/evidence/quarantine
-      - microcosm_evidence_clean:/data/evidence/clean
+      - evidence_clean:/data/evidence/clean
+      - evidence_quarantine:/data/evidence/quarantine
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
-      interval: 10s
+      interval: 15s
       timeout: 5s
       retries: 12
-      start_period: 10s
+      start_period: 20s
     restart: unless-stopped
 
+  environment-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 20s
+
 volumes:
-  microcosm_postgres_data:
-  microcosm_evidence_quarantine:
-  microcosm_evidence_clean:
+  postgres_data:
+  evidence_clean:
+  evidence_quarantine:
