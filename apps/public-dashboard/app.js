@@ -408,7 +408,7 @@ function makeKpis() {
     inDomain('waste', () => overviewKpi('Total waste generated', wasteTot == null ? null : wasteTot * wasteShow.factor, wasteShow.unit, colors.orange, 'trash', null, true, wasteShow.dec, 'convwastevideo')),
     overviewKpi('Landfill diversion', landfillDiversionPct, '%', colors.lime, 'shield', null, false, 1, 'landfillvideo'),
     inDomain('water', () => overviewKpi('Total water usage', waterKL, 'KL', colors.cyan, 'droplet', null, true, 0, 'watervideo')),
-    overviewKpi('Total green cover', green.totalGreenCoverPct, '%', colors.emerald, 'tree', null, false, 0, 'leavesvideo'),
+    overviewKpi('Total green cover', hasPublication ? green.totalGreenCoverPct : null, '%', colors.emerald, 'tree', null, false, 0, 'leavesvideo'),
     inDomain('outreach', () => overviewKpi('Outreach impact', outreachForPeriod ? outreach.participantsServed : null, outreach.qualifiers?.participantsServed === 'AT_LEAST' ? '+ people' : 'people', colors.gold, 'users', null, false, 0, 'earthvideo'))
   ].join('');
   document.getElementById('ghgKpis').innerHTML = [
@@ -1069,11 +1069,12 @@ function drawCharts() {
   const mk = (id, cfg) => { const el = document.getElementById(id); if (el && el.closest('.page.active')) charts[id] = new Chart(el, cfg); };
   const { year, month, d } = currentPeriod();
   if (!d) return;
-  const emptyTrendYear = {
+  const blankTrendYear = () => ({
     elecKwh: Array(12).fill(null), reKwh: Array(12).fill(null),
-    reOnCampusKwh: Array(12).fill(null), reProcuredKwh: Array(12).fill(null)
-  };
-  const trendYear = value => ({ ...emptyTrendYear, ...(value || {}) });
+    reOnCampusKwh: Array(12).fill(null), reProcuredKwh: Array(12).fill(null),
+    totalElectricityKwh: Array(12).fill(null)
+  });
+  const trendYear = value => ({ ...blankTrendYear(), ...(value || {}) });
   const d25 = trendYear(data[2025]), d26 = trendYear(data[2026]);
   /* Combined Scope1+Scope2 charts share one month window, derived from the
      genuine monthly records rather than a hardcoded cutoff. Sources with zero
@@ -1517,7 +1518,7 @@ function drawCharts() {
 
   // Compute full-year arrays for Energy line charts
   // Published zeros stay zeros and missing months stay missing (null).
-  const cleanZero = arr => arr.slice();
+  const cleanZero = arr => (Array.isArray(arr) ? arr : Array(12).fill(null)).slice();
   // The backend freezes each monthly combined total; the chart only displays it.
   const total25 = cleanZero(d25.totalElectricityKwh);
   const total26 = cleanZero(d26.totalElectricityKwh);

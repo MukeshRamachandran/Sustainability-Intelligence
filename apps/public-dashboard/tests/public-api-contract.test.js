@@ -55,6 +55,8 @@ test('missing comparison years and error-state trend years do not throw', () => 
   assert.match(app, /!d \|\| !py \|\| !Array\.isArray\(d\[arrName\]\) \|\| !Array\.isArray\(py\[arrName\]\)/);
   assert.match(app, /if \(!d\) return;/);
   assert.match(app, /const d25 = trendYear\(data\[2025\]\), d26 = trendYear\(data\[2026\]\);/);
+  assert.match(app, /totalElectricityKwh: Array\(12\)\.fill\(null\)/);
+  assert.match(app, /const cleanZero = arr => \(Array\.isArray\(arr\) \? arr : Array\(12\)\.fill\(null\)\)\.slice\(\);/);
 });
 
 test('adapter normalizes the active immutable release and preserves governed LPG litre state', async () => {
@@ -756,6 +758,7 @@ test('Overview contains exactly the eight governed presentation KPIs and keeps S
     'Total green cover',
     'Outreach impact'
   ]);
+  assert.match(app, /overviewKpi\('Total green cover', hasPublication \? green\.totalGreenCoverPct : null/);
   assert.ok(!titles.includes('Scope 1 emissions'));
   assert.ok(!titles.includes('Scope 2 emissions'));
   assert.match(app, /kpi\('Scope 1 emissions'/);
