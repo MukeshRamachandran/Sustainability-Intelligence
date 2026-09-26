@@ -111,6 +111,25 @@ function valFor(d, arr, m) {
   if (m === 'all') return arr.aggregate == null ? null : n(arr.aggregate);
   return arr[+m] == null ? null : n(arr[+m]);
 }
+/* Energy Source Breakdown bars for the selection. Each bar is the selected
+   period's own value (the month's record, or the Full Year / YTD aggregate
+   record) read through valFor - never a sum of months. A missing value omits
+   its bar rather than drawing 0; a partial aggregate keeps its coverage. */
+function energySourceBreakdown(d, month) {
+  const meta = d?.periodMeta?.[month === 'all' ? 'all' : +month];
+  return [
+    ['Grid total', 'elecKwh', 'grid_total_kwh', colors.cyan],
+    ['On-campus renewable', 'reOnCampusKwh', 'renewable_on_campus_kwh', '#63b3ed'],
+    ['Procured renewable', 'reProcuredKwh', 'renewable_procured_kwh', colors.emerald],
+    ['Solar water heater', 'solarWaterHeaterKwh', 'solar_water_heater_kwh', colors.gold]
+  ].map(([label, arr, code, color]) => {
+    const value = valFor(d, d?.[arr], month);
+    if (value == null) return null;
+    const item = meta?.values?.[code];
+    const partial = item?.coverage_status === 'partial';
+    return { label, value, color, partial, monthsCovered: partial ? (item.months_covered || []).length : null };
+  }).filter(Boolean);
+}
 
 /* A single factor is meaningful for an all-month view only when every
    published calculation in that selection used the same factor. */
@@ -155,7 +174,8 @@ function previousValue(arrName) {
   return valFor(py, py[arrName], month);
 }
 /* The up/down trend chip; lowerGood flips which direction counts as green. */
-function trendHtml(cur, prev, lowerGood = true) { if (cur == null) return ''; if (prev == null || prev === 0) return `<b class="neutral">base</b><span>no comparison</span>`; const p = pct(cur, prev); const good = lowerGood ? p <= 0 : p >= 0; return `<b class="${good ? 'good' : 'bad'}">${p >= 0 ? '↑' : '↓'} ${Math.abs(p).toFixed(1)}%</b><span>vs last year</span>` }
+const NO_COMPARISON_HTML = '<b class="neutral">base</b><span>no comparison</span>';
+function trendHtml(cur, prev, lowerGood = true) { if (cur == null) return ''; if (prev == null || prev === 0) return NO_COMPARISON_HTML; const p = pct(cur, prev); const good = lowerGood ? p <= 0 : p >= 0; return `<b class="${good ? 'good' : 'bad'}">${p >= 0 ? '↑' : '↓'} ${Math.abs(p).toFixed(1)}%</b><span>vs last year</span>` }
 /* Build one KPI card: optional ambient FX layer (looping video, canvas
    particles or SVG scene per fxType), icon, counter (animated later by
    initKpiAnimations) and trend chip. Clicking opens the detail sidebar. */
@@ -192,7 +212,11 @@ const CARD_DISPLAY = {
   'LPG emissions': { code: 'lpg_emissions', transform: v => ({ value: v, dec: emissionDecimals(v) }) },
   'Grid electricity emissions': { code: 'scope2_tco2e' },
   'Operational GHG per capita': { code: 'operational_ghg_per_capita_kgco2e' },
+  // Public title (Overview + GHG) for the same governed per-person GHG value.
+  'Per capita emissions': { code: 'operational_ghg_per_capita_kgco2e' },
   'Estimated avoided grid emissions': { code: 'estimated_avoided_grid_emissions_tco2e' },
+  // GHG page title for the same governed metric (renewable kWh × grid factor).
+  'Reduction through renewables': { code: 'estimated_avoided_grid_emissions_tco2e' },
   'Total electricity consumption': { code: 'total_electricity_consumption_kwh' },
   'Total grid electricity consumption': { code: 'grid_total_kwh' },
   'Grid HT connection': { code: 'grid_ht_kwh' },
@@ -259,6 +283,17 @@ kpi = function (title, value, unit, accent, icon, prev, lowerGood = true, dec = 
   const html = renderNumericKpi(title, value, unit, accent, icon, prev, lowerGood, dec, fxType);
   return html.replace('<div class="trend">', `${sourceBadge(label, context)}<div class="trend">`);
 };
+/* Public Overview card: same card, minus the "base / no comparison"
+   placeholder and the static-reference badge. Values, real comparisons and
+   period labels are untouched; other pages keep using kpi() directly. */
+function withoutNoComparison(html) {
+  return html.replace(`<div class="trend">${NO_COMPARISON_HTML}</div>`, '').replace('<div class="trend"></div>', '');
+}
+function overviewKpi(...args) {
+  return withoutNoComparison(kpi(...args)).replace(sourceBadge(STATIC_LABEL, true), '');
+}
+/* GHG page card: same card without the "base / no comparison" placeholder. */
+function ghgKpi(...args) { return withoutNoComparison(kpi(...args)) }
 
 /* "Jun 2026 · Verified historical record" / "2025 Full Year · Aggregated from
    verified monthly records (some values partial)". */
@@ -277,44 +312,55 @@ function describeSelection(year, month, d) {
   return `${meta.label} · ${source}${partial}`;
 }
 
-/* GHG page hero. Each official figure is the backend's display item (never a
-   partial Scope total); a figure without one is left out, and the whole hero
-   is omitted when none exists. */
+/* GHG page hero. Always the same structure: the official total, the Scope
+   contribution bar and both Scope splits. Each figure is the backend's display
+   item (never a partial Scope total). A figure without one shows "—" with the
+   reason; it is never treated as zero, and the total is never summed here. */
 function ghgHeroHtml() {
   const total = shownValue('operational_ghg_tco2e');
   const s1 = shownValue('scope1_tco2e'), s2 = shownValue('scope2_tco2e');
-  if (!total && !s1 && !s2) return '';
+  const { year, month, d } = currentPeriod();
+  const period = periodLabel(year, month);
+  const raw = d?.periodMeta?.[month === 'all' ? 'all' : +month]?.values || {};
+  // Why a figure is absent, from the API's own state: a partial value is
+  // withheld (never shown), an unavailable one lacks inputs, else no record.
+  const partial = code => raw[code]?.coverage_status === 'partial';
+  const missingText = code => partial(code) ? `Incomplete for ${period}` : raw[code] ? `Not available for ${period}` : `No data for ${period}`;
+  const missingClause = ([name, code]) => partial(code) ? `${name} incomplete` : raw[code] ? `${name} not available` : `no ${name} data`;
   const counter = (v, size) => `<span class="counter-val" data-val="${v}" data-dec="2">0</span><span style="font-size:${size}; font-weight:500; color:var(--muted);">tCO₂e</span>`;
-  const split = (item, icon, dot, title, note) => item ? `
+  const dash = '<span style="color:var(--muted);">—</span>';
+  const split = (item, code, icon, dot, title, note) => `
         <div class="ghg-split">
           <div class="ghg-split-icon">${ic(icon)}</div>
           <div>
             <div class="ghg-split-head"><div class="ghg-split-dot" style="background: ${dot};"></div>${title}</div>
-            <div class="ghg-split-val">${counter(item.value, '13px')}</div>
-            ${sourceBadge(item.label, item.context)}
-            <div class="ghg-split-note">${note}</div>
+            <div class="ghg-split-val">${item ? counter(item.value, '13px') : dash}</div>
+            ${item ? `${sourceBadge(item.label, item.context)}
+            <div class="ghg-split-note">${note}</div>` : `<div class="ghg-split-note">${missingText(code)}</div>`}
           </div>
-        </div>` : '';
+        </div>`;
+  const missing = [!s1 && ['Scope 1', 'scope1_tco2e'], !s2 && ['Scope 2', 'scope2_tco2e']].filter(Boolean);
+  const totalNote = total ? '' : missing.length
+    ? `Total not shown — ${missing.map(missingClause).join(', ')} for ${period}`
+    : `Total not published for ${period}`;
   const sameSource = total && s1 && s2 && total.label === s1.label && total.label === s2.label;
   return `
     <div class="ghg-hero">
-      ${total ? `
       <div class="ghg-top">
         <div>
-          <div class="ghg-title-row"><div class="icon">${ic('globe')}</div>Operational GHG Emissions — Scope 1 + Scope 2</div>
-          <div class="ghg-value-row">${counter(total.value, '1.2rem')}</div>
-          ${sourceBadge(total.label, total.context)}
+          <div class="ghg-title-row"><div class="icon">${ic('globe')}</div>Gross Organizational Emissions</div>
+          <div class="ghg-value-row">${total ? counter(total.value, '1.2rem') : dash}</div>
+          ${total ? sourceBadge(total.label, total.context) : `<div class="ghg-split-note">${totalNote}</div>`}
         </div>
         <div class="ghg-badge">* Scope 3 emissions not included</div>
-      </div>` : ''}
-      ${sameSource ? `
-      <div class="ghg-bar-container">
-        <div class="ghg-bar-1" style="width: ${total.value > 0 ? (s1.value / total.value) * 100 : 0}%;"></div>
-        <div class="ghg-bar-2" style="width: ${total.value > 0 ? (s2.value / total.value) * 100 : 0}%;"></div>
-      </div>` : ''}
+      </div>
+      <div class="ghg-bar-container"${sameSource ? '' : ' title="Scope contribution needs both Scope 1 and Scope 2 for the same period"'}>
+        ${sameSource ? `<div class="ghg-bar-1" style="width: ${total.value > 0 ? (s1.value / total.value) * 100 : 0}%;"></div>
+        <div class="ghg-bar-2" style="width: ${total.value > 0 ? (s2.value / total.value) * 100 : 0}%;"></div>` : ''}
+      </div>
       <div class="ghg-splits">
-        ${split(s1, 'factory', colors.emerald, 'Scope 1 Emissions', '* Petrol, Fleet Diesel, DG Diesel, LPG')}
-        ${split(s2, 'bolt', 'var(--muted)', 'Scope 2 Emissions', '* Grid electricity')}
+        ${split(s1, 'scope1_tco2e', 'factory', colors.emerald, 'Scope 1 Emissions', '* Petrol, Fleet Diesel, DG Diesel, LPG')}
+        ${split(s2, 'scope2_tco2e', 'bolt', 'var(--muted)', 'Scope 2 Emissions', '* Grid electricity')}
       </div>
     </div>`;
 }
@@ -356,14 +402,14 @@ function makeKpis() {
   if (hsAdmin) hsAdmin.textContent = fmt(elec, 0) + ' kWh';
   if (hsDg) hsDg.textContent = fmt(valFor(d, d.dgEm, month), 2) + ' tCO₂e';
   document.getElementById('overviewKpis').innerHTML = [
-    kpi('Renewable energy used', re, 'kWh', colors.emerald, 'sun', previousValue('reKwh'), false, 0, 'solarvideo'),
-    kpi('Total grid electricity consumed', elec, 'kWh', colors.cyan, 'bolt', previousValue('elecKwh'), true, 0, 'elecmetervideo'),
-    inDomain('water', () => kpi('Total water recycled', hasPublication ? waterRecycled : null, 'KL', colors.cyan, 'repeat', null, false, 0, 'rewatervideo')),
-    inDomain('waste', () => kpi('Total waste generated', wasteTot == null ? null : wasteTot * wasteShow.factor, wasteShow.unit, colors.orange, 'trash', null, true, wasteShow.dec, 'convwastevideo')),
-    kpi('Landfill diversion', landfillDiversionPct, '%', colors.lime, 'shield', null, false, 1, 'landfillvideo'),
-    inDomain('water', () => kpi('Total water usage', waterKL, 'KL', colors.cyan, 'droplet', null, true, 0, 'watervideo')),
-    kpi('Total green cover', green.totalGreenCoverPct, '%', colors.emerald, 'tree', null, false, 0, 'leavesvideo'),
-    inDomain('outreach', () => kpi('Outreach impact', outreachForPeriod ? outreach.participantsServed : null, outreach.qualifiers?.participantsServed === 'AT_LEAST' ? '+ people' : 'people', colors.gold, 'users', null, false, 0, 'earthvideo'))
+    overviewKpi('Renewable energy used', re, 'kWh', colors.emerald, 'sun', previousValue('reKwh'), false, 0, 'solarvideo'),
+    overviewKpi('Total grid electricity consumed', elec, 'kWh', colors.cyan, 'bolt', previousValue('elecKwh'), true, 0, 'elecmetervideo'),
+    inDomain('water', () => overviewKpi('Total water recycled', hasPublication ? waterRecycled : null, 'KL', colors.cyan, 'repeat', null, false, 0, 'rewatervideo')),
+    inDomain('waste', () => overviewKpi('Total waste generated', wasteTot == null ? null : wasteTot * wasteShow.factor, wasteShow.unit, colors.orange, 'trash', null, true, wasteShow.dec, 'convwastevideo')),
+    overviewKpi('Landfill diversion', landfillDiversionPct, '%', colors.lime, 'shield', null, false, 1, 'landfillvideo'),
+    inDomain('water', () => overviewKpi('Total water usage', waterKL, 'KL', colors.cyan, 'droplet', null, true, 0, 'watervideo')),
+    overviewKpi('Total green cover', green.totalGreenCoverPct, '%', colors.emerald, 'tree', null, false, 0, 'leavesvideo'),
+    inDomain('outreach', () => overviewKpi('Outreach impact', outreachForPeriod ? outreach.participantsServed : null, outreach.qualifiers?.participantsServed === 'AT_LEAST' ? '+ people' : 'people', colors.gold, 'users', null, false, 0, 'earthvideo'))
   ].join('');
   document.getElementById('ghgKpis').innerHTML = [
     `<style>
@@ -395,16 +441,22 @@ function makeKpis() {
       .ghg-split-dot { width: 8px; height: 8px; border-radius: 50%; }
       .ghg-split-val { font-size: 28px; font-family: 'IBM Plex Mono', monospace; font-weight: 700; color: var(--ink); display: flex; align-items: baseline; gap: 6px; margin-bottom: 6px; }
       .ghg-split-note { font-size: 11.5px; color: var(--faint); }
+      @media (max-width: 600px) {
+        #ghgKpis { grid-template-columns: 1fr !important; }
+        .ghg-hero { padding: 20px; }
+        .ghg-split { min-width: 0; flex-basis: 100%; }
+      }
     </style>
     ${ghgHeroHtml()}`,
     /* Governed component results straight from the frozen release. */
-    inDomain('transport', () => kpi('Petrol emissions', petrol, 'tCO₂e', colors.teal, 'fuel', previousValue('petrolEm'), true)),
-    inDomain('transport', () => kpi('Fleet diesel emissions', valFor(d, d.trDieselEm, month), 'tCO₂e', colors.gold, 'cloud', previousValue('trDieselEm'), true)),
-    inDomain('transport', () => kpi('DG diesel emissions', valFor(d, d.dgEm, month), 'tCO₂e', colors.orange, 'factory', previousValue('dgEm'), true)),
-    inDomain('lpg', () => kpi('LPG emissions', valFor(d, d.lpgEm, month), 'tCO₂e', colors.violet, 'flame', previousValue('lpgEm'), true, emissionDecimals(valFor(d, d.lpgEm, month)))),
-    inDomain('energy', () => kpi('Grid electricity emissions', scope2, 'tCO₂e', colors.cyan, 'bolt', previousValue('elecEm'), true)),
-    kpi('Operational GHG per capita', operationalPerCapita, 'kgCO₂e/person', colors.blue, 'users', null, true, 3),
-    kpi('Estimated avoided grid emissions', avoid, 'tCO₂e', colors.emerald, 'leaf', previousValue('avoidEm'), true, 3)
+    inDomain('transport', () => ghgKpi('Petrol emissions', petrol, 'tCO₂e', colors.teal, 'fuel', previousValue('petrolEm'), true)),
+    inDomain('transport', () => ghgKpi('Fleet diesel emissions', valFor(d, d.trDieselEm, month), 'tCO₂e', colors.gold, 'cloud', previousValue('trDieselEm'), true)),
+    inDomain('transport', () => ghgKpi('DG diesel emissions', valFor(d, d.dgEm, month), 'tCO₂e', colors.orange, 'factory', previousValue('dgEm'), true)),
+    inDomain('lpg', () => ghgKpi('LPG emissions', valFor(d, d.lpgEm, month), 'tCO₂e', colors.violet, 'flame', previousValue('lpgEm'), true, emissionDecimals(valFor(d, d.lpgEm, month)))),
+    inDomain('energy', () => ghgKpi('Grid electricity emissions', scope2, 'tCO₂e', colors.cyan, 'bolt', previousValue('elecEm'), true)),
+    ghgKpi('Per capita emissions', operationalPerCapita, 'kgCO₂e/person', colors.blue, 'users', null, true, 3),
+    // More avoided emissions is the good direction (lowerGood = false).
+    ghgKpi('Reduction through renewables', avoid, 'tCO₂e', colors.emerald, 'leaf', previousValue('avoidEm'), false, 3)
   ].join('');
 
   const gridPctStr = '';
@@ -416,31 +468,8 @@ function makeKpis() {
 
   const elecMixWidget = document.getElementById('elecMixWidget');
   if (elecMixWidget) {
+    // Layout rules live in styles.css ("GHG mix widgets") so they never depend on which widget rendered.
     elecMixWidget.innerHTML = `
-      <style>
-      .elec-mix-widget { display: flex; align-items: center; justify-content: center; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 24px; position: relative; }
-      .elec-mix-title-box { position: absolute; top: 20px; left: 24px; display: flex; align-items: center; gap: 12px; }
-      .elec-mix-icon { width: 40px; height: 40px; border-radius: 10px; background: rgba(217, 160, 91, 0.1); color: var(--gold, #d9a05b); display: flex; align-items: center; justify-content: center; font-size: 20px; }
-      .elec-mix-chart-area { display: flex; align-items: center; justify-content: center; position: relative; gap: 24px; margin-top: 64px; }
-      .elec-mix-chart-container { width: 240px; height: 240px; position: relative; transition: transform 0.3s ease; }
-      .elec-mix-chart-container:hover { transform: scale(1.02); }
-      .elec-mix-center-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--gold, #d9a05b); opacity: 0.8; transition: transform 0.3s ease; }
-      .elec-mix-chart-container:hover .elec-mix-center-icon { transform: translate(-50%, -50%) scale(1.1); }
-      .elec-label-block { display: flex; flex-direction: column; gap: 6px; width: 110px; }
-      .elec-label-left { text-align: right; }
-      .elec-label-right { text-align: left; }
-      .elec-pct { font-size: 28px; font-weight: 700; line-height: 1; }
-      .elec-pct-grid { color: var(--gold, #d9a05b); }
-      .elec-pct-re { color: var(--emerald, #1c7a4b); }
-      .elec-sub { font-size: 13px; color: var(--ink); font-weight: 600; line-height: 1.2; }
-      .elec-desc { font-size: 11px; color: var(--ink); opacity: 0.6; line-height: 1.3; }
-      @media (max-width: 1200px) {
-        .elec-mix-chart-area { flex-direction: column; gap: 24px; }
-        .elec-label-left, .elec-label-right { text-align: center; }
-        .elec-mix-title-box { position: relative; top: 0; left: 0; margin-bottom: 16px; margin-top: 0; }
-        .elec-mix-widget { flex-direction: column; padding: 20px; }
-      }
-      </style>
       <div class="elec-mix-widget">
         <div class="elec-mix-title-box">
           <div class="elec-mix-icon">${ic('bolt')}</div>
@@ -494,22 +523,6 @@ function makeKpis() {
     const lpgPct = share(lpg);
 
     fuelMixWidget.innerHTML = `
-      <style>
-        .fuel-mix-widget .elec-mix-widget { display: block; min-height: 320px; padding: 24px; }
-        .fuel-mix-widget .elec-mix-title-box { position: static; margin: 0 0 20px; }
-        .fuel-mix-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 240px) minmax(0, 1fr); gap: 16px; align-items: center; }
-        .fuel-mix-layout .elec-mix-chart-container { width: 100%; max-width: 240px; height: 220px; margin: auto; }
-        .fuel-mix-side { display: grid; gap: 18px; min-width: 0; }
-        .fuel-mix-side.left { text-align: right; }
-        .fuel-mix-side.right { text-align: left; }
-        .fuel-mix-item .elec-pct { font-size: 25px; }
-        @media (max-width: 700px) {
-          .fuel-mix-layout { grid-template-columns: 1fr 1fr; row-gap: 10px; }
-          .fuel-mix-layout .elec-mix-chart-container { grid-column: 1 / -1; grid-row: 1; width: 210px; height: 200px; }
-          .fuel-mix-side.left { grid-column: 1; grid-row: 2; text-align: left; }
-          .fuel-mix-side.right { grid-column: 2; grid-row: 2; }
-        }
-      </style>
       <div class="elec-mix-widget fuel-mix-widget">
         <div class="elec-mix-title-box">
           <div class="elec-mix-icon" style="background: rgba(221, 107, 32, 0.1); color: var(--orange, #dd6b20);">${ic('flame')}</div>
@@ -657,8 +670,12 @@ function makeKpis() {
   const energyProgressWidget = document.getElementById('energyProgressWidget');
   if (energyProgressWidget) {
     const reProgressPct = reShare;
+    // The breakdown follows the same selected period but stands on its own:
+    // a missing renewable share hides only the progress card.
+    const breakdown = energySourceBreakdown(d, month);
+    const partialSources = breakdown.filter(bar => bar.partial);
 
-    if (reProgressPct == null) {
+    if (reProgressPct == null && !breakdown.length) {
       energyProgressWidget.innerHTML = '';
     } else {
 
@@ -667,6 +684,7 @@ function makeKpis() {
         @keyframes epBarGrow { from { width: 0; } }
         @keyframes epShimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
         .ep-hero-row { display: flex; gap: 24px; margin-bottom: 24px; }
+        .ep-hero-row > .ep-hero:only-child { max-width: none; }
         .ep-hero {
           flex: 1;
           max-width: 50%;
@@ -809,8 +827,8 @@ function makeKpis() {
         }
       </style>
       <div class="ep-hero-row">
-        <div class="ep-hero">
-        
+        ${reProgressPct == null ? '' : `<div class="ep-hero">
+
         <div class="ep-top">
           <div>
             <div class="ep-title-row">
@@ -850,23 +868,25 @@ function makeKpis() {
             </div>
           </div>
         </div>
-        </div>
+        </div>`}
 
         <!-- New Source Breakdown Card -->
-        <div class="ep-hero" style="display: flex; flex-direction: column; padding: 32px 32px 24px 32px;">
+        ${breakdown.length ? `<div class="ep-hero" style="display: flex; flex-direction: column; padding: 32px 32px 24px 32px;">
           <div class="ep-top" style="margin-bottom: 24px;">
             <div>
               <div class="ep-title-row">
                 <div class="icon">${ic('bolt')}</div>
                 Energy Source Breakdown
               </div>
+              <p class="hint" style="margin: 0;">${periodLabel(year, month)}</p>
             </div>
           </div>
-          
+
           <div class="ep-src-breakdown" style="flex: 1; position: relative; min-height: 180px;">
             <canvas id="energySrcBreakdownChart"></canvas>
           </div>
-        </div>
+          ${partialSources.map(bar => `<p class="hint" style="margin: 12px 0 0;">${bar.label} is partial: ${bar.monthsCovered} month(s) reported for this period.</p>`).join('')}
+        </div>` : ''}
 
       </div>
     `;
@@ -932,12 +952,12 @@ function heroGHG(gross, year, month, d, avoid, operationalPerCapita) {
     // pick the figure for the active view; the bar's fill never changes, only which slice is emphasized (via CSS)
     if (currentHeroView === 'net') {
       targetValue = operationalPerCapita;
-      labelEl.textContent = "Operational GHG per person";
+      labelEl.textContent = "Per capita emissions";
       unitEl.textContent = "kgCO₂e/person";
       document.getElementById('tab-net').classList.add('active');
     } else if (currentHeroView === 'avoid') {
       targetValue = avoid;
-      labelEl.textContent = "Estimated Avoided Grid Emissions";
+      labelEl.textContent = "Reduction through renewables";
       unitEl.textContent = "tCO₂e";
       document.getElementById('tab-avoid').classList.add('active');
     } else {
@@ -976,6 +996,15 @@ function heroGHG(gross, year, month, d, avoid, operationalPerCapita) {
 /* ---- charts ---- */
 /* Live Chart.js instances by canvas id; destroyed before every rebuild. */
 let charts = {}; function killCharts() { Object.values(charts).forEach(c => c.destroy()); charts = {}; }
+/* Chart.js measures axis/legend text when a chart is built. On a cold load
+   the chart web font can still be loading, leaving fallback-font metrics;
+   draw now and rebuild once when that font is ready (drawCharts destroys first). */
+let chartFontPending = null;
+function redrawWhenChartFontLoads() {
+  const font = `${Chart.defaults.font.size}px ${Chart.defaults.font.family}`;
+  if (!document.fonts || chartFontPending || document.fonts.check(font)) return;
+  chartFontPending = document.fonts.load(font).then(() => { chartFontPending = null; if (Object.keys(charts).length) drawCharts(); });
+}
 Chart.defaults.color = '#5c6b62';
 Chart.defaults.font.family = "'Public Sans',sans-serif";
 Chart.defaults.font.size = 12;
@@ -1036,6 +1065,7 @@ const baseline = 'rgba(21,32,26,.16)';
    pages get theirs on arrival, since go() always calls refresh(). */
 function drawCharts() {
   killCharts();
+  redrawWhenChartFontLoads();
   const mk = (id, cfg) => { const el = document.getElementById(id); if (el && el.closest('.page.active')) charts[id] = new Chart(el, cfg); };
   const { year, month, d } = currentPeriod();
   if (!d) return;
@@ -1074,7 +1104,7 @@ function drawCharts() {
 
   /* Published grid+renewable source columns typically run further than the
      shared 'available' above (fuel/Fleet/DG usually lag electricity) - these
-     feed the mix donut + source-breakdown bar below, so they get their own
+     feed the mix donut below, so they get their own
      month count instead of being capped to the combined S1+S2 window. */
   const energyAvailable = Math.max(
     monthsWithData(d.htKwh), monthsWithData(d.reOnCampusKwh),
@@ -1086,7 +1116,6 @@ function drawCharts() {
   // Backend-published renewable components, not an estimated ratio of reVal.
   const reOnCampusVal = sum(esl(d.reOnCampusKwh));
   const reProcuredVal = sum(esl(d.reProcuredKwh));
-  const solarWaterHeaterTotal = sum(esl(d.solarWaterHeaterKwh));
 
   mk('elecMixChartCanvas', {
     type: 'doughnut',
@@ -1154,14 +1183,16 @@ function drawCharts() {
     }
   });
 
+  // Same selected period as Renewable Energy Progress and the KPI cards.
+  const sourceBars = energySourceBreakdown(d, month);
   mk('energySrcBreakdownChart', {
     type: 'bar',
     data: {
-      labels: ['Grid total', 'On-campus renewable', 'Procured renewable', 'Solar water heater'],
+      labels: sourceBars.map(bar => bar.partial ? `${bar.label} (partial)` : bar.label),
       datasets: [{
         label: 'Energy (kWh)',
-        data: [gridVal, reOnCampusVal, reProcuredVal, solarWaterHeaterTotal],
-        backgroundColor: [colors.cyan, '#63b3ed', colors.emerald, colors.gold],
+        data: sourceBars.map(bar => bar.value),
+        backgroundColor: sourceBars.map(bar => bar.color),
         borderWidth: 0,
         borderRadius: 6
       }]
@@ -1984,7 +2015,7 @@ const kpiDescriptions = {
     impact: "This bounded operational indicator is not a complete Scope 3 or universal institutional GHG inventory.",
     trend: "No target or trend narrative is asserted here."
   },
-  "Operational GHG per capita": {
+  "Per capita emissions": {
     def: "The backend-published operational GHG result converted to kilograms and divided by the approved population reference for the reporting year.",
     impact: "Shown only when both the operational GHG result and a positive year-specific population reference exist; otherwise the card is omitted.",
     trend: "No target or trend narrative is asserted here."

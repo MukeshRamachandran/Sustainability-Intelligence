@@ -10,20 +10,17 @@
    quality (AQI/PM/gas pollutants) is real data from the same station, but
    deliberately laid out as secondary, lower-priority context underneath.
 
-   Talks to the separate Aeron Environment Dashboard backend (FastAPI +
-   Postgres, see aeron-environment-dashboard/) over HTTP - that backend
-   must be running locally (uvicorn, port 8000) for live data to show.
-   If it isn't reachable, every widget here degrades to '--' and the
+   Reads persisted Aeron readings from the K-COSMOS main API through the
+   same-origin, read-only /api/environment routes (production: Nginx;
+   local staging: serve-staging.py). Nothing here triggers ingestion - the
+   separate worker polls Aeron. Freshness (LIVE/STALE/OFFLINE) comes from
+   the server so it never depends on the visitor's clock.
+   If the API isn't reachable, every widget here degrades to '--' and the
    status pill/dock dot switch to OFFLINE rather than erroring.
    ===================================================================== */
 (function () {
-  // Candidate hosts for the Aeron backend, tried in order and cached once one
-  // works. "localhost" can resolve to the IPv6 loopback (::1) on Windows while
-  // uvicorn only listens on IPv4 127.0.0.1 - that alone is enough to make every
-  // request silently fail to connect even though the backend is up, so we don't
-  // rely on window.location.hostname alone.
-  const API_HOST_CANDIDATES = [...new Set([window.location.hostname, '127.0.0.1', 'localhost'].filter(Boolean))];
-  let resolvedApiBase = null;
+  const API_BASE = '/api/environment';
+  const DISPLAY_TZ = 'Asia/Kolkata'; // the station's timezone, labelled IST
   const POLL_MS = 20000;      // latest reading + status (drives the dock dot)
   const HISTORY_POLL_MS = 60000; // trend charts, only while the page is open
 
@@ -158,12 +155,15 @@
     return dirs[Math.round((+deg % 360) / 22.5) % 16];
   }
 
-  /* LIVE < 10 min old, STALE 10-30 min, OFFLINE beyond that or no reading at all. */
-  function computeStatus(recordedAtISO) {
-    if (!recordedAtISO) return 'offline';
-    const ageSec = (Date.now() - new Date(recordedAtISO).getTime()) / 1000;
+  /* LIVE < 10 min old, STALE 10-30 min, OFFLINE beyond that or no reading at all.
+     The server classifies against its own clock; the local fallback only
+     applies if an older API response lacks `freshness`. */
+  function computeStatus(data) {
+    if (!data || !data.recorded_at) return 'offline';
+    if (data.freshness) return String(data.freshness).toLowerCase();
+    const ageSec = (Date.now() - new Date(data.recorded_at).getTime()) / 1000;
     if (ageSec > 30 * 60) return 'offline';
-    if (ageSec > 10 * 60) return 'stale';
+    if (ageSec >= 10 * 60) return 'stale';
     return 'live';
   }
 
@@ -176,51 +176,32 @@
     return `${Math.floor(secs / 3600)}h ago`;
   }
 
-  /* Absolute "28 Aug 2026 · 14:32:07" for the always-visible fetched-at
+  /* Absolute "28 Aug 2026 · 14:32:07 IST" for the always-visible measurement
      timestamp - relative age alone ("2m ago") doesn't tell you *when*. */
   function absoluteStamp(recordedAtISO) {
     if (!recordedAtISO) return null;
     const dt = new Date(recordedAtISO);
-    const datePart = dt.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
-    const timePart = dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    return `${datePart} · ${timePart}`;
+    const datePart = dt.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric', timeZone: DISPLAY_TZ });
+    const timePart = dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: DISPLAY_TZ });
+    return `${datePart} · ${timePart} IST`;
   }
+  const istDay = dt => dt.toLocaleDateString('en-CA', { timeZone: DISPLAY_TZ });
 
-  /* Tries the already-known-good host first, then walks the full candidate
-     list. A thrown fetch error OR a non-2xx response both move on to the next
-     candidate - some other, unrelated server (e.g. a stray static file server
-     also squatting on :8000 via a different loopback address) can easily
-     answer with its own 404 instead of a real network failure, so a bad
-     response is not proof the real backend is unreachable, only that *this*
-     host wasn't it. Only a genuinely-OK response gets cached. */
-  async function request(path, method) {
-    const hosts = resolvedApiBase ? [resolvedApiBase, ...API_HOST_CANDIDATES.filter(h => h !== resolvedApiBase)] : API_HOST_CANDIDATES;
-    let lastErr = null, lastBad = null;
-    for (const host of hosts) {
-      const url = `http://${host}:8000/api${path}`;
-      try {
-        const res = await fetch(url, { cache: 'no-store', method: method || 'GET' });
-        if (!res.ok) {
-          lastBad = `${url} responded ${res.status} ${res.statusText}`;
-          continue;
-        }
-        resolvedApiBase = host;
-        return await res.json();
-      } catch (e) {
-        lastErr = e;
+  async function request(path) {
+    try {
+      const res = await fetch(`${API_BASE}${path}`, { cache: 'no-store', credentials: 'omit' });
+      if (!res.ok) {
+        if (res.status !== 404) console.warn(`[weather] ${API_BASE}${path} responded ${res.status}`);
+        return null;
       }
+      return await res.json();
+    } catch (error) {
+      console.warn(`[weather] could not reach ${API_BASE}${path}`, error);
+      return null;
     }
-    resolvedApiBase = null;
-    if (lastBad) console.warn(`[weather] ${lastBad}`);
-    // Most common causes: the Aeron backend (uvicorn, port 8000) isn't running,
-    // this page was opened via file:// (browsers block cross-origin fetch from
-    // a file:// origin), or none of the tried hostnames reach it on this machine.
-    console.warn(`[weather] could not reach the Aeron backend on any of [${hosts.join(', ')}]:8000`, lastErr);
-    return null;
   }
-  const fetchLatest = () => request('/environment/latest');
-  const fetchHistory = (limit) => request(`/environment/history?limit=${limit}`);
-  const postSync = () => request('/sync/aeron', 'POST');
+  const fetchLatest = () => request('/latest');
+  const fetchHistory = (limit) => request(`/history?limit=${limit}`);
 
   /* ---- nav dock dot: reflects connectivity regardless of which page is open ---- */
   function updateNavDot(status) {
@@ -238,13 +219,13 @@
     if (text) text.textContent = status === 'live' ? 'LIVE' : status === 'stale' ? 'STALE' : 'OFFLINE';
     if (updated) {
       if (!recordedAtISO) {
-        const hosts = resolvedApiBase ? [resolvedApiBase] : API_HOST_CANDIDATES;
         updated.textContent = status === 'offline'
-          ? `Can't reach the Aeron backend (tried ${hosts.map(h => `${h}:8000`).join(', ')})`
+          ? 'No station reading available'
           : 'Waiting for first reading…';
       } else {
         const stamp = absoluteStamp(recordedAtISO), age = relativeAge(recordedAtISO);
-        updated.textContent = `Data fetched: ${stamp} (${age})${status === 'stale' ? ' — station may be offline' : ''}`;
+        const note = status === 'stale' ? ' — station may be offline' : status === 'offline' ? ' — station offline' : '';
+        updated.textContent = `Measured: ${stamp} (${age})${note}`;
       }
     }
   }
@@ -330,7 +311,7 @@
           <span class="weather-updated-text" id="weatherUpdatedText">Waiting for first reading…</span>
           <span class="weather-network-badge" id="weatherNetworkBadge" style="display:none;"></span>
         </div>
-        <button class="btn" id="weatherSyncBtn">Sync Now</button>
+        <button class="btn" id="weatherSyncBtn">Refresh</button>
       </div>`;
 
     // ---- Primary: climate parameters (Ambient Temperature, Humidity, Rainfall, Wind Speed)
@@ -491,7 +472,7 @@
     let last24h = rows.filter(d => new Date(d.recorded_at).getTime() >= cutoff);
     if (!last24h.length) last24h = rows;
 
-    const labels = last24h.map(d => new Date(d.recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    const labels = last24h.map(d => new Date(d.recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: DISPLAY_TZ }));
 
     charts.temp.data.labels = labels;
     charts.temp.data.datasets[0].data = last24h.map(d => d.temperature_c);
@@ -513,8 +494,8 @@
     charts.pm.update();
 
     // ---- Derived stats for the KPI subtitles: today's range/total/peak
-    const now = new Date();
-    const todayRows = rows.filter(d => { const dt = new Date(d.recorded_at); return dt.toDateString() === now.toDateString(); });
+    const today = istDay(new Date());
+    const todayRows = rows.filter(d => istDay(new Date(d.recorded_at)) === today);
     const sample = todayRows.length ? todayRows : last24h;
 
     const temps = sample.map(d => d.temperature_c).filter(v => v != null);
@@ -533,7 +514,7 @@
   /* ---- polling ---- */
   async function tickLatest() {
     const data = await fetchLatest();
-    const status = data ? computeStatus(data.recorded_at) : 'offline';
+    const status = computeStatus(data);
     updateNavDot(status);
     if (document.body.dataset.page === 'weather') renderLatest(data, status);
   }
@@ -543,17 +524,18 @@
     renderCharts(history);
   }
 
+  /* Re-reads the stored data only. Ingestion is scheduled server-side and
+     can never be triggered from a visitor's browser. */
   async function triggerSync() {
     const btn = document.getElementById('weatherSyncBtn');
     if (!btn) return;
     const original = btn.textContent;
-    btn.textContent = 'Syncing…';
+    btn.textContent = 'Refreshing…';
     btn.disabled = true;
     try {
-      await postSync();
-    } finally {
       await tickLatest();
       await tickHistory();
+    } finally {
       btn.textContent = original;
       btn.disabled = false;
     }

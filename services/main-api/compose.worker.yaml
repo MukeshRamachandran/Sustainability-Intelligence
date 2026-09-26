@@ -1,0 +1,29 @@
+services:
+  environment-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+
+    environment:
+      APP_ENV: development
+      DATABASE_URL: ${MICROCOSM_DATABASE_URL:-postgresql+psycopg://microcosm_app:microcosm_dev_only@postgres:5432/microcosm_clean_20260922}
+      LOG_LEVEL: INFO
+
+      AERON_STATION_ID: ${AERON_STATION_ID:?AERON_STATION_ID is required}
+      AERON_INTERNAL_BASE_URL: ${AERON_INTERNAL_BASE_URL:-https://live3.aeronsystems.com/api}
+      AERON_DASHBOARD_URL: ${AERON_DASHBOARD_URL:-https://live3.aeronsystems.com/dashboard}
+      AERON_REGION: ${AERON_REGION:-india}
+      AERON_USERNAME: ${AERON_USERNAME:?AERON_USERNAME is required}
+      AERON_PASSWORD: ${AERON_PASSWORD:?AERON_PASSWORD is required}
+      AERON_SESSION_COOKIE: ${AERON_SESSION_COOKIE:-}
+      AERON_POLL_INTERVAL_SECONDS: ${AERON_POLL_INTERVAL_SECONDS:-300}
+      AERON_HTTP_TIMEOUT_SECONDS: ${AERON_HTTP_TIMEOUT_SECONDS:-15}
+      AERON_LOGIN_TIMEOUT_SECONDS: ${AERON_LOGIN_TIMEOUT_SECONDS:-30}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 20s

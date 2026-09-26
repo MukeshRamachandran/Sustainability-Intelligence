@@ -28,6 +28,10 @@ dev = [
   "pytest-asyncio>=1.1.0,<2.0",
   "ruff>=0.12.11,<0.13",
 ]
+# Only the Aeron ingestion worker needs a browser; the API image does not.
+aeron-worker = [
+  "playwright>=1.63.0,<1.64",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]

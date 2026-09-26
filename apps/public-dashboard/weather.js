@@ -37,12 +37,15 @@
     return { label: 'Hazardous', color: '#9f1239', pct: seg * 5 + (Math.min(v - 300, 200) / 200) * seg };
   }
 
-  /* LIVE < 10 min old, STALE 10-30 min, OFFLINE beyond that or no reading at all. */
-  function computeStatus(recordedAtISO) {
-    if (!recordedAtISO) return 'offline';
-    const ageSec = (Date.now() - new Date(recordedAtISO).getTime()) / 1000;
+  /* LIVE < 10 min old, STALE 10-30 min, OFFLINE beyond that or no reading at all.
+     The server classifies against its own clock; the local fallback only
+     applies if an older API response lacks `freshness`. */
+  function computeStatus(data) {
+    if (!data || !data.recorded_at) return 'offline';
+    if (data.freshness) return String(data.freshness).toLowerCase();
+    const ageSec = (Date.now() - new Date(data.recorded_at).getTime()) / 1000;
     if (ageSec > 30 * 60) return 'offline';
-    if (ageSec > 10 * 60) return 'stale';
+    if (ageSec >= 10 * 60) return 'stale';
     return 'live';
   }
 
@@ -332,7 +335,7 @@
     latestInFlight = true;
     try {
       const data = await fetchLatest();
-      const status = data ? computeStatus(data.recorded_at) : 'offline';
+      const status = computeStatus(data);
       updateNavDot(status);
       if (document.body.dataset.page === 'weather') renderLatest(data, status);
     } finally {

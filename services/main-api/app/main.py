@@ -23,6 +23,7 @@ from app.routers.admin_users import router as admin_users_router
 from app.routers.audit import router as audit_router
 from app.routers.auth import router as auth_router
 from app.routers.emission_factors import router as emission_factor_router
+from app.routers.environment import router as environment_router
 from app.routers.evidence import admin_router as evidence_admin_router
 from app.routers.evidence import manager_router as evidence_manager_router
 from app.routers.health import router as health_router
@@ -164,6 +165,7 @@ def create_app(
     application.include_router(release_admin_router)
     application.include_router(publication_readiness_router)
     application.include_router(release_public_router)
+    application.include_router(environment_router)
     return application
 
 

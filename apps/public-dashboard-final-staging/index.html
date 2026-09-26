@@ -21,7 +21,7 @@
   <script src="vendor/chartjs-chart-treemap.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
   <script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
-  <link rel="stylesheet" href="styles.css?v=25">
+  <link rel="stylesheet" href="styles.css?v=27">
   <link rel="stylesheet" href="walkthrough.css?v=14">
   <link rel="stylesheet" href="mobile.css?v=1">
 </head>
@@ -91,7 +91,7 @@
     <div class="hero-row">
       <section class="balance square-kpi" style="flex: 1; max-width: 50%;">
         <div class="bal-top">
-          <span id="balLabel">Operational GHG per person</span>
+          <span id="balLabel">Per capita emissions</span>
           <span id="balPeriod">—</span>
         </div>
 
@@ -105,7 +105,7 @@
 
           <div class="bal-legend" role="tablist">
             <div class="bal-item active" id="tab-net" style="cursor: pointer;">
-              <span class="k"><i class="dot" style="background:var(--blue)"></i>Per capita</span>
+              <span class="k"><i class="dot" style="background:var(--blue)"></i>Per capita emissions</span>
               <span class="v" id="balNetVal">--</span>
             </div>
             <div class="bal-item" id="tab-gross" style="cursor: pointer;">
@@ -113,7 +113,7 @@
               <span class="v" id="balGrossVal">--</span>
             </div>
             <div class="bal-item" id="tab-avoid" style="cursor: pointer;">
-              <span class="k"><i class="dot" style="background:var(--green)"></i>Estimated Avoided Grid Emissions</span>
+              <span class="k"><i class="dot" style="background:var(--green)"></i>Reduction through renewables</span>
               <span class="v" id="balAvoidVal">--</span>
             </div>
           </div>
@@ -681,8 +681,8 @@
 
   <script src="public-api.js?v=3"></script>
   <script src="public-data-loader.js?v=9"></script>
-  <script src="app.js?v=34"></script>
-  <script src="weather.js?v=6"></script>
+  <script src="app.js?v=39"></script>
+  <script src="weather.js?v=7"></script>
   <script src="vendor/gsap-scrolltrigger.min.js"></script>
   <script src="walkthrough.js?v=20"></script>
   <script src="mobile.js?v=1"></script>

@@ -27,6 +27,10 @@ PUBLIC_ROUTES = frozenset(
         "/api/public/dashboard",
         "/api/public/dashboard/history",
         "/api/public/dashboard/timeline",
+        # Read-only persisted Aeron readings (Weather page).
+        "/api/environment/latest",
+        "/api/environment/history",
+        "/api/environment/status",
     }
 )
 ROOT = Path(__file__).resolve().parent

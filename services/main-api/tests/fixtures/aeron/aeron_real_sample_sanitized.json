@@ -1,0 +1,547 @@
+{
+  "_provenance": {
+    "description": "Sanitized genuine Aeron responses from live verification. Contains sensor values, units, timestamps and the station identifier only.",
+    "captured_at_utc": "2026-09-25T03:18:51.810344+00:00",
+    "source_host": "live3.aeronsystems.com",
+    "station_id": "b1ce41c2-586a-4a26-9382-9d8bfe757e78",
+    "station_name": "Air Quality KCT",
+    "station_timezone": "Asia/Kolkata"
+  },
+  "latest": {
+    "request": "GET /api/stations/{station_id}/readings?mode=latest&region=india",
+    "http_status": 200,
+    "content_type": "application/json",
+    "body": {
+      "recordedAt": "2026-09-24T22:34:00.000Z",
+      "health": {
+        "fuse": 0,
+        "gpsfix": 0,
+        "supply": 0,
+        "battery": 0,
+        "network": 4,
+        "charging": 0,
+        "DeviceTemp": 0,
+        "network_reg": 1
+      },
+      "location": {
+        "Altitude": 0,
+        "Latitude": 0,
+        "Longitude": 0
+      },
+      "data": {
+        "63d0da020016a": 0.130831,
+        "63d0da885f1a0": 87.967484,
+        "63d0daa4740ba": 1.671602,
+        "63d0daf2bcb74": 14.11762,
+        "63d0db066e993": 0.000789,
+        "63d0db8f77ecb": 4.693056,
+        "63d0dbb867a7c": 9.93737,
+        "63d0dbfe0a111": 27.113262,
+        "63d0dc28f109d": 69.387342,
+        "63d0dc5164112": 0,
+        "63d0dd3721886": 1.044231,
+        "63d0dd4ff30c9": 22.948194,
+        "63d0ddf115956": 45.288128,
+        "63d0de104027f": 45.28212,
+        "63d0de34a0b72": 45.306344,
+        "63d0de7568a3b": 0.109317,
+        "63d0ea1253e8f": 383.406878,
+        "63d0ea927306d": 375.793326,
+        "63d0eb32b7070": 314.110443,
+        "63d0eb591ee3a": 0.336311,
+        "63d0eb7f49e34": 242.685318,
+        "63d0eba20cd96": 241.793286,
+        "63d0ebc89f18d": 234.342885,
+        "63d0ebfa17c49": 353.526063,
+        "63d0ec7aa5a61": 339.811142,
+        "63d0ec9873bc3": 282.154628,
+        "63d0ecc9829f2": 278.498042,
+        "63d0ee3fcd99a": 150,
+        "63d0eeb2aaeef": 166.372899,
+        "641d7b36d4413": 0.777293,
+        "6421673518c4f": 318.162494,
+        "64216914170b7": 4.340745,
+        "64216a7500e46": 48.90828,
+        "64216b8187e5e": 0.004572,
+        "6422ae0f8147e": 107
+      }
+    }
+  },
+  "history_excerpt": {
+    "request": "GET /api/stations/{station_id}/readings?from=2026-09-24T18:30:00.000Z&to=2026-09-25T18:29:59.999Z&limit=300&region=india",
+    "http_status": 200,
+    "row_count": 244,
+    "rows": [
+      {
+        "recordedAt": "2026-09-24 18:30:00+00",
+        "health": {
+          "fuse": 0,
+          "gpsfix": 0,
+          "supply": 0,
+          "battery": 0,
+          "network": 4,
+          "charging": 0,
+          "DeviceTemp": 0,
+          "network_reg": 1
+        },
+        "location": {
+          "Altitude": 0,
+          "Latitude": 0,
+          "Longitude": 0
+        },
+        "data": {
+          "63d0da020016a": 0.134831,
+          "63d0da885f1a0": 87.923808,
+          "63d0daa4740ba": 1.910629,
+          "63d0daf2bcb74": 15.788009,
+          "63d0db066e993": 0.702358,
+          "63d0db8f77ecb": 6.526962,
+          "63d0dbb867a7c": 12.177038,
+          "63d0dbfe0a111": 27.462781,
+          "63d0dc28f109d": 63.276104,
+          "63d0dc5164112": 0,
+          "63d0dd3721886": 2.413333,
+          "63d0dd4ff30c9": 110.904436,
+          "63d0ddf115956": 45.3023,
+          "63d0de104027f": 45.283353,
+          "63d0de34a0b72": 45.38568,
+          "63d0de7568a3b": 0.109717,
+          "63d0ea1253e8f": 383.552006,
+          "63d0ea927306d": 372.798546,
+          "63d0eb32b7070": 312.419955,
+          "63d0eb591ee3a": 0.187049,
+          "63d0eb7f49e34": 242.557684,
+          "63d0eba20cd96": 241.852379,
+          "63d0ebc89f18d": 227.285042,
+          "63d0ebfa17c49": 350.661632,
+          "63d0ec7aa5a61": 342.218259,
+          "63d0ec9873bc3": 286.197487,
+          "63d0ecc9829f2": 278.58263,
+          "63d0ee3fcd99a": 150,
+          "63d0eeb2aaeef": 166.566668,
+          "641d7b36d4413": 0.801577,
+          "6421673518c4f": 318.372009,
+          "64216914170b7": 4.967751,
+          "64216a7500e46": 54.79734,
+          "64216b8187e5e": 4.176459,
+          "6422ae0f8147e": 107
+        }
+      },
+      {
+        "recordedAt": "2026-09-24 20:33:00+00",
+        "health": {
+          "fuse": 0,
+          "gpsfix": 0,
+          "supply": 0,
+          "battery": 0,
+          "network": 4,
+          "charging": 0,
+          "DeviceTemp": 0,
+          "network_reg": 1
+        },
+        "location": {
+          "Altitude": 0,
+          "Latitude": 0,
+          "Longitude": 0
+        },
+        "data": {
+          "63d0da020016a": 0.122853,
+          "63d0da885f1a0": 87.936432,
+          "63d0daa4740ba": 1.907926,
+          "63d0daf2bcb74": 17.26512,
+          "63d0db066e993": 0.97547,
+          "63d0db8f77ecb": 4.97717,
+          "63d0dbb867a7c": 8.08434,
+          "63d0dbfe0a111": 26.919044,
+          "63d0dc28f109d": 58.904395,
+          "63d0dc5164112": 0,
+          "63d0dd3721886": 1.551429,
+          "63d0dd4ff30c9": 252.711074,
+          "63d0ddf115956": 45.288012,
+          "63d0de104027f": 45.283268,
+          "63d0de34a0b72": 45.312108,
+          "63d0de7568a3b": 0.113992,
+          "63d0ea1253e8f": 383.489553,
+          "63d0ea927306d": 357.625238,
+          "63d0eb32b7070": 313.832292,
+          "63d0eb591ee3a": 0.485659,
+          "63d0eb7f49e34": 242.482803,
+          "63d0eba20cd96": 241.781324,
+          "63d0ebc89f18d": 226.186009,
+          "63d0ebfa17c49": 347.204494,
+          "63d0ec7aa5a61": 343.315934,
+          "63d0ec9873bc3": 287.558189,
+          "63d0ecc9829f2": 278.813054,
+          "63d0ee3fcd99a": 150,
+          "63d0eeb2aaeef": 166.265096,
+          "641d7b36d4413": 0.729137,
+          "6421673518c4f": 317.842963,
+          "64216914170b7": 4.952657,
+          "64216a7500e46": 59.780145,
+          "64216b8187e5e": 5.798674,
+          "6422ae0f8147e": 107
+        }
+      },
+      {
+        "recordedAt": "2026-09-24 22:34:00+00",
+        "health": {
+          "fuse": 0,
+          "gpsfix": 0,
+          "supply": 0,
+          "battery": 0,
+          "network": 4,
+          "charging": 0,
+          "DeviceTemp": 0,
+          "network_reg": 1
+        },
+        "location": {
+          "Altitude": 0,
+          "Latitude": 0,
+          "Longitude": 0
+        },
+        "data": {
+          "63d0da020016a": 0.130831,
+          "63d0da885f1a0": 87.967484,
+          "63d0daa4740ba": 1.671602,
+          "63d0daf2bcb74": 14.11762,
+          "63d0db066e993": 0.000789,
+          "63d0db8f77ecb": 4.693056,
+          "63d0dbb867a7c": 9.93737,
+          "63d0dbfe0a111": 27.113262,
+          "63d0dc28f109d": 69.387342,
+          "63d0dc5164112": 0,
+          "63d0dd3721886": 1.044231,
+          "63d0dd4ff30c9": 22.948194,
+          "63d0ddf115956": 45.288128,
+          "63d0de104027f": 45.28212,
+          "63d0de34a0b72": 45.306344,
+          "63d0de7568a3b": 0.109317,
+          "63d0ea1253e8f": 383.406878,
+          "63d0ea927306d": 375.793326,
+          "63d0eb32b7070": 314.110443,
+          "63d0eb591ee3a": 0.336311,
+          "63d0eb7f49e34": 242.685318,
+          "63d0eba20cd96": 241.793286,
+          "63d0ebc89f18d": 234.342885,
+          "63d0ebfa17c49": 353.526063,
+          "63d0ec7aa5a61": 339.811142,
+          "63d0ec9873bc3": 282.154628,
+          "63d0ecc9829f2": 278.498042,
+          "63d0ee3fcd99a": 150,
+          "63d0eeb2aaeef": 166.372899,
+          "641d7b36d4413": 0.777293,
+          "6421673518c4f": 318.162494,
+          "64216914170b7": 4.340745,
+          "64216a7500e46": 48.90828,
+          "64216b8187e5e": 0.004572,
+          "6422ae0f8147e": 107
+        }
+      }
+    ]
+  },
+  "health": {
+    "request": "GET /api/stations/{station_id}/health?region=india",
+    "http_status": 200,
+    "body": {
+      "recordedAt": "2026-09-24T22:34:00.000Z",
+      "receivedAt": "2026-09-24T22:34:14.000Z",
+      "health": {
+        "fuse": 0,
+        "gpsfix": 0,
+        "supply": 0,
+        "battery": 0,
+        "network": 4,
+        "charging": 0,
+        "DeviceTemp": 0,
+        "network_reg": 1
+      },
+      "stationStatus": null
+    }
+  },
+  "parameters": {
+    "request": "GET /api/stations/{station_id}/parameters?scope=live&region=india",
+    "http_status": 200,
+    "body": [
+      {
+        "id": "63d0da020016a",
+        "caption": "CO",
+        "unit": "mg/m3",
+        "displayOrder": 0,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0da885f1a0",
+        "caption": "NO2",
+        "unit": "ug/m3",
+        "displayOrder": 1,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0daa4740ba",
+        "caption": "SO2",
+        "unit": "ug/m3",
+        "displayOrder": 2,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0daf2bcb74",
+        "caption": "O3",
+        "unit": "ug/m3",
+        "displayOrder": 3,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0db066e993",
+        "caption": "NO",
+        "unit": "ug/m3",
+        "displayOrder": 4,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0db8f77ecb",
+        "caption": "PM 2.5",
+        "unit": "ug/m3",
+        "displayOrder": 5,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0dbb867a7c",
+        "caption": "PM 10",
+        "unit": "ug/m3",
+        "displayOrder": 6,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0dbfe0a111",
+        "caption": "Ambient Temperature",
+        "unit": "degC",
+        "displayOrder": 7,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0dc28f109d",
+        "caption": "Relative Humidity",
+        "unit": "Per",
+        "displayOrder": 8,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0dc5164112",
+        "caption": "RAIN",
+        "unit": "mm",
+        "displayOrder": 9,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0dd3721886",
+        "caption": "Wind Speed",
+        "unit": "kmph",
+        "displayOrder": 10,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0dd4ff30c9",
+        "caption": "Wind Direction",
+        "unit": "Deg",
+        "displayOrder": 11,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0ddf115956",
+        "caption": "Noise Average",
+        "unit": "db",
+        "displayOrder": 12,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0de104027f",
+        "caption": "Min value of Noise level",
+        "unit": "db",
+        "displayOrder": 13,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0de34a0b72",
+        "caption": "Max value of Noise level",
+        "unit": "db",
+        "displayOrder": 14,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0de7568a3b",
+        "caption": "UV",
+        "unit": "index",
+        "displayOrder": 15,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0ea1253e8f",
+        "caption": "CO2",
+        "unit": "ppm",
+        "displayOrder": 16,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0ea927306d",
+        "caption": "CO_WE",
+        "unit": "mv",
+        "displayOrder": 17,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0eb32b7070",
+        "caption": "CO_AUX",
+        "unit": "mV",
+        "displayOrder": 18,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0eb591ee3a",
+        "caption": "NO2_WE",
+        "unit": "mV",
+        "displayOrder": 19,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0eb7f49e34",
+        "caption": "NO2_AUX",
+        "unit": "mV",
+        "displayOrder": 20,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0eba20cd96",
+        "caption": "SO2_WE",
+        "unit": "mV",
+        "displayOrder": 21,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0ebc89f18d",
+        "caption": "SO2_AUX",
+        "unit": "mV",
+        "displayOrder": 22,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0ebfa17c49",
+        "caption": "O3_WE",
+        "unit": "mV",
+        "displayOrder": 23,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0ec7aa5a61",
+        "caption": "O3_AUX",
+        "unit": "mV",
+        "displayOrder": 24,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0ec9873bc3",
+        "caption": "NO_WE",
+        "unit": "mV",
+        "displayOrder": 25,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0ecc9829f2",
+        "caption": "NO_AUX",
+        "unit": "mV",
+        "displayOrder": 26,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0ee3fcd99a",
+        "caption": "Baromteric Pressure",
+        "unit": "mBa",
+        "displayOrder": 27,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "63d0eeb2aaeef",
+        "caption": "Molecular Volume",
+        "unit": "ltr",
+        "displayOrder": 28,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "641d7b36d4413",
+        "caption": "CO_ppm",
+        "unit": "ppb",
+        "displayOrder": 29,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "6421673518c4f",
+        "caption": "NO2_ppb",
+        "unit": "ppb",
+        "displayOrder": 30,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "64216914170b7",
+        "caption": "SO2_ppb",
+        "unit": "ppb",
+        "displayOrder": 31,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "64216a7500e46",
+        "caption": "O3_ppb",
+        "unit": "ppb",
+        "displayOrder": 32,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "64216b8187e5e",
+        "caption": "NO_ppb",
+        "unit": "ppb",
+        "displayOrder": 33,
+        "hidden": false,
+        "retired": false
+      },
+      {
+        "id": "6422ae0f8147e",
+        "caption": "Air Quality Index",
+        "unit": "Unit",
+        "displayOrder": 34,
+        "hidden": false,
+        "retired": false
+      }
+    ]
+  }
+}

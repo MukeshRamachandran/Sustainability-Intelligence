@@ -179,6 +179,57 @@ test('staging helper proxies the public routes and nothing else', () => {
   assert.match(server, /PUBLIC_ROUTES/);
 });
 
+test('Weather reads persisted Aeron data same-origin and can never trigger ingestion', () => {
+  const weather = read('weather.js');
+  const code = weather.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+  assert.match(code, /const API_BASE = '\/api\/environment';/);
+  assert.match(code, /request\('\/latest'\)/);
+  assert.match(code, /request\(`\/history\?limit=\$\{limit\}`\)/);
+  assert.doesNotMatch(code, /:8000|:8001|localhost|127\.0\.0\.1/);
+  assert.doesNotMatch(code, /method:\s*'POST'|['"]POST['"]|\/sync/);
+
+  const server = read('serve-staging.py');
+  for (const route of ['/api/environment/latest', '/api/environment/history', '/api/environment/status']) {
+    assert.ok(server.includes(`"${route}"`), `serve-staging.py must proxy ${route}`);
+  }
+  assert.doesNotMatch(server, /\/api\/environment\/sync|\/api\/sync/);
+});
+
+test('production Weather also reads the same-origin environment API with server freshness', () => {
+  // Ported from the retired services/aeron-api contract test.
+  const weather = fs.readFileSync(path.resolve(root, '..', 'public-dashboard', 'weather.js'), 'utf8');
+  assert.ok(weather.includes("const API_BASE = '/api/environment'"));
+  assert.doesNotMatch(weather, /localhost:8000|127\.0\.0\.1:8000|:8001/);
+  assert.ok(weather.includes('setInterval(tickLatest, POLL_MS)'));
+  assert.ok(weather.includes("if (document.body.dataset.page !== 'weather'"));
+  assert.match(weather, /if \(data\.freshness\) return String\(data\.freshness\)\.toLowerCase\(\);/);
+  assert.doesNotMatch(weather, /['"]POST['"]|\/sync/);
+});
+
+test('Weather reads only fields the backend environment schema serves', () => {
+  const schema = fs.readFileSync(
+    path.resolve(root, '..', '..', 'services', 'main-api', 'app', 'schemas', 'environment.py'), 'utf8');
+  const block = schema.match(/class EnvironmentReadingResponse\(BaseModel\):([\s\S]*?)\nclass /)[1];
+  const served = new Set([...block.matchAll(/^ {4}(\w+): /gm)].map(match => match[1]));
+  const used = new Set([...read('weather.js').matchAll(/(?<![.\w])(?:data|d)\.([a-z][a-z0-9_]*)/g)].map(match => match[1]));
+  assert.ok(used.size > 20, 'expected the Weather UI to read many reading fields');
+  for (const field of used) assert.ok(served.has(field), `weather.js reads ${field}, which the API does not serve`);
+  assert.ok(served.has('freshness') && served.has('recorded_at') && served.has('observed_at'));
+});
+
+test('Weather status follows server freshness and shows the station time in IST', () => {
+  const weather = read('weather.js');
+  const source = weather.match(/function computeStatus\(data\) \{[\s\S]*?\n  \}/)[0];
+  const computeStatus = vm.runInNewContext(`(${source})`, { Date, String });
+  assert.equal(computeStatus(null), 'offline');
+  assert.equal(computeStatus({ recorded_at: new Date().toISOString(), freshness: 'OFFLINE' }), 'offline');
+  assert.equal(computeStatus({ recorded_at: '2020-01-01T00:00:00Z', freshness: 'LIVE' }), 'live');
+  assert.equal(computeStatus({ recorded_at: new Date(Date.now() - 10 * 60 * 1000).toISOString() }), 'stale');
+  assert.match(weather, /const DISPLAY_TZ = 'Asia\/Kolkata';/);
+  assert.match(weather, /IST`/);
+  assert.doesNotMatch(weather, /Data fetched:/);
+});
+
 test('governed waste comes from the backend timeline, never waste_master.csv', () => {
   const loader = read('public-data-loader.js');
   const code = loader.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
@@ -245,11 +296,15 @@ test('an unpublished waste period reports unavailable rather than zero', async (
 
 test('official GHG is shown only from backend values and never derived in the browser', () => {
   const app = read('app.js');
-  assert.match(app, /Operational GHG Emissions — Scope 1 \+ Scope 2/);
-  // The GHG hero shows each official figure from the backend display item, or omits it.
+  assert.match(app, /<\/div>Gross Organizational Emissions<\/div>/);
+  // The GHG hero keeps one structure: each official figure comes from the
+  // backend display item, or shows "—" with a reason; never summed or zeroed.
   assert.match(app, /const total = shownValue\('operational_ghg_tco2e'\)/);
   assert.match(app, /const s1 = shownValue\('scope1_tco2e'\), s2 = shownValue\('scope2_tco2e'\)/);
-  assert.match(app, /if \(!total && !s1 && !s2\) return '';/);
+  assert.doesNotMatch(app, /if \(!total && !s1 && !s2\) return '';/);
+  assert.match(app, /\$\{total \? counter\(total\.value, '1\.2rem'\) : dash\}/);
+  assert.match(app, /\$\{item \? counter\(item\.value, '13px'\) : dash\}/);
+  assert.doesNotMatch(app, /s1\.value \+ s2\.value|s2\.value \+ s1\.value/);
   assert.doesNotMatch(app, /2\.388|2\.701|0\.727|0\.71|1\.5571|2\.939/);
   assert.doesNotMatch(app, /Calculations\./);
   // LPG is displayed on its governed litre basis; the superseded kg series is gone.
@@ -494,7 +549,7 @@ test('GHG charts use the governed grid aggregate, not an unpublished per-connect
   assert.match(app, /label: 'S2: Grid electricity', data: sl\(d\.elecEm\)/);
   assert.doesNotMatch(app, /sl\(d\.(?:htEm|commEm|tempEm)\)/);
   for (const title of ['Petrol emissions', 'Fleet diesel emissions', 'DG diesel emissions', 'LPG emissions', 'Grid electricity emissions']) {
-    assert.ok(app.includes(`kpi('${title}'`), `${title} card must exist on the GHG page`);
+    assert.ok(app.includes(`ghgKpi('${title}'`), `${title} card must exist on the GHG page`);
   }
 });
 
@@ -603,6 +658,73 @@ test('energy total reads the combined value published by the backend', () => {
   assert.doesNotMatch(app, /elec \+ re/);
 });
 
+test('Energy Source Breakdown reads the selected period record, never a year sum', async () => {
+  const app = read('app.js');
+  const fn = name => app.match(new RegExp(`function ${name}\\([\\s\\S]*?\\n\\}`))[0];
+  const breakdown = vm.runInNewContext(`${fn('valFor')}\n${fn('energySourceBreakdown')}\nenergySourceBreakdown`, {
+    n: Number, colors: { cyan: 'c', emerald: 'e', gold: 'g' }, Array
+  });
+  const energy = (grid, onCampus, procured) => ({
+    grid_total_kwh: tv(grid, 'energy', { kind: 'calculation' }),
+    renewable_on_campus_kwh: tv(onCampus, 'energy'), renewable_procured_kwh: tv(procured, 'energy')
+  });
+  const ytd = tlAggregate('2027-YTD', 2027, 'YTD', 3, {
+    ...energy(300, 60, 900),
+    grid_total_kwh: tv(300, 'energy', { coverage_status: 'partial', months_covered: ['2027-01', '2027-03'] })
+  }, '2027 YTD · Jan–Mar');
+  const { data } = await loadDashboardFromTimeline(timelineOf([
+    ytd, tlMonth(2027, 1, energy(100, 20, 300)), tlMonth(2027, 2, energy(null, 20, 300)),
+    tlMonth(2027, 3, { ...energy(200, 20, 300), solar_water_heater_kwh: tv(0, 'energy') })
+  ], '2027-03'));
+  const d = data['2027'];
+  const bars = month => Object.fromEntries(breakdown(d, month).map(bar => [bar.label, bar.value]));
+  // A month uses only that month; the aggregate uses the backend's own record.
+  assert.deepEqual(bars(0), { 'Grid total': 100, 'On-campus renewable': 20, 'Procured renewable': 300 });
+  assert.deepEqual(bars('all'), { 'Grid total': 300, 'On-campus renewable': 60, 'Procured renewable': 900 });
+  // Missing grid and missing solar water heater are omitted, never 0; a published 0 stays 0.
+  assert.deepEqual(bars(1), { 'On-campus renewable': 20, 'Procured renewable': 300 });
+  assert.equal(bars(2)['Solar water heater'], 0);
+  // A partial aggregate keeps its coverage.
+  const grid = breakdown(d, 'all').find(bar => bar.label === 'Grid total');
+  assert.deepEqual([grid.partial, grid.monthsCovered], [true, 2]);
+  // Chart, progress card and KPIs all follow the selection; no year-sum or hard-coded period.
+  assert.match(app, /const sourceBars = energySourceBreakdown\(d, month\)/);
+  assert.match(app, /const breakdown = energySourceBreakdown\(d, month\)/);
+  assert.doesNotMatch(app, /solarWaterHeaterTotal|sum\(esl\(d\.solarWaterHeaterKwh\)\)/);
+  assert.doesNotMatch(fn('energySourceBreakdown'), /\b20\d\d\b|sum\(|\|\| 0/);
+  // Renewable Energy Progress still shows the backend renewable_share_pct only.
+  assert.match(app, /const reShare = valFor\(d, d\.renewableSharePct, month\)/);
+  assert.match(app, /const reProgressPct = reShare;/);
+  assert.match(app, /\$\{reProgressPct == null \? '' : `<div class="ep-hero">/);
+});
+
+test('Energy cards can shrink with the page and the two hero cards stack by their own width', () => {
+  const css = read('styles.css');
+  // Grid items holding Chart.js canvases must be allowed to shrink below the canvas's last pixel width.
+  assert.match(css, /#energy \.row > \* \{ min-width: 0; \}/);
+  // Stacking follows the widget's container width, not a device breakpoint.
+  assert.match(css, /#energyProgressWidget \{ container-type: inline-size; \}/);
+  assert.match(css, /@container \(max-width: \d+px\) \{\s*\.ep-hero-row \{ flex-direction: column; \}/);
+  // Fixed by layout, never by clipping the page.
+  assert.doesNotMatch(css, /(?:html|body|\.page|#energy)\s*\{[^}]*overflow-x:\s*hidden/);
+});
+
+test('shared top bar wraps and grows instead of overflowing, keeping every control', () => {
+  const css = read('styles.css');
+  const mobile = read('mobile.css');
+  const html = read('index.html');
+  const topbar = css.match(/\.topbar\{[^}]*\}/)[0];
+  // No fixed height: the bar grows when the controls wrap to their own row.
+  assert.match(topbar, /flex-wrap:wrap/);
+  assert.match(topbar, /min-height:68px/);
+  assert.doesNotMatch(topbar, /[{;]\s*height:/);
+  assert.doesNotMatch(mobile.match(/\.topbar \{[^}]*\}/)[0], /[{;]\s*height:/);
+  assert.match(css, /\.topbar-controls\{[^}]*min-width:0/);
+  // Every control stays in the bar; nothing is hidden or clipped to make it fit.
+  for (const id of ['yearFilter', 'monthFilter', 'periodText', 'exportBtn']) assert.match(html, new RegExp(`id="${id}"`));
+  assert.doesNotMatch(css + mobile, /(?:html|body|\.topbar|\.topbar-controls)\s*\{[^}]*overflow-x:\s*hidden/);
+});
+
 test('Data Explorer builds each source row on its own published value', () => {
   const app = read('app.js');
   assert.match(app, /if \(d\.elecKwh\[i\] != null\) rows\.push\(\[year, m, 'S2', 'Grid Electricity'/);
@@ -629,7 +751,7 @@ test('Overview contains exactly the eight governed presentation KPIs and keeps S
   const app = read('app.js');
   const overview = app.match(/document\.getElementById\('overviewKpis'\)\.innerHTML = \[([\s\S]*?)\]\.join\(''\);/);
   assert.ok(overview, 'Overview KPI renderer must be present');
-  const titles = [...overview[1].matchAll(/kpi\('([^']+)'/g)].map(match => match[1]);
+  const titles = [...overview[1].matchAll(/(?:overviewKpi|kpi)\('([^']+)'/g)].map(match => match[1]);
   assert.deepEqual(titles, [
     'Renewable energy used',
     'Total grid electricity consumed',
@@ -701,6 +823,9 @@ test('KPI cards use backend values, the static landfill reference, and no waste 
   assert.match(app, /kpi\('Landfill diversion', landfillDiversionPct/);
   assert.match(app, /kpi\('Consumption per capita', waterPerCapitaL, 'L\/person'/);
   assert.match(app, /kpi\('Estimated avoided grid emissions', avoid/);
+  // The GHG page shows the same governed metric as "Reduction through renewables".
+  assert.match(app, /'Reduction through renewables': \{ code: 'estimated_avoided_grid_emissions_tco2e' \}/);
+  assert.match(app, /ghgKpi\('Reduction through renewables', avoid,/);
   assert.match(app, /tables\.derived =/);
   assert.match(html, /data-t="derived"/);
   assert.doesNotMatch(app, /kpi\('Green-cover carbon sequestration'/);
@@ -880,4 +1005,40 @@ test('the 2025 annual water total is backend data, never a frontend constant', (
   }
   // Total water usage is a backend display item like every other KPI.
   assert.match(read('app.js'), /'Total water usage': \{ code: 'water_consumed_kl' \}/);
+});
+
+test('Overview and GHG share public labels bound to the governed fields; GHG mix charts lay out from stable CSS', () => {
+  const app = read('app.js');
+  const html = read('index.html');
+  const css = read('styles.css');
+  // Labels are display text only; each maps to the one authoritative backend field.
+  assert.match(app, /'Reduction through renewables': \{ code: 'estimated_avoided_grid_emissions_tco2e' \}/);
+  assert.match(app, /'Per capita emissions': \{ code: 'operational_ghg_per_capita_kgco2e' \}/);
+  assert.match(app, /net: shownValue\('operational_ghg_per_capita_kgco2e'\)/);
+  assert.match(app, /avoid: shownValue\('estimated_avoided_grid_emissions_tco2e'\)/);
+  assert.match(app, /labelEl\.textContent = "Per capita emissions"/);
+  assert.match(app, /labelEl\.textContent = "Reduction through renewables"/);
+  assert.match(html, /<\/i>Per capita emissions<\/span>/);
+  assert.match(html, /<\/i>Reduction through renewables<\/span>/);
+  assert.doesNotMatch(app + html, /per capita income/i);
+  // More avoided emissions is good; per-person emissions keep lower-is-better.
+  assert.match(app, /ghgKpi\('Reduction through renewables', avoid, 'tCO₂e', colors\.emerald, 'leaf', previousValue\('avoidEm'\), false, 3\)/);
+  assert.match(app, /ghgKpi\('Per capita emissions', operationalPerCapita, 'kgCO₂e\/person', colors\.blue, 'users', null, true, 3\)/);
+  // GHG KPI card contract.
+  const ghg = app.match(/document\.getElementById\('ghgKpis'\)\.innerHTML = \[([\s\S]*?)\]\.join\(''\);/);
+  assert.deepEqual([...ghg[1].matchAll(/ghgKpi\('([^']+)'/g)].map(m => m[1]), [
+    'Petrol emissions', 'Fleet diesel emissions', 'DG diesel emissions', 'LPG emissions',
+    'Grid electricity emissions', 'Per capita emissions', 'Reduction through renewables'
+  ]);
+  // Charts: every rebuild destroys the previous instances first; no timer-based layout fix.
+  assert.match(app, /function drawCharts\(\) \{\s*killCharts\(\);\s*redrawWhenChartFontLoads\(\);/);
+  assert.match(app, /function killCharts\(\) \{ Object\.values\(charts\)\.forEach\(c => c\.destroy\(\)\); charts = \{\}; \}/);
+  assert.match(app, /document\.fonts\.load\(font\)\.then\(/);
+  assert.doesNotMatch(app.slice(app.indexOf('function redrawWhenChartFontLoads'), app.indexOf('function drawCharts')), /setTimeout/);
+  // Mix-widget layout is static CSS (not injected per render) and sized by its own container.
+  assert.doesNotMatch(app, /<style>\s*\.elec-mix-widget|<style>\s*\.fuel-mix-widget/);
+  assert.match(css, /\.elec-mix-widget\.fuel-mix-widget \{/);
+  assert.match(css, /#elecMixWidget, #fuelMixWidget \{ container-type: inline-size; \}/);
+  assert.match(css, /#ghg \.row > \* \{ min-width: 0; \}/);
+  assert.doesNotMatch(css.slice(css.indexOf('GHG mix widgets')), /left:\s*\d{3,}px|margin-left:\s*\d{3,}px|translateX\(/);
 });

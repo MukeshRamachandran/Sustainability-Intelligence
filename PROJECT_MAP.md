@@ -24,18 +24,19 @@ Responsibilities:
 - approval
 - sustainability calculations
 - publication
+- read-only Aeron environment API (latest/history/status)
 
-## Aeron environmental service
+## Aeron environmental ingestion
 
 Path:
-services/aeron-api
+services/main-api/app/environment
 
 Responsibilities:
-- Aeron upstream API communication
-- sensor normalization
-- environmental persistence
-- latest/history/status APIs
-- protected synchronization
+- Playwright session acquisition/refresh (worker only)
+- Aeron readings HTTP polling (worker only, every 5 minutes)
+- sensor normalization and validation
+- environmental persistence (`environment` schema)
+- freshness classification
 
 ## Report generation
 
@@ -47,10 +48,7 @@ services/report-generation
 Path:
 services/main-api/alembic
 
-## Aeron database schema
-
-Path:
-services/aeron-api/database
+The Aeron `environment` schema is migration `0012_environment_readings`.
 
 ## Legacy Supabase reference
 

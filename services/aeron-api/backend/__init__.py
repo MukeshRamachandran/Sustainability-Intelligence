@@ -1,1 +1,0 @@
-"""Aeron environmental monitoring service."""

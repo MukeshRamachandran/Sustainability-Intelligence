@@ -1,6 +1,7 @@
 """SQLAlchemy models will be added in Phase D4."""
 
 from app.models.audit import AuditLog
+from app.models.environment import EnvironmentIngestionRun, EnvironmentReading
 from app.models.history import (
     HistoricalCalculationResult,
     HistoricalConflict,
@@ -36,6 +37,8 @@ __all__ = [
     "CalculationResult",
     "EmissionFactor",
     "EmissionFactorSet",
+    "EnvironmentIngestionRun",
+    "EnvironmentReading",
     "HistoricalCalculationResult",
     "HistoricalConflict",
     "HistoricalImportBatch",

@@ -25,12 +25,15 @@ administrative review, correction, approval and publication.
 
 FastAPI service responsible for authentication, authorization,
 sustainability submissions, review, calculations and publication.
+It also serves the read-only Aeron environment API
+(`/api/environment/latest|history|status`).
 
-### Aeron Environmental API
-`services/aeron-api`
+### Aeron ingestion worker
+`services/main-api/app/environment/worker.py`
 
-FastAPI service responsible for Aeron environmental synchronization,
-normalization, storage and latest/history/status APIs.
+Separate scheduled process (`python -m app.environment.worker`) that polls
+Aeron every 5 minutes, using Playwright only to obtain or refresh the
+session. See `AERON_INTEGRATION_ARCHITECTURE.md`.
 
 ### Report Generation
 `services/report-generation`
@@ -47,15 +50,13 @@ Primary schemas:
 - sustainability
 - publication
 - audit
-- environmental
+- history
+- environment
 
-Main database migrations are maintained under:
+Database migrations, including the Aeron `environment` schema, are
+maintained under:
 
 `services/main-api/alembic`
-
-Aeron environmental schema currently exists under:
-
-`services/aeron-api/database`
 
 ## Deployment
 
