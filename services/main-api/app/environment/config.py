@@ -1,8 +1,8 @@
 """Settings for the Aeron ingestion worker only.
 
-The public API process never needs these. Credentials are read from the
-process environment (never from a repository ``.env``) and held as
-``SecretStr`` so they cannot leak through ``repr`` or logging.
+The public API process never needs these. Credentials come from the same
+gitignored ``services/main-api/.env`` as the API and are held as ``SecretStr``
+so they cannot leak through ``repr`` or logging.
 """
 
 from __future__ import annotations
@@ -12,9 +12,11 @@ from urllib.parse import urlparse
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.config import SERVICE_ENV_FILE
+
 
 class AeronWorkerSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=None, case_sensitive=True, extra="ignore")
+    model_config = SettingsConfigDict(env_file=SERVICE_ENV_FILE, case_sensitive=True, extra="ignore")
 
     AERON_STATION_ID: str = Field(min_length=1, max_length=100)
     AERON_INTERNAL_BASE_URL: str = "https://live3.aeronsystems.com/api"

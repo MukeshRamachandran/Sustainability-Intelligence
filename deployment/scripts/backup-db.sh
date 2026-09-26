@@ -6,8 +6,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 API_DIR="${REPO_ROOT}/services/main-api"
 ENV_FILE="${API_DIR}/.env"
-BACKUP_DIR="${BACKUP_DIR:-/var/backups/kcosmos}"
-RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-14}"
 
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
@@ -19,6 +17,11 @@ env_value() {
   line="$(grep -E "^${key}=" "${ENV_FILE}" | tail -n 1 || true)"
   printf '%s' "${line#*=}"
 }
+
+BACKUP_DIR="${BACKUP_DIR:-$(env_value BACKUP_DIR)}"
+BACKUP_DIR="${BACKUP_DIR:-/var/backups/kcosmos}"
+RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-$(env_value BACKUP_RETENTION_DAYS)}"
+RETENTION_DAYS="${RETENTION_DAYS:-14}"
 
 db_name="$(env_value POSTGRES_DB)"
 db_user="$(env_value POSTGRES_USER)"

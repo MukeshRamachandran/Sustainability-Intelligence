@@ -16,10 +16,13 @@ DEVELOPMENT_SECRETS = {
     "secret",
 }
 
+# One environment file for the API, the worker, and Compose.
+SERVICE_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=SERVICE_ENV_FILE,
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore",

@@ -28,13 +28,13 @@ Historical design notes are in [docs/reports](docs/reports).
 ## Local development
 
 ```bash
-cd services/main-api
-cp .env.example .env
+cp services/main-api/.env.example services/main-api/.env
 ```
 
 For a laptop, set `APP_ENV=development`, `SESSION_COOKIE_SECURE=false`, `PUBLIC_BASE_URL=http://localhost:8000`, and `ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000`. Put a real local password in `POSTGRES_PASSWORD` and the same password inside `DATABASE_URL`. Do not commit that file.
 
 ```bash
+cd services/main-api
 docker compose up -d postgres
 docker compose run --rm --no-deps api alembic upgrade head
 docker compose up -d api
@@ -44,7 +44,7 @@ Serve the portal on port 3000 if you want `auth-client.js` to call port 8000. Th
 
 ## Environment variables
 
-The process reads `services/main-api/.env`. The root `.env.example` is a checklist. Required production values:
+The API, worker, Compose, and backup scripts read one file: `services/main-api/.env`. Required production values:
 
 | Variable | Role |
 | --- | --- |
@@ -155,4 +155,4 @@ The script refuses to run without both `CONFIRM_RESTORE=yes` and `--replace`.
 - Authorization is enforced in FastAPI, including manager domain.
 - Production CORS is the single site origin. Wildcards are rejected. Loopback origins are rejected in production.
 - Errors returned to browsers include a request id and a safe message. Stack traces stay in the server log.
-- Do not commit `.env`, passwords, or session secrets. `.env.example` files contain empty secret fields.
+- Do not commit `.env`, passwords, or session secrets. `services/main-api/.env.example` has empty secret fields.

@@ -35,7 +35,7 @@ Direct SQL inserts are for emergency recovery only, after the API is unavailable
 
 ## Backups
 
-`deployment/scripts/backup-db.sh` runs `pg_dump --format=custom` inside the PostgreSQL container and writes the file to `BACKUP_DIR` on the host (default `/var/backups/kcosmos`).
+`deployment/scripts/backup-db.sh` runs `pg_dump --format=custom` inside the PostgreSQL container and writes the file to `BACKUP_DIR` on the host. That path and `BACKUP_RETENTION_DAYS` come from `services/main-api/.env` (default `/var/backups/kcosmos`, 14 days). A shell variable with the same name overrides the file.
 
 `deployment/scripts/restore-db.sh` loads one of those files only when invoked as:
 
