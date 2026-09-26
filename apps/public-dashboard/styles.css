@@ -115,12 +115,7 @@
   --radius:16px;--radius2:13px;
   --shadow:0 1px 2px rgba(21,32,26,.04),0 8px 24px rgba(21,32,26,.05);
 }
-body.dark-mode {
-  --paper:#0b110d;--surface:#15201a;--surface2:#1e2d24;
-  --ink:#e5e9e4;--muted:#a1b0a8;--faint:#6c7d74;
-  --line:#2b3b33;--line-strong:#3a4b41;
-  --shadow:0 1px 2px rgba(0,0,0,.2),0 8px 24px rgba(0,0,0,.4);
-}
+
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
 body{position:relative;z-index:0;font-family:'Public Sans',system-ui,sans-serif;background:var(--paper);color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased}
@@ -136,28 +131,24 @@ body::before, .bg-layer {
 }
 
 body::before {
-  background-image: url('background.png');
+  background-image: url('media/background.png');
   opacity: 0.8;
   mix-blend-mode: multiply;
 }
-body.dark-mode::before {
-  filter: invert(1);
-  opacity: 0.6;
-  mix-blend-mode: screen;
-}
+
 
 .bg-layer {
   opacity: 0;
   mix-blend-mode: multiply;
 }
 
-#bg-waste { background-image: url('waste-bg.jpg'); }
-#bg-water { background-image: url('water-bg.png'); }
-#bg-energy { background-image: url('energy-bg.png'); }
-#bg-ghg { background-image: url('ghg-bg.png'); }
-#bg-outreach { background-image: url('outreach-bg.png'); }
-#bg-main { background-image: url('background.png'); }
-#bg-weather { background-image: url('background.png'); }
+#bg-waste { background-image: url('media/waste-bg.jpg'); }
+#bg-water { background-image: url('media/water-bg.png'); }
+#bg-energy { background-image: url('media/energy-bg.png'); }
+#bg-ghg { background-image: url('media/ghg-bg.png'); }
+#bg-outreach { background-image: url('media/outreach-bg.png'); }
+#bg-main { background-image: url('media/background.png'); }
+#bg-weather { background-image: url('media/background.png'); }
 
 body[data-page="waste"]::before, body[data-page="water"]::before, body[data-page="energy"]::before, body[data-page="ghg"]::before, body[data-page="outreach"]::before, body[data-page="overview"]::before, body[data-page="explorer"]::before, body[data-page="about"]::before, body[data-page="weather"]::before { opacity: 0; }
 body[data-page="waste"] #bg-waste { opacity: 0.8; }
@@ -170,65 +161,39 @@ body[data-page="explorer"] #bg-main { opacity: 0.8; }
 body[data-page="about"] #bg-main { opacity: 0.8; }
 body[data-page="weather"] #bg-main { opacity: 0.8; }
 
-body.dark-mode .bg-layer {
-  filter: invert(1);
-  mix-blend-mode: screen;
-}
 
-body.dark-mode[data-page="waste"] #bg-waste { opacity: 0.6; }
-body.dark-mode[data-page="water"] #bg-water { opacity: 0.6; }
-body.dark-mode[data-page="energy"] #bg-energy { opacity: 0.6; }
-body.dark-mode[data-page="ghg"] #bg-ghg { opacity: 0.6; }
-body.dark-mode[data-page="outreach"] #bg-outreach { opacity: 0.6; }
-body.dark-mode[data-page="overview"] #bg-main { opacity: 0.6; }
-body.dark-mode[data-page="explorer"] #bg-main { opacity: 0.6; }
-body.dark-mode[data-page="about"] #bg-main { opacity: 0.6; }
-body.dark-mode[data-page="weather"] #bg-main { opacity: 0.6; }
+
+
+
+
+
+
+
+
+
+
 h1,h2,h3,h4{font-family:'Archivo',sans-serif;letter-spacing:-.02em;line-height:1.12;font-weight:700}
 .mono,.value,td.num{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
 
 /* ---- top bar ---- */
-.topbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:20px;
-  padding:0 clamp(16px,3vw,34px);height:68px;background:rgba(255,255,255,.7);
+/* min-height + wrap (not a fixed height): when brand and controls no longer
+   fit on one line the controls drop to their own row and the bar grows to
+   hold them, instead of spilling above/below the bar and past the viewport. */
+.topbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:20px;justify-content:space-between;
+  flex-wrap:wrap;row-gap:10px;padding:8px clamp(16px,3vw,34px);min-height:68px;background:rgba(255,255,255,.7);
   backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid rgba(0,0,0,0.05);
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);}
-body.dark-mode .topbar {
-  background: rgba(21,32,26,0.7);
-  border-bottom: 1px solid rgba(255,255,255,0.05);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
-}
-.theme-switch {
-  border: none;
-  background: transparent;
-  color: var(--ink);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 15px;
-  padding: 8px;
-  border-radius: 50%;
-  transition: background 0.3s ease, color 0.3s ease;
-}
-.theme-switch:hover {
-  background: rgba(128, 128, 128, 0.1);
-}
-.theme-switch .sun-icon {
-  display: none;
-}
-.theme-switch .moon-icon {
-  display: block;
-}
-body.dark-mode .theme-switch .sun-icon {
-  display: block;
-}
-body.dark-mode .theme-switch .moon-icon {
-  display: none;
-}
+
+
+
+
+
+
+
 .brand{display:flex;align-items:center;gap:15px;margin-right:auto}
 .brand .logo-k{height:25px;width:auto;display:block}
 .brand .logo-m{height:44px;width:auto;display:block}
-body.dark-mode .brand .logo-k, body.dark-mode .brand .logo-m { filter: invert(1); }
+
 .brand-div{width:1px;height:35px;background:var(--line-strong)}
 .nav{display:flex;gap:2px;align-self:stretch}
 .nav button{border:0;background:transparent;color:var(--muted);font-family:'Public Sans';
@@ -237,13 +202,13 @@ body.dark-mode .brand .logo-k, body.dark-mode .brand .logo-m { filter: invert(1)
 .nav button.active{color:var(--ink);box-shadow:inset 0 -2px 0 var(--green)}
 .hamb{display:none}
 
-/* ---- toolbar ---- */
-.toolbar{position:sticky;top:68px;z-index:25;display:flex;gap:14px;align-items:center;flex-wrap:wrap;
-  padding:11px clamp(16px,3vw,34px);background:var(--surface2);border-bottom:1px solid var(--line)}
-.toolbar label{color:var(--faint);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;display:flex;align-items:center;gap:7px}
-.toolbar select{background:var(--surface);color:var(--ink);border:1px solid var(--line-strong);border-radius:9px;
+/* ---- topbar controls ---- */
+.topbar-controls{display:flex;gap:14px;align-items:center;flex-wrap:wrap;min-width:0;max-width:100%}
+.topbar-controls label,.topbar-controls select{min-width:0;max-width:100%}
+.topbar-controls label{color:var(--faint);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;display:flex;align-items:center;gap:7px}
+.topbar-controls select{background:var(--surface);color:var(--ink);border:1px solid var(--line-strong);border-radius:9px;
   padding:7px 10px;font-family:'Public Sans';font-weight:600;font-size:13px;outline:none;cursor:pointer}
-.toolbar select:focus{border-color:var(--green)}
+.topbar-controls select:focus{border-color:var(--green)}
 .source-pill{margin-left:auto;color:var(--faint);font-size:11.5px}
 .btn{border:1px solid var(--green);border-radius:9px;padding:8px 14px;background:var(--green);color:#fff;
   font-family:'Public Sans';font-weight:700;font-size:13px;cursor:pointer;transition:.18s}
@@ -258,13 +223,14 @@ body.dark-mode .brand .logo-k, body.dark-mode .brand .logo-m { filter: invert(1)
 .eyebrow:before{content:"";width:22px;height:1.5px;background:var(--green)}
 .page>h1,.page-hero>h1{font-size:clamp(24px,3.4vw,33px);margin-bottom:6px}
 .hint{color:var(--muted);font-size:13.5px;max-width:680px;margin-bottom:4px}
+.abbr-full{display:block;font-size:13px;font-weight:500;color:var(--muted);margin-top:2px}
 
 /* ---- page hero folder: glass panel enclosing the heading + KPI row ---- */
 .page-hero{
   position:relative;
   background:color-mix(in srgb, var(--surface) 58%, transparent);
-  backdrop-filter:blur(22px) saturate(160%);
-  -webkit-backdrop-filter:blur(22px) saturate(160%);
+  backdrop-filter:blur(10px) saturate(160%);
+  -webkit-backdrop-filter:blur(10px) saturate(160%);
   border:1px solid color-mix(in srgb, var(--surface) 45%, var(--line-strong) 55%);
   border-radius:22px;
   padding:16px clamp(16px,2.4vw,24px) 14px;
@@ -273,11 +239,7 @@ body.dark-mode .brand .logo-k, body.dark-mode .brand .logo-m { filter: invert(1)
 }
 .page-hero .hint{margin-bottom:0}
 .page-hero .kpi-grid{margin-bottom:0}
-body.dark-mode .page-hero{
-  background:color-mix(in srgb, var(--surface) 46%, transparent);
-  border-color:color-mix(in srgb, var(--surface) 30%, var(--line-strong) 70%);
-  box-shadow:0 10px 34px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);
-}
+
 
 .data-head{margin:6px 2px 16px}
 .data-head h2{font-size:clamp(19px,2.4vw,25px);font-weight:700}
@@ -289,8 +251,8 @@ body.dark-mode .page-hero{
 .bal-top{display:flex;align-items:baseline;gap:12px;margin-bottom:4px}
 .bal-top span{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--faint)}
 .bal-top span:last-child{margin-left:auto}
-.bal-gross{font-family:'IBM Plex Mono';font-size:clamp(34px,5.2vw,52px);font-weight:700;letter-spacing:-.02em;color:var(--ink)}
-.bal-gross em{font-style:normal;font-size:16px;color:var(--muted);margin-left:4px}
+.bal-gross{font-family:'IBM Plex Mono';font-size:clamp(46px,7vw,72px);font-weight:700;letter-spacing:-.02em;color:var(--ink)}
+.bal-gross em{font-style:normal;font-size:18px;color:var(--muted);margin-left:4px}
 /* Progress Bar Master Track Runway — a live composition bar: Gross = Avoided + Net-emitted */
 .bal-bar {
   height: 14px;
@@ -388,12 +350,6 @@ main,footer{position:relative;z-index:1}
     box-shadow: 0 12px 24px rgba(21, 32, 26, 0.12) !important;
     z-index: 20 !important;
     opacity: 1 !important;
-  }
-
-  /* 2. Standard sibling fade layout logic instead of container-wide :has triggers */
-  .kpi-grid:hover .kpi:not(:hover) {
-    opacity: 0.5;
-    transform: scale(0.98);
   }
 }
 .kpi .icon{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;margin-bottom:13px;
@@ -554,7 +510,23 @@ main,footer{position:relative;z-index:1}
 .kpi-fx-elecmetervideo .icon,
 .kpi-fx-elecmetervideo .label,
 .kpi-fx-elecmetervideo .value,
-.kpi-fx-elecmetervideo .trend {
+.kpi-fx-elecmetervideo .trend,
+.kpi-fx-convwastevideo .icon,
+.kpi-fx-convwastevideo .label,
+.kpi-fx-convwastevideo .value,
+.kpi-fx-convwastevideo .trend,
+.kpi-fx-landfillvideo .icon,
+.kpi-fx-landfillvideo .label,
+.kpi-fx-landfillvideo .value,
+.kpi-fx-landfillvideo .trend,
+.kpi-fx-watervideo .icon,
+.kpi-fx-watervideo .label,
+.kpi-fx-watervideo .value,
+.kpi-fx-watervideo .trend,
+.kpi-fx-rewatervideo .icon,
+.kpi-fx-rewatervideo .label,
+.kpi-fx-rewatervideo .value,
+.kpi-fx-rewatervideo .trend {
   position: relative;
   z-index: 2;
 }
@@ -615,6 +587,30 @@ main,footer{position:relative;z-index:1}
 .kpi.kpi-fx-elecmetervideo:hover .kpi-fx-video {
   opacity: 1.0;
 }
+.kpi-fx-convwastevideo .kpi-fx-video {
+  opacity: 0.75;
+}
+.kpi.kpi-fx-convwastevideo:hover .kpi-fx-video {
+  opacity: 1.0;
+}
+.kpi-fx-landfillvideo .kpi-fx-video {
+  opacity: 0.75;
+}
+.kpi.kpi-fx-landfillvideo:hover .kpi-fx-video {
+  opacity: 1.0;
+}
+.kpi-fx-watervideo .kpi-fx-video {
+  opacity: 0.75;
+}
+.kpi.kpi-fx-watervideo:hover .kpi-fx-video {
+  opacity: 1.0;
+}
+.kpi-fx-rewatervideo .kpi-fx-video {
+  opacity: 0.75;
+}
+.kpi.kpi-fx-rewatervideo:hover .kpi-fx-video {
+  opacity: 1.0;
+}
 .kpi-fx-video-overlay {
   position: absolute;
   inset: 0;
@@ -648,8 +644,6 @@ main,footer{position:relative;z-index:1}
 .card .hint{font-size:12.5px;margin-bottom:16px}
 
 /* ---- Chart FX ---- */
-.card-3d{transition:transform 0.1s ease-out,box-shadow 0.3s ease-out;transform-style:preserve-3d}
-.card-3d:hover{z-index:10;box-shadow:0 12px 24px rgba(21,32,26,.08)}
 .chart-spin canvas{animation:spinChart 60s linear infinite}
 @keyframes spinChart{to{transform:rotate(1turn)}}
 .chart-shimmer{position:relative;overflow:hidden;border-radius:var(--radius2)}
@@ -746,11 +740,7 @@ footer{max-width:1240px;margin:auto;padding:24px clamp(16px,3vw,34px) 44px;borde
   position: relative;
   gap: 8px;
 }
-body.dark-mode .bottom-dock {
-  background: rgba(30, 45, 36, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
-}
+
 .bottom-dock button {
   position: relative;
   z-index: 1;
@@ -1096,4 +1086,192 @@ body.sidebar-active .page {
   width: 0%;
   background: var(--green);
   border-radius: 3px;
+}
+
+/* ---- progress-hero accent variants ----
+   The base .ep-* rules (card, bar track, shimmer, target line, tooltip) are
+   injected once, globally, by the Energy page's progress widget in app.js -
+   every page's progress-hero card below reuses those same classes so the
+   whole family of cards looks and behaves identically; only the top accent
+   stripe needs a per-page color, since ::before can't be inline-styled. */
+.ep-hero-rust::before { background: linear-gradient(90deg, var(--rust), var(--amber)); }
+.ep-hero-blue::before { background: linear-gradient(90deg, var(--blue), var(--teal)); }
+.ep-hero-gold::before { background: linear-gradient(90deg, var(--amber), #e0b15c); }
+
+/* ---- Weather page: live condition background video ----
+   Sits above #bg-weather/#bg-main (later in DOM, same z-index tier as every
+   .bg-layer) and is shown/hidden by weather.js based on live conditions, not
+   by a body[data-page] selector - only the Weather tab has any content to
+   toggle here, so there's nothing for other pages to accidentally match. */
+.weather-bg-video-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .8s ease;
+}
+.weather-bg-video-wrap.active { opacity: 1; }
+.weather-bg-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity .6s ease;
+  filter: brightness(1.22) saturate(1.1) contrast(1.03);
+}
+.weather-bg-video.video-visible { opacity: 1; }
+.weather-bg-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(15,23,20,.15) 0%, rgba(15,23,20,.22) 60%, rgba(15,23,20,.3) 100%);
+}
+
+
+/* Text legibility on the Weather page specifically, since a bright sky video
+   can sit behind it: the glass hero panel and the "Air Quality & Pollutants"
+   chip (the one bit of text on this page that isn't already inside a
+   .page-hero or an opaque .card/.kpi) get a thin, minimally-blurred "liquid
+   glass" treatment - much less frosting than the rest of the site's glass
+   panels, so the video reads through clearly, plus a refractive gradient rim
+   (the ::before below) standing in for real specular refraction, which CSS
+   can't do - closer to Apple's Liquid Glass material than a flat frosted
+   card. The extra inset highlights + text-shadow keep contrast from
+   suffering for the transparency this trades in. */
+body[data-page="weather"] .page-hero,
+body[data-page="weather"] .data-head {
+  position: relative;
+  overflow: hidden;
+  border: none;
+}
+body[data-page="weather"] .page-hero {
+  background: color-mix(in srgb, var(--surface) 48%, transparent);
+  backdrop-filter: blur(2px) saturate(180%);
+  -webkit-backdrop-filter: blur(2px) saturate(180%);
+  border-radius: 26px;
+  box-shadow:
+    0 14px 38px rgba(0,0,0,.16),
+    inset 0 1px 1px rgba(255,255,255,.55),
+    inset 0 -14px 20px -14px rgba(255,255,255,.12);
+}
+body[data-page="weather"] .data-head {
+  width: fit-content;
+  max-width: 100%;
+  background: color-mix(in srgb, var(--surface) 46%, transparent);
+  backdrop-filter: blur(2px) saturate(180%);
+  -webkit-backdrop-filter: blur(2px) saturate(180%);
+  border-radius: 18px;
+  padding: 10px 18px;
+  box-shadow:
+    0 8px 24px rgba(0,0,0,.14),
+    inset 0 1px 1px rgba(255,255,255,.5),
+    inset 0 -10px 14px -10px rgba(255,255,255,.1);
+}
+/* The rim itself: a thin gradient ring (light hitting the top-left curve,
+   fading through the glass, catching again at the bottom-right) drawn with
+   the mask-composite border trick rather than a flat 1px border. */
+body[data-page="weather"] .page-hero::before,
+body[data-page="weather"] .data-head::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: linear-gradient(135deg,
+    rgba(255,255,255,.95) 0%,
+    rgba(255,255,255,.15) 35%,
+    rgba(255,255,255,.08) 60%,
+    rgba(255,255,255,.55) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+body[data-page="weather"] .page-hero h1,
+body[data-page="weather"] .page-hero .hint,
+body[data-page="weather"] .data-head h2,
+body[data-page="weather"] .data-head p {
+  text-shadow: 0 1px 3px rgba(0,0,0,.18);
+}
+
+
+
+
+
+/* Provenance of a KPI value: the period its number comes from. Context values
+   (annual / YTD / static shown for another selection) get a tinted pill. */
+.kpi-source { display: inline-block; margin: 6px 0 2px; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 600; letter-spacing: .02em; color: var(--muted, #6b7a72); background: var(--surface2, rgba(21,32,26,.05)); }
+.kpi-source.is-context { color: #1c7a4b; background: rgba(28,122,75,.10); }
+/* Keep the badge above the video/particle layer of animated KPI cards. */
+.kpi-fx .kpi-source { position: relative; z-index: 10 !important; opacity: 1 !important; }
+
+/* Public Overview: no internal source/provenance line in the toolbar, and the
+   Data Explorer tab is not offered from this page (it stays reachable
+   elsewhere and via ?page=explorer). Export keeps its right-hand slot. */
+body[data-page="overview"] #periodText,
+body[data-page="overview"] .bottom-dock button[data-page="explorer"] { display: none; }
+body[data-page="overview"] #exportBtn { margin-left: auto; }
+@media (max-width: 1040px) { body[data-page="overview"] #exportBtn { margin-left: 0; } }
+
+/* ---- Energy page layout ----
+   Trend-chart cards: a grid item's min-width:auto holds the Chart.js canvas's
+   last pixel width, so cards could grow on resize but never shrink back. */
+#energy .row > * { min-width: 0; }
+/* Renewable Energy Progress + Energy Source Breakdown sit side by side only
+   while each card keeps a readable width; below that they stack. Sized by the
+   widget's own width, not the device. */
+#energyProgressWidget { container-type: inline-size; }
+.ep-hero-row > .ep-hero { min-width: 0; }
+@container (max-width: 820px) {
+  .ep-hero-row { flex-direction: column; }
+  .ep-hero-row > .ep-hero { max-width: none; }
+}
+
+/* ---- GHG mix widgets (Electricity Mix, Fossil Fuel Emissions Mix) ----
+   Moved here from inline <style> blocks in app.js so the fuel widget no
+   longer depends on the electricity widget having rendered. Layout follows
+   each card's own width (container queries), not the viewport. */
+#ghg .row > * { min-width: 0; } /* lets GHG chart cards shrink so Chart.js can resize down */
+#elecMixWidget, #fuelMixWidget { container-type: inline-size; }
+.elec-mix-widget { display: flex; align-items: center; justify-content: center; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 24px; position: relative; }
+.elec-mix-title-box { position: absolute; top: 20px; left: 24px; display: flex; align-items: center; gap: 12px; }
+.elec-mix-icon { width: 40px; height: 40px; border-radius: 10px; background: rgba(217, 160, 91, 0.1); color: var(--gold, #d9a05b); display: flex; align-items: center; justify-content: center; font-size: 20px; }
+.elec-mix-chart-area { display: flex; align-items: center; justify-content: center; position: relative; gap: 24px; margin-top: 64px; }
+.elec-mix-chart-container { width: 240px; height: 240px; position: relative; transition: transform 0.3s ease; }
+.elec-mix-chart-container:hover { transform: scale(1.02); }
+.elec-mix-center-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--gold, #d9a05b); opacity: 0.8; transition: transform 0.3s ease; }
+.elec-mix-chart-container:hover .elec-mix-center-icon { transform: translate(-50%, -50%) scale(1.1); }
+.elec-label-block { display: flex; flex-direction: column; gap: 6px; width: 110px; }
+.elec-label-left { text-align: right; }
+.elec-label-right { text-align: left; }
+.elec-pct { font-size: 28px; font-weight: 700; line-height: 1; }
+.elec-pct-grid { color: var(--gold, #d9a05b); }
+.elec-pct-re { color: var(--emerald, #1c7a4b); }
+.elec-sub { font-size: 13px; color: var(--ink); font-weight: 600; line-height: 1.2; }
+.elec-desc { font-size: 11px; color: var(--ink); opacity: 0.6; line-height: 1.3; }
+/* Side-by-side needs two 110px label columns + the 240px ring + gaps + padding. */
+@container (max-width: 560px) {
+  .elec-mix-widget { flex-direction: column; padding: 20px; }
+  .elec-mix-chart-area { flex-direction: column; gap: 24px; }
+  .elec-label-left, .elec-label-right { text-align: center; }
+  .elec-mix-title-box { position: relative; top: 0; left: 0; margin-bottom: 16px; margin-top: 0; }
+}
+/* Fuel widget: both classes sit on the same element, so the selectors are compound. */
+.elec-mix-widget.fuel-mix-widget { display: block; min-height: 320px; padding: 24px; }
+.fuel-mix-widget .elec-mix-title-box { position: static; margin: 0 0 20px; }
+.fuel-mix-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 240px) minmax(0, 1fr); gap: 16px; align-items: center; }
+.fuel-mix-layout .elec-mix-chart-container { width: 100%; max-width: 240px; height: 220px; margin: auto; }
+.fuel-mix-side { display: grid; gap: 18px; min-width: 0; overflow-wrap: anywhere; }
+.fuel-mix-side.left { text-align: right; }
+.fuel-mix-side.right { text-align: left; }
+.fuel-mix-item .elec-pct { font-size: 25px; }
+/* Annotations need ~120px beside the ring; below that they move under it. */
+@container (max-width: 560px) {
+  .fuel-mix-layout { grid-template-columns: 1fr 1fr; row-gap: 10px; }
+  .fuel-mix-layout .elec-mix-chart-container { grid-column: 1 / -1; grid-row: 1; width: 210px; height: 200px; }
+  .fuel-mix-side.left { grid-column: 1; grid-row: 2; text-align: left; }
+  .fuel-mix-side.right { grid-column: 2; grid-row: 2; }
 }

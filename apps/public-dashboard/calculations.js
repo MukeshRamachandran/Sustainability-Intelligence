@@ -2,7 +2,7 @@
    MICROCOSM - DASHBOARD CALCULATION ENGINE (calculations.js)
    Single source of truth for every formula used by the dashboard.
    Every function here is a direct, literal implementation of a formula
-   from KCT_Sustainability_Dashboard_Calculation_Formulas.md - the
+   from Kumaraguru_Institution_Sustainability_Dashboard_Calculation_Formulas.md - the
    section number is noted on each one so it can be diffed against that
    doc directly. Pure functions only (no fetch, no DOM, no globals):
    given the same inputs they always return the same output.
@@ -36,8 +36,8 @@
      2. Scope 1 total - Doc §6
      Scope 1 = Petrol Emissions + Transport Diesel Emissions + DG Emissions
      --------------------------------------------------------------- */
-  function scope1Total(petrolEmissions, transportDieselEmissions, dgEmissions){
-    return n(petrolEmissions) + n(transportDieselEmissions) + n(dgEmissions);
+  function scope1Total(petrolEmissions, transportDieselEmissions, dgEmissions, lpgEmissions){
+    return n(petrolEmissions) + n(transportDieselEmissions) + n(dgEmissions) + n(lpgEmissions);
   }
 
   /* ---------------------------------------------------------------

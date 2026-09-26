@@ -6,7 +6,7 @@ const vm = require('node:vm');
 
 const root = path.resolve(__dirname, '../..');
 const authClient = fs.readFileSync(path.join(root, 'apps/manager-admin/auth-client.js'), 'utf8');
-const dataLoader = fs.readFileSync(path.join(root, 'apps/public-dashboard/data-loader.js'), 'utf8');
+const publicApi = fs.readFileSync(path.join(root, 'apps/public-dashboard/public-api.js'), 'utf8');
 
 function loadAuth(location) {
   const calls = [];
@@ -52,9 +52,9 @@ test('local port 3000 remains a development-only API base', async () => {
 });
 
 test('public dashboard production path is /api/public/dashboard', () => {
-  assert.match(dataLoader, /\/api\/public\/dashboard/);
-  assert.match(dataLoader, /sustainability\.kct\.ac\.in/);
-  assert.doesNotMatch(dataLoader, /file:\/\//);
+  assert.match(publicApi, /\/api\/public\/dashboard/);
+  assert.match(publicApi, /return ''/);
+  assert.doesNotMatch(publicApi, /localhost|127\.0\.0\.1|:8000|file:\/\//);
 });
 
 test('manager pages keep stylesheet and script links relative', () => {

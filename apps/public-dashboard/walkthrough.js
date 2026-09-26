@@ -26,7 +26,6 @@
      from these. Correct a factor here and every act updates.
      ------------------------------------------------------------------ */
   var WT_EQUIV = {
-    treeKgYr: 21,      // kg CO₂ absorbed per mature tree per year
     homeKwhYr: 1200,   // kWh consumed per Indian household per year
     carKgKm: 0.17,     // kg CO₂e per km, average petrol car
     indiaPerCap: 2.0   // tCO₂e per person per year, India average
@@ -38,16 +37,14 @@
     var f = WT_EQUIV;
     function b(x, dec) { return '<b>' + fmtNum(x, dec || 0) + '</b>'; }
     switch (n) {
-      case 1: return 'the yearly absorption work of ' + b(v * 1000 / f.treeKgYr) + ' mature trees';
+      case 1: return null;
       case 2: return 'enough to run ' + b(v / f.homeKwhYr) + ' Indian homes for a year';
       case 3: return 'a full year of clean power for ' + b(v / f.homeKwhYr) + ' homes';
       case 4: return b(v * 1000 / f.carKgKm) + ' km of petrol driving that never happened';
       case 5: return 'equal to driving a petrol car ' + b(v * 1000 / f.carKgKm) + ' km';
-      case 6: return 'it would take ' + b(v * 1000 / f.treeKgYr) + ' mature trees a year to absorb this';
+      case 6: return null;
       case 7: return 'about ' + b(v / f.indiaPerCap * 100) + '% of the average Indian’s annual footprint';
-      case 8: return v < 0
-        ? 'a net removal — the yearly work of ' + b(Math.abs(v) * 1000 / f.treeKgYr) + ' mature trees'
-        : 'still ' + b(v * 1000 / f.treeKgYr) + ' mature trees of absorption away from zero';
+      case 8: return null;
     }
     return null;
   }
@@ -76,72 +73,72 @@
   var WT_STORY = [
     {
       title: 'Total carbon footprint (gross)',
-      video: 'industrynew.mp4',
+      video: 'media/industrynew.mp4',
       head: ['The Weight of', 'What We Make'],
       def: 'Every litre of fuel burned and every unit of electricity drawn, converted into a single number — the total greenhouse gas this campus released before a single offset is counted.',
       chips: ['Scope 1 + Scope 2', 'Before offsets']
     },
     {
       title: 'Total electricity consumption',
-      video: 'elecmeter.mp4',
+      video: 'media/elecmeter.mp4',
       head: ['The Current', 'Beneath Everything'],
       def: 'The aggregate electrical energy drawn by every building, laboratory, hostel and streetlight on campus. It is the quiet constant standing behind almost everything else measured here.',
       chips: ['Grid + on-site solar', 'Metered at source']
     },
     {
       title: 'Renewable energy used',
-      video: 'solar-kpi.mp4',
-      storyVideo: 'solarbuild.mp4',
+      video: 'media/solar-kpi.mp4',
+      storyVideo: 'media/solarbuild.mp4',
       head: ['Light, Borrowed', 'and Returned'],
       def: 'Energy generated from sources that replenish themselves — here, overwhelmingly the sun. Every unit produced on campus is a unit the grid never had to burn coal to supply.',
       chips: ['Solar generation', 'Displaces grid power']
     },
     {
       title: 'Emission avoided',
-      video: 'leavesfall.mp4',
-      storyVideo: 'natureview.mp4',
+      video: 'media/leavesfall.mp4',
+      storyVideo: 'media/natureview.mp4',
       head: ['The Carbon', 'That Never Was'],
       def: 'The greenhouse gas that would have entered the atmosphere had the campus drawn this same energy from the grid instead of generating it cleanly. It is measured in absence — emissions that never happened.',
-      chips: ['Counterfactual', 'Renewable × grid factor']
+      chips: ['Governed GRID factor', 'Separate from operational inventory']
     },
     {
       title: 'Scope 1 emissions',
-      video: 'fuelpour.mp4',
-      storyVideo: 'busdepot.mp4',
+      video: 'media/fuelpour.mp4',
+      storyVideo: 'media/busdepot.mp4',
       head: ['What We', 'Burn Ourselves'],
       def: 'Direct emissions from sources the institution owns and controls: the diesel in its buses, the petrol in its vehicles, the fuel feeding its generators. These cannot be purchased away, only designed away.',
       chips: ['Petrol · Diesel · DG sets', 'Direct combustion']
     },
     {
       title: 'Scope 2 emissions',
-      video: 'electricspark.mp4',
-      storyVideo: 'electri.mp4',
+      video: 'media/electricspark.mp4',
+      storyVideo: 'media/electri.mp4',
       head: ['The Grid', 'We Inherit'],
       def: 'Indirect emissions embedded in the electricity the campus buys. The carbon was released somewhere else, at a power station, on this campus’s behalf — which makes the grid’s fuel mix part of our footprint.',
-      chips: ['Purchased electricity', '0.727 kgCO₂e / kWh']
+      chips: ['Purchased electricity', 'Governed result · published API only']
     },
     {
       title: 'Per capita emissions',
-      video: 'queper.mp4',
+      video: 'media/queper.mp4',
       head: ['One Campus, Divided', 'by Its People'],
       def: 'The total footprint shared across every student and staff member. It normalises the picture: an institution can grow in size and still, by this measure, grow lighter on the world.',
       chips: ['Footprint ÷ population', 'Growth-adjusted']
     },
     {
-      title: 'Net carbon impact',
-      video: 'earth.mp4',
-      head: ['What', 'Remains'],
-      def: 'Gross emissions less the emissions avoided — the honest, settled figure. Everything the campus released, set against everything it prevented. This is the number that moves an institution toward carbon neutrality.',
-      chips: ['Gross − avoided', 'The bottom line']
+      title: 'Where We Stand',
+      video: 'media/earth.mp4',
+      head: ['Where', 'We Stand'],
+      def: 'Operational greenhouse gas emissions and estimated avoided grid emissions are reported separately. Avoided emissions are not subtracted from the operational inventory.',
+      chips: ['Two distinct indicators', 'No net subtraction']
     }
   ];
 
   var INTRO = {
     kind: 'intro',
     accent: '#1c7a4b',
-    video: 'entrykct.mp4',        // the campus gate opens the story
-    still: 'background.png',       // shown instantly as a poster while it loads
-    eyebrow: 'KCT Microcosm · Carbon Observatory',
+    video: 'media/entrykct.mp4',  // the campus gate opens the story
+    still: 'media/background.png', // shown instantly as a poster while it loads
+    eyebrow: 'Kumaraguru Institution Microcosm · Carbon Observatory',
     head: ['The Carbon', 'Story'],
     def: 'Eight measures of what a campus takes from the world, and what it gives back.'
   };
@@ -149,14 +146,10 @@
   var OUTRO = {
     kind: 'outro',
     accent: '#1c7a4b',
-    video: 'micronew.mp4',
-    eyebrow: 'The ledger, closed',
-    head: ['Where', 'We Stand'],
-    lead: 'Everything released, set against everything prevented.',
-    // the closing sentence depends on which way the ledger actually fell
-    below: 'The figure above is below zero: over this period the campus kept more carbon out of the atmosphere than it put in.',
-    above: 'The figure above is still above zero: over this period the campus released more carbon than it managed to prevent.',
-    mirrors: 'Net carbon impact'
+    video: 'media/micronew.mp4',
+    eyebrow: 'The story continues',
+    head: ['A Clearer', 'Picture'],
+    lead: 'The published operational inventory and estimated avoided grid emissions remain separate measures.'
   };
 
   /* ------------------------------------------------------------------ */
@@ -202,7 +195,7 @@
 
   function readCards() {
     var map = {};
-    document.querySelectorAll('#overviewKpis .kpi').forEach(function (card) {
+    document.querySelectorAll('.page .kpi').forEach(function (card) {
       var labelEl = card.querySelector('.label');
       if (!labelEl) return;
       var title = labelEl.textContent.trim();
@@ -213,6 +206,7 @@
       var s = card.querySelector('.trend span');
 
       var unit = unitEl ? unitEl.textContent.trim() : '';
+      var statusText = s ? s.textContent.trim() : '';
       var trend = null;
       if (b && !b.classList.contains('neutral')) {
         trend = {
@@ -221,16 +215,69 @@
         };
       }
 
+      var unavailable = !counter;
+      var source = card.querySelector('.kpi-source');
       map[title] = {
-        value: counter ? parseFloat(counter.getAttribute('data-val')) || 0 : 0,
+        provenance: source ? source.textContent.trim() : '',
+        value: unavailable ? null : parseFloat(counter.getAttribute('data-val')),
         dec: counter ? parseInt(counter.getAttribute('data-dec'), 10) || 0 : 0,
         unit: unit,
-        na: unit === 'N/A',
+        na: unavailable,
+        statusText: statusText,
         accent: (card.style.getPropertyValue('--a') || '#1c7a4b').trim(),
         video: src ? src.getAttribute('src') : null,
         trend: trend
       };
     });
+
+    // Scope totals are published in the GHG page's split summary rather
+    // than in a `.kpi` card in the current staging layout.
+    document.querySelectorAll('#ghgKpis .ghg-split').forEach(function (split) {
+      var heading = split.querySelector('.ghg-split-head');
+      if (!heading) return;
+      var title = heading.textContent.trim().replace(/\s+/g, ' ').toLowerCase();
+      if (title !== 'scope 1 emissions' && title !== 'scope 2 emissions') return;
+      var counter = split.querySelector('.counter-val');
+      var unavailable = !counter;
+      var value = counter ? parseFloat(counter.getAttribute('data-val')) : NaN;
+      var splitSource = split.querySelector('.kpi-source');
+      map[title === 'scope 1 emissions' ? 'Scope 1 emissions' : 'Scope 2 emissions'] = {
+        provenance: splitSource ? splitSource.textContent.trim() : '',
+        value: unavailable || !isFinite(value) ? null : value,
+        dec: counter ? parseInt(counter.getAttribute('data-dec'), 10) || 2 : 2,
+        unit: 'tCO₂e',
+        na: unavailable || !isFinite(value),
+        statusText: '',
+        accent: '#1c7a4b',
+        video: null,
+        trend: null
+      };
+    });
+
+    // The original story predates the current GHG page labels. Read these
+    // aliases from the dashboard's already-rendered, API-backed KPI cards.
+    function alias(title, source) {
+      if (map[source]) map[title] = Object.assign({}, map[source]);
+    }
+    alias('Emission avoided', 'Estimated avoided grid emissions');
+    alias('Per capita emissions', 'Operational GHG per capita');
+
+    // The former gross-footprint KPI now lives in the governed hero card.
+    // It is the API-published Operational GHG value, not a browser sum.
+    var grossEl = document.querySelector('#ghgKpis .ghg-top .counter-val');
+    var grossValue = grossEl ? parseFloat(grossEl.getAttribute('data-val')) : NaN;
+    var grossSource = document.querySelector('#ghgKpis .ghg-top .kpi-source');
+    map['Total carbon footprint (gross)'] = {
+      provenance: grossSource ? grossSource.textContent.trim() : '',
+      value: isFinite(grossValue) ? grossValue : null,
+      dec: grossEl ? parseInt(grossEl.getAttribute('data-dec'), 10) || 2 : 2,
+      unit: 'tCO₂e',
+      na: !isFinite(grossValue),
+      statusText: '',
+      accent: '#b8623a',
+      video: null,
+      trend: null
+    };
     return map;
   }
 
@@ -334,33 +381,22 @@
 
     var valEl = null, valLine = null, ledger = null;
     if (cfg.ledger) {
-      // closing card: animated arithmetic instead of a single number
+      // Two independent published measures; never an arithmetic ledger.
       var lg = el('div', 'wt-ledger');
-      var rows = [
-        { k: 'Gross emissions', v: cfg.ledger.gross },
-        { k: '− Avoided', v: cfg.ledger.avoided }
-      ];
-      ledger = { nums: [], vals: [cfg.ledger.gross, cfg.ledger.avoided, cfg.ledger.net], rows: [], rule: null, netRow: null };
+      var rows = cfg.ledger.rows;
+      ledger = { nums: [], vals: rows.map(function (r) { return r.v; }), rows: [] };
       rows.forEach(function (r) {
         var row = el('div', 'wt-ledger-row');
-        row.appendChild(el('span', 'k', r.k));
+        var key = el('span', 'k', r.k);
+        if (r.provenance) key.appendChild(el('small', 'wt-source', ' · ' + r.provenance));
+        row.appendChild(key);
         var num = el('span', 'n', fmtNum(0, cfg.dec));
+        num.appendChild(el('small', null, ' tCO₂e'));
         row.appendChild(num);
         lg.appendChild(row);
         ledger.rows.push(row);
         ledger.nums.push(num);
       });
-      ledger.rule = el('div', 'wt-ledger-rule');
-      lg.appendChild(ledger.rule);
-      var netRow = el('div', 'wt-ledger-row wt-ledger-net');
-      netRow.appendChild(el('span', 'k', 'Net impact'));
-      var netNum = el('span', 'n', fmtNum(0, cfg.dec));
-      netNum.appendChild(el('small', null, ' ' + cfg.unit));
-      netRow.appendChild(netNum);
-      lg.appendChild(netRow);
-      ledger.rows.push(netRow);
-      ledger.nums.push(netNum);
-      ledger.netRow = netRow;
       copy.appendChild(lg);
       ledger.root = lg;
     } else if (cfg.value != null || cfg.na) {
@@ -371,6 +407,7 @@
       valLine = el('div', 'wt-val-line');
       metric.appendChild(valLine);
       copy.appendChild(metric);
+      if (cfg.provenance) copy.appendChild(el('div', 'wt-source', cfg.provenance));
     }
 
     var def = el('p', 'wt-def');
@@ -441,19 +478,40 @@
     var intro = Object.assign({}, INTRO);
     list.push(intro);
 
+    // An act whose figure has no trustworthy number for this selection is
+    // skipped - the story never shows "Unavailable" or a placeholder.
+    var shown = 0;
     WT_STORY.forEach(function (s, i) {
       var c = cards[s.title];
-      var na = c ? c.na : false;
+      if (s.title === 'Where We Stand') {
+        var ledgerRows = [
+          { k: 'Operational GHG', card: cards['Total carbon footprint (gross)'] },
+          { k: 'Estimated avoided grid emissions', card: cards['Emission avoided'] }
+        ].filter(function (row) { return row.card && !row.card.na && row.card.value != null; })
+          .map(function (row) { return { k: row.k, v: row.card.value, provenance: row.card.provenance }; });
+        if (!ledgerRows.length) return;
+        shown += 1;
+        list.push({
+          kind: 'kpi', n: shown, title: s.title, head: s.head, def: s.def,
+          chips: s.chips, video: s.video, accent: '#1c7a4b', na: false,
+          dec: 3, unit: 'tCO₂e', ledger: { rows: ledgerRows }
+        });
+        return;
+      }
+      if (!c || c.na || c.value == null) return;
+      var na = false;
+      shown += 1;
       list.push({
         kind: 'kpi',
-        n: i + 1,
+        n: shown,
+        provenance: c.provenance,
         title: s.title,
         head: s.head,
         def: s.def,
         chips: s.chips,
         video: s.storyVideo || (c && c.video) || s.video,
         accent: (c && c.accent) || '#1c7a4b',
-        value: c ? c.value : 0,
+        value: c ? c.value : null,
         dec: c ? c.dec : 2,
         unit: c ? c.unit : '',
         na: na,
@@ -462,22 +520,9 @@
       });
     });
 
-    var net = cards[OUTRO.mirrors];
-    var netVal = net ? net.value : 0;
-    var grossC = cards['Total carbon footprint (gross)'];
-    var avoidC = cards['Emission avoided'];
     var outro = Object.assign({}, OUTRO, {
-      value: netVal,
-      dec: net ? net.dec : 2,
-      unit: net ? net.unit : 'tCO₂e',
-      na: net ? net.na : false,
-      accent: (net && net.accent) || '#1c7a4b',
-      def: OUTRO.lead + ' ' + (netVal < 0 ? OUTRO.below : OUTRO.above),
-      ledger: {
-        gross: grossC ? grossC.value : 0,
-        avoided: avoidC ? avoidC.value : 0,
-        net: netVal
-      }
+      na: false,
+      def: OUTRO.lead
     });
     list.push(outro);
 
@@ -570,16 +615,12 @@
     if (p.cta) tl.to(p.cta, { y: 0, opacity: 1, duration: .8, ease: 'power3.out' }, .86);
 
     if (p.ledger) {
-      // the arithmetic reveal: rows enter, gross counts, avoided counts,
-      // the rule draws, then the net figure lands and takes the accent
+      // Reveal each independent published figure without combining them.
       var lg = p.ledger;
-      tl.to(lg.rows, { y: 0, opacity: 1, duration: .7, stagger: .14, ease: 'power3.out' }, .35)
-        .add(countTween(lg.nums[0], lg.vals[0], a.dec, .8), .55)
-        .add(countTween(lg.nums[1], lg.vals[1], a.dec, .8), 1.05)
-        .to(lg.rule, { scaleX: 1, duration: .7, ease: 'power2.inOut' }, 1.45)
-        .add(countTween(lg.nums[2], lg.vals[2], a.dec, 1.0), 1.7)
-        .fromTo(lg.netRow, { scale: .96, transformOrigin: '0% 50%' },
-          { scale: 1, duration: .6, ease: 'back.out(1.6)' }, 2.45);
+      tl.to(lg.rows, { y: 0, opacity: 1, duration: .7, stagger: .14, ease: 'power3.out' }, .35);
+      lg.nums.forEach(function (num, index) {
+        tl.add(countTween(num, lg.vals[index], a.dec, .8), .55 + index * .5);
+      });
     }
     return tl;
   }
@@ -1369,7 +1410,7 @@
         { '--wt-r': radius + 'px', duration: .95, ease: 'expo.inOut', onComplete: settleOpen });
       gsap.fromTo(['.wt-bar-top', '.wt-bar-bot'], { height: 0 },
         { height: '5.6vh', duration: 1.1, ease: 'expo.out', delay: .18 });
-      gsap.delayedCall(.55, function () { if (open) revealText(acts[0]); });
+      gsap.delayedCall(.55, function () { if (open && acts[0]) revealText(acts[0]); });
 
       grainLast = 0;
       atmoLast = 0;
@@ -1748,7 +1789,7 @@
     fab.setAttribute('aria-label', 'Open The Carbon Story — a guided walkthrough of the eight metrics');
     fab.innerHTML =
       '<video class="wt-cta-video" autoplay loop muted playsinline preload="auto">' +
-        '<source src="entrykct.mp4" type="video/mp4"></video>' +
+        '<source src="media/entrykct.mp4" type="video/mp4"></video>' +
       '<div class="wt-cta-tint"></div>' +
       '<div class="wt-cta-shine"></div>' +
       '<div class="wt-cta-glow"></div>' +

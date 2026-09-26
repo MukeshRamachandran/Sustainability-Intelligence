@@ -151,8 +151,8 @@
   function deriveYear(d) {
     d.elecKwh = MONTHS.map((_, i) => Calculations.totalGridElectricity(d.htKwh[i], d.commKwh[i], d.tempKwh[i]));
     d.elecEm = MONTHS.map((_, i) => Calculations.scope2Total(d.htEm[i], d.commEm[i], d.tempEm[i]));
-    d.scope1Selected = MONTHS.map((_, i) => Calculations.scope1Total(d.petrolEm[i], d.trDieselEm[i], d.dgEm[i]));
-    d.scope1Full = MONTHS.map((_, i) => d.scope1Selected[i] + n(d.lpgEm[i]));
+    d.scope1Selected = MONTHS.map((_, i) => Calculations.scope1Total(d.petrolEm[i], d.trDieselEm[i], d.dgEm[i], d.lpgEm[i]));
+    d.scope1Full = d.scope1Selected;
     d.dieselCombo = MONTHS.map((_, i) => n(d.trDieselEm[i]) + n(d.dgEm[i]));
     d.grossSelected = MONTHS.map((_, i) => Calculations.grossEmissions(d.scope1Selected[i], d.elecEm[i]));
     d.grossFull = MONTHS.map((_, i) => Calculations.grossEmissions(d.scope1Full[i], d.elecEm[i]));
@@ -172,12 +172,7 @@
   }
 
   async function loadDashboardData() {
-    /* 127.0.0.1:8000 is development-only. Production (Nginx, empty port or
-       sustainability.kct.ac.in) uses the same-origin path /api/public/... */
-    const productionHost = window.location.hostname === 'sustainability.kct.ac.in';
-    const localFrontend = !productionHost && ['3000', '5500', '8080'].includes(window.location.port);
-    const apiBase = window.KCOSMOS_API_BASE || (localFrontend ? 'http://127.0.0.1:8000' : '');
-    const [factorRows, transportRows, dgRows, lpgRows, popRows, metaRows, wasteText, waterText, greenText, outreachRelease, energyText] = await Promise.all([
+    const [factorRows, transportRows, dgRows, lpgRows, popRows, metaRows, wasteText, waterText, greenText, outreachText, energyText] = await Promise.all([
       fetchCSV('data/emission_factors.csv'),
       fetchGroupedCSV('data/transport_master.csv', 'fuel_type'),
       fetchCSV('data/dg_master.csv'),
@@ -187,7 +182,7 @@
       fetch('data/waste_master.csv?v=' + Date.now()).then(r => r.text()).catch(() => ''),
       fetch('data/water_master.csv?v=' + Date.now()).then(r => r.text()).catch(() => ''),
       fetch('data/green_master.csv?v=' + Date.now()).then(r => r.text()).catch(() => ''),
-      fetch(apiBase + '/api/public/dashboard', { credentials: 'omit', cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('data/outreach_master.csv?v=' + Date.now()).then(r => r.text()).catch(() => ''),
       /* Replaces electricity_master.csv + renewable_master.csv - both grid
          (HT/Commercial/Temporary) and renewable (on-campus + procured) now
          come from this one sheet. See the block parser below. */
@@ -305,7 +300,7 @@
       }
     }
 
-    /* Green cover is a one-time campus survey (Trees of KCT), not a monthly
+    /* Green cover is a one-time campus survey (Trees of Kumaraguru Institution), not a monthly
        series, so it lives outside the year-keyed `data` object entirely -
        see the block-section parser below and the green_master.csv comment
        at the top of that file for the four sections it walks. */
@@ -346,43 +341,40 @@
       });
     }
 
-    /* Outreach is sourced only from the active immutable backend release.
-       outreach_master.csv is retained as reference data but is not part of
-       the active runtime path. */
+    /* Outreach, like green cover, is a one-time reported set of figures
+       (currently 2025 only - no year column in the sheet at all), not a
+       monthly series. app.js gates display on the YEAR filter itself
+       (there's nothing to compute for 2026 - see outreachKpisEl there). */
     const outreach = {
       programsDelivered: null, volunteersEngaged: null, volunteerHours: null,
       expertsInvolved: null, participantsServed: null, partnerOrganizations: null,
-      saplingsPlanted: null, thematicAreas: [], audienceReach: [], gender: null,
-      year: null, month: null, published: false
+      saplingsPlanted: null, thematicAreas: [], audienceReach: []
     };
-    if (outreachRelease?.outreach && outreachRelease?.period) {
-      const source = outreachRelease.outreach;
-      const labels = {
-        school_students: 'School students', college_students: 'College students',
-        farmers_agriculture: 'Farmers / agriculture', industrial_experts: 'Industrial experts',
-        researchers_experts: 'Researchers / experts', government: 'Government participants'
-      };
-      const themeLabels = {
-        climate_smart_agriculture: 'Climate Smart Agriculture', climate_change: 'Climate Change',
-        afforestation: 'Afforestation', water_conservation: 'Water Conservation',
-        waste_management: 'Waste Management', biodiversity_conservation: 'Biodiversity Conservation',
-        hwcc: 'HWCC', livelihood_development: 'Livelihood Development',
-        campus_sustainability: 'Campus Sustainability'
-      };
-      Object.assign(outreach, {
-        programsDelivered: source.total_programs,
-        participantsServed: source.total_participants,
-        partnerOrganizations: source.partner_organizations,
-        saplingsPlanted: source.saplings_planted,
-        expertsInvolved: source.experts_involved,
-        volunteersEngaged: source.volunteers_engaged,
-        volunteerHours: source.volunteer_hours,
-        audienceReach: Object.entries(source.participants_by_category || {}).map(([category, reach]) => ({ category: labels[category] || category, reach })),
-        thematicAreas: Object.entries(source.themes || {}).filter(([, programs]) => programs > 0).map(([category, programs]) => ({ category: themeLabels[category] || category, programs })),
-        gender: source.gender || null,
-        year: outreachRelease.period.year,
-        month: outreachRelease.period.month,
-        published: true
+    if (outreachText) {
+      const oRows = tokenizeCSV(outreachText);
+      let section = null;
+      oRows.forEach(r => {
+        const c0 = String(r[0] || '').trim();
+        if (c0 === 'Overall Metrix') { section = 'summary'; return; }
+        if (c0 === 'Thematic Areas') { section = 'thematic'; return; }
+        if (c0 === 'Category wise mapping') { section = 'audience'; return; }
+        if (c0 === 'Metric' || c0 === 'Category' || c0 === 'Audience category') return;
+        if (!c0) return;
+
+        if (section === 'summary') {
+          const val = extractNumber(r[1]);
+          if (c0.startsWith('Number of Outreach Programs')) outreach.programsDelivered = val;
+          else if (c0 === 'Volunteers engaged') outreach.volunteersEngaged = val;
+          else if (c0 === 'Volunteering hours') outreach.volunteerHours = val;
+          else if (c0 === 'Experts involved') outreach.expertsInvolved = val;
+          else if (c0.startsWith('Total participants')) outreach.participantsServed = val;
+          else if (c0.startsWith('Partner organizations')) outreach.partnerOrganizations = val;
+          else if (c0.startsWith('Saplings')) outreach.saplingsPlanted = val;
+        } else if (section === 'thematic') {
+          outreach.thematicAreas.push({ category: c0, programs: extractNumber(r[1]) || 0 });
+        } else if (section === 'audience') {
+          outreach.audienceReach.push({ category: c0, reach: extractNumber(r[1]) });
+        }
       });
     }
 
@@ -411,23 +403,20 @@
        here as on-campus + procured, not read from a column. */
     if (energyText) {
       const enRows = tokenizeCSV(energyText);
-      let enYear = null;
       enRows.forEach((r, idx) => {
         if (idx === 0) return; // header row
-        const label = String(r[0] || '').trim();
-        if (/^\d{4}$/.test(label)) {
-          enYear = label;
-          const swh = num(r[10]);
-          if (swh != null) ensureYear(data, enYear).solarWaterHeaterKwh = swh;
-          return;
-        }
-        if (!enYear) return;
-        const mi = monthToIndex(label);
+        const enYear = String(r[0] || '').trim();
+        if (!/^\d{4}$/.test(enYear)) return;
+        const mi = monthToIndex(String(r[1] || '').trim());
         if (mi == null) return;
         const d = ensureYear(data, enYear);
-        add(d.htKwh, mi, num(r[1]));
-        add(d.commKwh, mi, num(r[2]));
-        add(d.tempKwh, mi, num(r[3]));
+        
+        const swh = num(r[7]);
+        if (swh != null) d.solarWaterHeaterKwh = swh;
+        
+        add(d.htKwh, mi, num(r[2]));
+        add(d.commKwh, mi, num(r[3]));
+        add(d.tempKwh, mi, num(r[4]));
         const onCampus = num(r[5]), procured = num(r[6]);
         add(d.reOnCampusKwh, mi, onCampus);
         add(d.reProcuredKwh, mi, procured);
