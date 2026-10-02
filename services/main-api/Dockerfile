@@ -10,7 +10,7 @@ WORKDIR /app
 
 RUN groupadd --system --gid 10001 microcosm \
     && useradd --system --uid 10001 --gid microcosm --home-dir /app microcosm \
-    && mkdir -p /data/evidence/quarantine /data/evidence/clean \
+    && mkdir -p /data/evidence/quarantine /data/evidence/clean /app/certificate-storage \
     && chown -R microcosm:microcosm /app /data/evidence
 
 COPY pyproject.toml README.md ./

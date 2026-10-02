@@ -16,7 +16,9 @@
       'active-vehicles-petrol': 'petrol_vehicle_count',
       'active-vehicles-diesel': 'diesel_vehicle_count',
       'ev-consumption': 'ev_consumption_kwh',
-      'diesel-dg': 'dg_diesel_litres',
+      // DG is entered as electricity generated (kWh) (0015_dg_kwh_methodology).
+      // Diesel litres are derived by the backend and are never sent.
+      'dg-generation': 'dg_generation_kwh',
       'active-dg': 'dg_count'
     },
     energy: {
@@ -28,11 +30,11 @@
       'ren-solar': 'solar_water_heater_kwh'
     },
     lpg: {
-      // lpg_consumption_litres is the governed emissions activity; the other
-      // two are optional reference metadata and drive no calculation.
-      'lpg-litres': 'lpg_consumption_litres',
-      'lpg-cylinders': 'lpg_cylinder_count',
-      'lpg-kg': 'lpg_weight_kg'
+      // lpg_weight_kg (kg) is the governed emissions activity
+      // (0013_lpg_kg_governance_v2). The cylinder count is optional reference
+      // metadata and drives no calculation; litres are no longer collected.
+      'lpg-kg': 'lpg_weight_kg',
+      'lpg-cylinders': 'lpg_cylinder_count'
     },
     waste: {
       // Only wet waste is manager-entered. dry_waste_generated_kg and

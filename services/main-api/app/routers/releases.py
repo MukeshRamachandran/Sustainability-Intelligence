@@ -17,6 +17,7 @@ from app.services.publication import (
     build_release_payload,
     derived_payload_blockers,
     empty_public_dashboard,
+    lpg_payload_blockers,
     payload_checksum,
     waste_payload_blockers,
 )
@@ -104,6 +105,7 @@ def prepare_release(
         frozen_payload_blockers(payload_data)
         + waste_payload_blockers(payload_data)
         + derived_payload_blockers(payload_data)
+        + lpg_payload_blockers(payload_data)
     )
     if frozen_blockers:
         raise HTTPException(
@@ -201,6 +203,7 @@ def publish_release(release_id: UUID, request: Request, current: CsrfUser, db: D
         frozen_payload_blockers(payload.payload)
         + waste_payload_blockers(payload.payload)
         + derived_payload_blockers(payload.payload)
+        + lpg_payload_blockers(payload.payload)
     )
     if frozen_blockers:
         raise HTTPException(

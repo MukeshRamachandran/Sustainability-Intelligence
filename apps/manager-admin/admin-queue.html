@@ -3,7 +3,7 @@
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Admin Review Queue — K-COSMOS Portal</title><link rel="stylesheet" href="styles.css"></head>
 <body data-auth-role="microcosm_admin" data-login-page="admin-login.html">
   <div class="app-container">
-    <aside class="sidebar"><div class="sidebar-header"><a href="admin-overview.html" class="sidebar-brand" style="display:flex;align-items:center;gap:10px;padding:4px 0;"><img src="kumaraguru-microcosm-logo.png" alt="MICROCOSM" style="height:auto;width:auto;max-height:48px;max-width:100%;"></a></div><nav class="sidebar-nav"><a href="admin-overview.html" class="nav-item">Admin Overview</a><a href="admin-queue.html" class="nav-item active">Approval Queue</a><a href="admin-evidence.html" class="nav-item">Evidence Repository</a><a href="admin-factors.html" class="nav-item">Emission Factors</a><a href="admin-preview.html" class="nav-item">Dashboard Preview</a><a href="admin-users.html" class="nav-item">Managers &amp; Access</a><a href="admin-audit.html" class="nav-item">Audit Log</a></nav></aside>
+    <aside class="sidebar"><div class="sidebar-header"><a href="admin-overview.html" class="sidebar-brand" style="display:flex;align-items:center;gap:10px;padding:4px 0;"><img src="kumaraguru-microcosm-logo.png" alt="MICROCOSM" style="height:auto;width:auto;max-height:48px;max-width:100%;"></a></div><nav class="sidebar-nav"><a href="admin-overview.html" class="nav-item">Admin Overview</a><a href="admin-queue.html" class="nav-item active">Approval Queue</a><a href="admin-evidence.html" class="nav-item">Evidence Repository</a><a href="admin-certificates.html" class="nav-item">Certificates</a><a href="admin-factors.html" class="nav-item">Emission Factors</a><a href="admin-preview.html" class="nav-item">Dashboard Preview</a><a href="admin-users.html" class="nav-item">Managers &amp; Access</a><a href="admin-audit.html" class="nav-item">Audit Log</a></nav></aside>
     <main class="main-content">
       <header class="topbar"><div class="topbar-left"><div class="current-period"><span>K-COSMOS</span><span>|</span><span>Administration</span></div></div><div class="topbar-right"><span class="user-badge">Admin</span><button class="btn btn-outline" id="logout-btn">Logout</button></div></header>
       <div class="content-area">
@@ -35,20 +35,52 @@
         return `<div class="card mb-3"><h3>${escapeHtml(programme.programme_name || 'Outreach programme')}</h3><div class="grid-2">${fields.map(([key,value]) => `<div><span class="text-muted">${escapeHtml(key.replaceAll('_',' '))}</span><br><strong>${escapeHtml(Array.isArray(value) ? JSON.stringify(value) : value ?? 'Not recorded')}</strong></div>`).join('')}</div></div>`;
       }
 
+      /* What a source value is, where the code alone could mislead. */
+      const METRIC_NOTES = {
+        renewable_on_campus_kwh: 'Renewable electricity (source)',
+        renewable_procured_kwh: 'Renewable electricity (source)',
+        solar_water_heater_kwh: 'Solar thermal (source) — not electricity',
+        renewable_total_kwh: 'Legacy total incl. solar water heater — deprecated, as originally recorded, not used'
+      };
+
       function metricsHtml(values) {
-        return `<div class="card mb-3"><h3>Manager-entered metrics</h3><div class="table-responsive"><table class="table"><thead><tr><th>Metric</th><th>Value</th><th>Unit</th><th>Quality note</th></tr></thead><tbody>${values.map(item => `<tr><td>${escapeHtml(item.metric_code)}</td><td>${escapeHtml(item.value ?? 'Not submitted')}</td><td>${escapeHtml(item.canonical_unit)}</td><td>${escapeHtml(item.quality_note || '—')}</td></tr>`).join('')}</tbody></table></div></div>`;
+        return `<div class="card mb-3"><h3>Manager-entered metrics</h3><div class="table-responsive"><table class="table"><thead><tr><th>Metric</th><th>Value</th><th>Unit</th><th>Quality note</th></tr></thead><tbody>${values.map(item => `<tr><td>${escapeHtml(item.metric_code)}${METRIC_NOTES[item.metric_code] ? `<br><small class="text-muted">${escapeHtml(METRIC_NOTES[item.metric_code])}</small>` : ''}</td><td>${escapeHtml(item.value ?? 'Not submitted')}</td><td>${escapeHtml(item.canonical_unit)}</td><td>${escapeHtml(item.quality_note || '—')}</td></tr>`).join('')}</tbody></table></div></div>`;
+      }
+
+      /* Energy submissions: the backend's read-only electrical indicators, and the solar water heater apart as thermal.
+         Renewable electricity is on-campus + procured only; a wrong figure is corrected through the Manager's source values. */
+      function energyHtml(energy) {
+        if (!energy) return '';
+        const indicator = item => !item || item.status !== 'available' || item.value == null
+          ? `Unavailable — ${(item?.reason || 'not calculated').replaceAll('_', ' ')}` : `${item.value} ${item.unit}`;
+        const rows = [
+          ['Renewable electricity total (on-campus + procured)', energy.renewable_electricity_kwh],
+          ['Total electricity (grid + renewable electricity)', energy.total_electricity_consumption_kwh],
+          ['Renewable share', energy.renewable_share_pct],
+          ['Electrical avoided emissions', energy.estimated_avoided_grid_emissions_tco2e]
+        ].map(([label, item]) => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(indicator(item))}</td></tr>`).join('');
+        const thermal = energy.solar_thermal && energy.solar_thermal.value != null
+          ? `${energy.solar_thermal.value} ${energy.solar_thermal.unit}` : 'Not submitted';
+        return `<div class="card mb-3"><h3>Derived electrical values (read-only)</h3><div class="table-responsive"><table class="table"><thead><tr><th>Indicator</th><th>Backend result</th></tr></thead><tbody>${rows}</tbody></table></div><h3 style="margin-top:16px;">Solar thermal (separate from electricity)</h3><p><strong>Solar water heater:</strong> ${escapeHtml(thermal)} — thermal energy, not included in any electrical value above. No emission impact is calculated for it.</p></div>`;
       }
 
       function calculationsHtml(items) {
         if (!items.length) return '';
-        const rows = items.map(item => `<tr><td>${escapeHtml(item.calculation_code.replaceAll('_',' '))}</td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.result_value ?? 'Unavailable')} ${escapeHtml(item.result_unit || '')}</td><td>${escapeHtml(item.factor_set_version || '—')}</td><td>${escapeHtml(item.factor_value ?? '—')} ${escapeHtml(item.factor_unit || '')}</td><td>${escapeHtml(item.reason ? item.reason.replaceAll('_',' ') : '—')}</td></tr>`).join('');
-        return `<div class="card mb-3"><h3>Authoritative calculations</h3><div class="table-responsive"><table class="table"><thead><tr><th>Calculation</th><th>Status</th><th>Result</th><th>Factor set</th><th>Factor used</th><th>Reason</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+        /* Derived activity (kWh-based DG): source kWh x governed SFC = derived litres. Read-only; a correction is requested on the source kWh. */
+        const derivationText = item => item.derivation
+          ? `${item.derivation.source_value} ${item.derivation.source_unit} × ${item.derivation.parameter_value} ${item.derivation.parameter_unit} (${item.derivation.parameter_code}) = ${item.derivation.derived_value} ${item.derivation.derived_unit}`
+          : '—';
+        const activityText = item => item.activity_value == null ? '—' : `${item.activity_value} ${item.activity_unit || ''}`;
+        const rows = items.map(item => `<tr><td>${escapeHtml(item.calculation_code.replaceAll('_',' '))}</td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(activityText(item))}</td><td>${escapeHtml(derivationText(item))}</td><td>${escapeHtml(item.result_value ?? 'Unavailable')} ${escapeHtml(item.result_unit || '')}</td><td>${escapeHtml(item.factor_set_version || '—')}</td><td>${escapeHtml(item.factor_value ?? '—')} ${escapeHtml(item.factor_unit || '')}</td><td>${escapeHtml(item.reason ? item.reason.replaceAll('_',' ') : '—')}</td></tr>`).join('');
+        return `<div class="card mb-3"><h3>Authoritative calculations</h3><div class="table-responsive"><table class="table"><thead><tr><th>Calculation</th><th>Status</th><th>Manager-entered activity</th><th>Derived activity</th><th>Result</th><th>Factor set</th><th>Factor used</th><th>Reason</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
       }
 
       function wasteHtml(waste) {
         if (!waste) return '';
         const kg = value => value === null || value === undefined ? 'Not submitted' : `${Number(value).toFixed(2)} kg`;
-        const summary = `<div class="grid-3 mb-3"><div><span class="text-muted">Wet Waste Generated</span><br><strong>${escapeHtml(kg(waste.wet_waste_generated_kg))}</strong></div><div><span class="text-muted">Dry Waste Generated</span><br><strong>${escapeHtml(kg(waste.dry_waste_generated_kg))}</strong></div><div><span class="text-muted">Total Waste Generated</span><br><strong>${escapeHtml(kg(waste.total_waste_generated_kg))}</strong></div></div>`;
+        const summary = `<div class="grid-3 mb-3"><div><span class="text-muted">Wet Waste Generated</span><br><strong>${escapeHtml(kg(waste.wet_waste_generated_kg))}</strong></div><div><span class="text-muted">Dry Waste Generated</span><br><strong>${escapeHtml(kg(waste.dry_waste_generated_kg))}</strong></div><div><span class="text-muted">Total Waste Generated</span><br><strong>${escapeHtml(kg(waste.total_waste_generated_kg))}</strong></div></div>`
+          + `<p class="text-muted mb-3">Source: wet waste and the material quantities below. Derived by the backend (not editable): dry = sum of materials; total = wet + dry; diverted from landfill = dry; per person = total &divide; population.</p>`
+          + `<div class="grid-3 mb-3"><div><span class="text-muted">Waste Diverted from Landfill (derived)</span><br><strong>${escapeHtml(kg(waste.waste_diverted_from_landfill_kg))}</strong></div><div><span class="text-muted">Waste per Person (derived)</span><br><strong>${escapeHtml(waste.waste_per_capita_kg === null || waste.waste_per_capita_kg === undefined ? 'Unavailable (no population reference)' : `${Number(waste.waste_per_capita_kg).toFixed(4)} kg/person`)}</strong></div></div>`;
         const items = waste.items || [];
         if (!items.length) {
           return `<div class="card mb-3"><h3>Waste inventory</h3>${summary}<p class="text-muted">No dry waste materials recorded for this month.</p></div>`;
@@ -99,7 +131,7 @@
           const detail = Array.isArray(currentSubmission.programmes)
             ? currentSubmission.programmes.map(programmeHtml).join('')
             : metricsHtml(currentSubmission.values || []);
-          document.getElementById('modal-data-container').innerHTML = `<p><strong>Domain:</strong> ${escapeHtml(currentSubmission.domain)} &nbsp; <strong>Period:</strong> ${escapeHtml(currentSubmission.reporting_period_label)} &nbsp; <strong>Revision:</strong> ${escapeHtml(currentSubmission.revision_number)} &nbsp; <strong>Status:</strong> ${escapeHtml(currentSubmission.status)}</p>${detail}${wasteHtml(currentSubmission.waste)}${calculationsHtml(currentSubmission.calculations || [])}`;
+          document.getElementById('modal-data-container').innerHTML = `<p><strong>Domain:</strong> ${escapeHtml(currentSubmission.domain)} &nbsp; <strong>Period:</strong> ${escapeHtml(currentSubmission.reporting_period_label)} &nbsp; <strong>Revision:</strong> ${escapeHtml(currentSubmission.revision_number)} &nbsp; <strong>Status:</strong> ${escapeHtml(currentSubmission.status)}</p>${detail}${wasteHtml(currentSubmission.waste)}${energyHtml(currentSubmission.energy)}${calculationsHtml(currentSubmission.calculations || [])}`;
           document.getElementById('modal-evidence-container').innerHTML = evidenceHtml(evidence);
           document.getElementById('admin-comment').value = '';
           modal.classList.add('active');

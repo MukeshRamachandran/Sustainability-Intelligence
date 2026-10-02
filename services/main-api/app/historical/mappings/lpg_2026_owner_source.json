@@ -1,0 +1,48 @@
+{
+  "code": "lpg_2026_owner_source",
+  "version": 1,
+  "domain": "lpg",
+  "priority": 1,
+  "source_reference": "database/historical-sources/lpg/lpg_2026_jan_jul.csv",
+  "parser": "wide_monthly",
+  "description": "LPG monthly weight in kg, Jan - Jul 2026, supplied by the project owner on 2026-09-30 (19 kg cylinders). KG is the governed activity. The cylinder count and the source-reported emissions are kept as reference only; emissions are recalculated by the backend with the governed LPG_KG factor and compared with the source.",
+  "options": {
+    "header_row": 0,
+    "fixed_year": 2026,
+    "month_column": "MONTH",
+    "row_checks": [
+      {
+        "description": "KG equals cylinders used x cylinder size",
+        "expected": "KG",
+        "product": ["NO OF CYLINDER USED", "CYLINDER SIZE KG"],
+        "advisory": true
+      },
+      {
+        "description": "cylinders used equals opening stock + purchase - closing stock",
+        "expected": "NO OF CYLINDER USED",
+        "plus": ["OPENING STOCK", "PURCHASE"],
+        "minus": ["CLOSING STOCK"],
+        "advisory": true
+      }
+    ]
+  },
+  "columns": {
+    "KG": {
+      "metric_code": "lpg_weight_kg",
+      "unit": "kg"
+    },
+    "NO OF CYLINDER USED": {
+      "metric_code": "lpg_cylinder_count",
+      "unit": "count",
+      "reference_only": true,
+      "note": "Source-supplied cylinder count (19 kg cylinders); reference only, never a calculation input."
+    },
+    "EMISSIONS TCO2E": {
+      "metric_code": "lpg_emissions_source_reported",
+      "unit": "tCO2e",
+      "reference_only": true,
+      "compare_to_calculation": "lpg_emissions",
+      "note": "Source-reported comparison only; the authoritative LPG emission is the backend calculation with the governed LPG_KG factor."
+    }
+  }
+}

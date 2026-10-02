@@ -17,6 +17,7 @@ from app.schemas.submissions import (
 )
 from app.schemas.waste import WasteCatalogResponse
 from app.security.dependencies import CsrfUser, DbSession, ManagerUser, enforce_manager_domain
+from app.services import dg_methodology as dg
 from app.services import waste as waste_service
 from app.services.audit import add_audit_log
 from app.services.emission_factors import freeze_calculations
@@ -97,8 +98,17 @@ def get_current_period(
 
 
 @router.get("/{domain}/metrics", response_model=list[MetricDefinitionResponse])
-def list_metrics(domain: OperationalDomain, current: ManagerUser, db: DbSession) -> list[MetricDefinitionResponse]:
+def list_metrics(
+    domain: OperationalDomain, request: Request, current: ManagerUser, db: DbSession
+) -> list[MetricDefinitionResponse]:
     _require_domain(current, domain)
+    # Managers enter the current reporting month only, so the DG activity that
+    # is not that month's source (litres once the governed SFC is in force) is
+    # not offered as an input.
+    hidden = None
+    if domain is OperationalDomain.TRANSPORT:
+        period = current_reporting_period(db, request.app.state.settings, request.app.state.institutional_clock)
+        hidden = dg.superseded_manager_metric(db, period.period_start)
     metrics = db.scalars(
         select(MetricDefinition)
         .where(MetricDefinition.operational_domain == domain, MetricDefinition.is_active.is_(True))
@@ -115,6 +125,7 @@ def list_metrics(domain: OperationalDomain, current: ManagerUser, db: DbSession)
             display_order=item.display_order,
         )
         for item in metrics
+        if item.code != hidden
     ]
 
 

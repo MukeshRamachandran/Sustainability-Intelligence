@@ -106,9 +106,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       industrial_experts: nullableInteger('participant-industrial'),
       researchers_experts: nullableInteger('participant-researchers'),
       government_participants: nullableInteger('participant-government'),
-      male_participants: nullableInteger('gender-male'),
-      female_participants: nullableInteger('gender-female'),
-      other_not_disclosed_participants: nullableInteger('gender-other'),
       saplings_planted: nullableInteger('saplings-planted'),
       waste_collected_kg: nullableDecimal('waste-collected-kg'),
       species_identified_count: nullableInteger('species-identified-count'),
@@ -135,7 +132,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     badge.className = `badge ${status === 'approved' ? 'badge-approved' : status === 'correction_requested' ? 'badge-correction' : status === 'draft' ? 'badge-draft' : 'badge-submitted'}`;
     const locked = !['draft', 'correction_requested'].includes(status);
     form.querySelectorAll('input,select,textarea').forEach(element => {
-      if (element.id !== 'participant-total' && element.id !== 'gender-total') element.disabled = locked;
+      if (element.id !== 'participant-total') element.disabled = locked;
     });
     field('save-draft-btn').disabled = locked;
     field('submit-review-btn').disabled = locked;
@@ -172,9 +169,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       'participant-industrial': programme.industrial_experts,
       'participant-researchers': programme.researchers_experts,
       'participant-government': programme.government_participants,
-      'gender-male': programme.male_participants,
-      'gender-female': programme.female_participants,
-      'gender-other': programme.other_not_disclosed_participants,
       'saplings-planted': programme.saplings_planted,
       'waste-collected-kg': programme.waste_collected_kg,
       'species-identified-count': programme.species_identified_count,
@@ -215,7 +209,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
       }
     }
-    /* The page's own calculators (participant total, gender total, species
+    /* The page's own calculators (participant total, species
        total, summary preview) listen for `input` on each individual field.
        An event dispatched on the form bubbles UP and never reaches those
        children, which left the read-only totals showing 0 after a reload even

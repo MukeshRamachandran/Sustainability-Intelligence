@@ -259,6 +259,9 @@
     function alias(title, source) {
       if (map[source]) map[title] = Object.assign({}, map[source]);
     }
+    // Same governed metric (estimated_avoided_grid_emissions_tco2e): the GHG
+    // page card, or an 'Estimated avoided grid emissions' card where one exists.
+    alias('Emission avoided', 'Reduction through renewables');
     alias('Emission avoided', 'Estimated avoided grid emissions');
     alias('Per capita emissions', 'Operational GHG per capita');
 

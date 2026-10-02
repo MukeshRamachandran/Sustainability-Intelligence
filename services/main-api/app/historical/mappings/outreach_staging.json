@@ -3,7 +3,7 @@
   "version": 1,
   "domain": "outreach",
   "priority": 1,
-  "source_reference": "apps/public-dashboard-final-staging/data/outreach_master.csv",
+  "source_reference": "apps/public-dashboard/data/outreach_master.csv",
   "parser": "year_columns",
   "description": "Outreach overall metrics, thematic programme counts and audience reach, one column per year. Aggregate figures only - no programme-level rows exist.",
   "sections": {

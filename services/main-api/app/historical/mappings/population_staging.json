@@ -3,7 +3,7 @@
   "version": 1,
   "domain": "population",
   "priority": 1,
-  "source_reference": "apps/public-dashboard-final-staging/data/population_master.csv",
+  "source_reference": "apps/public-dashboard/data/population_master.csv",
   "parser": "annual_rows",
   "description": "Institutional population reference (year, population).",
   "columns": {

@@ -3,7 +3,7 @@
   "version": 1,
   "domain": "transport",
   "priority": 1,
-  "source_reference": "apps/public-dashboard-final-staging/data/dg_master.csv",
+  "source_reference": "apps/public-dashboard/data/dg_master.csv",
   "parser": "long_monthly",
   "description": "DG diesel monthly litres, Jan 2025 - Apr 2026.",
   "options": {

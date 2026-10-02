@@ -6,7 +6,7 @@ K-COSMOS has two sources of public sustainability data. They are merged by one b
 HISTORICAL                                   CURRENT / FUTURE
 CSV / institutional source                   Manager monthly entry
   → immutable import batch (SHA-256)           → Admin approval
-  → raw source rows (JSONB)                    → Prepare (backend calculations, schema 1.4)
+  → raw source rows (JSONB)                    → Prepare (backend calculations, schema 1.5)
   → normalization (mapping JSON)               → Publish
   → reconciliation (rules R0–R5)               → published release (frozen payload + checksum)
   → metric values (true granularity)                 │
@@ -41,6 +41,13 @@ All history tables are in schema `history`, which revokes all privileges from `p
 - **R4** – A value whose coverage is not stated in the source stays UNVERIFIED.
 - **R5** – Only a VERIFIED value from the highest-priority agreeing copy becomes AUTHORITATIVE. Agreeing lower-priority copies stay SOURCE_REPORTED (corroborating).
 
+### Unit reinterpretations and reference-only values
+
+- A mapping version that reinterprets the **same source bytes** (for example `lpg_staging` v2: the 2025 LPG values are kilograms, not litres) declares `reinterprets` and needs an owner-approved `unit_corrections` entry in `mappings/resolutions.json`. The importer refuses the correction if the file changed or a number would change. Each corrected value is a new version whose `supersedes_id` points at the value it replaces, and a RESOLVED `unit_reinterpretation` conflict records the approval. The superseded value stays in place for audit.
+- A mapping column marked `reference_only` (for example a source-reported cylinder count or emission figure) is stored with provenance but is never AUTHORITATIVE, public or a calculation input. A column with `compare_to_calculation` is checked against the backend's own result, and a disagreement is an UNRESOLVED `source_reported_vs_calculated` conflict.
+- An `advisory` source check (for example stock arithmetic) never blocks. A failure is kept as a quality note on the affected values.
+- The public default period is the latest month reported by at least two operational domains. A single-domain month, such as LPG alone, stays selectable but never becomes the default.
+
 ## Shared calculation engine
 
 `app/services/sustainability_formulas.py` holds the only implementation of the accepted formulas:
@@ -60,7 +67,8 @@ Release preparation (`publication.py`, `emission_factors.py`) and the historical
 
 ## Factor treatment
 
-Every historical emission uses the governed factor set in `sustainability.emission_factor_sets` whose `effective_from` is the latest on or before the period start. That is currently `existing-project-draft-v1`, effective 2025-01-01: GRID 0.727, PETROL 2.388, DIESEL 2.701, LPG 1.5571 kgCO2e per unit.
+Every historical emission uses the governed factor set in `sustainability.emission_factor_sets` whose `effective_from` is the latest on or before the period start. That is currently `kcosmos-factors-2025-v2-lpg-kg`, effective 2025-01-01: GRID_ELECTRICITY 0.727 kgCO2e/kWh, PETROL 2.388 kgCO2e/L, DIESEL 2.701 kgCO2e/L, LPG_KG 2.98 kgCO2e/kg (applied to `lpg_weight_kg`). It superseded `existing-project-draft-v1` (now retired, unchanged, and still referenced by frozen litre-era calculations) in `0013_lpg_kg_governance_v2`. See `LPG_KG_METHODOLOGY.md`.
+- An activity is never multiplied by a factor of another unit: a mismatch makes the emission unavailable (`incompatible_unit`).
 - An ANNUAL or YTD activity value is refused if another active set becomes effective inside its window (`multiple_factor_sets_in_period`).
 - Annual totals of emissions are sums of monthly results, each calculated with its own month's factor.
 - If no set applies, the emission is unavailable (`no_applicable_factor_set`). A factor is never guessed.

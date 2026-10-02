@@ -12,6 +12,7 @@ from app.core.config import Settings
 from app.main import create_app
 from app.models.enums import OperationalDomain, RoleCode
 from app.models.sustainability import MetricDefinition, ReportingPeriod
+from app.services import dg_methodology as dg
 from tests.integration_support import unique_username
 
 PASSWORD = "Generic-Workflow-Test!"
@@ -79,9 +80,23 @@ def _login(client: TestClient, username: str) -> str:
 
 
 def _values(
-    engine: Engine, domain: OperationalDomain, *, include_optional_zero: bool = False
+    engine: Engine,
+    domain: OperationalDomain,
+    *,
+    include_optional_zero: bool = False,
+    period: ReportingPeriod | None = None,
 ) -> list[dict[str, object]]:
+    """Required Manager values for a domain.
+
+    DG has one source metric per period (0015_dg_kwh_methodology): generation
+    in kWh once the governed SFC is in force, litres before it. ``period``
+    selects it; without one the current (kWh) methodology is assumed.
+    """
     with Session(engine) as db:
+        dg_source = (
+            dg.manager_source_metric(db, period.period_start) if period is not None else dg.DG_GENERATION_METRIC
+        )
+        not_entered = dg.DG_LITRES_METRIC if dg_source == dg.DG_GENERATION_METRIC else dg.DG_GENERATION_METRIC
         definitions = db.scalars(
             select(MetricDefinition)
             .where(
@@ -94,6 +109,8 @@ def _values(
         values: list[dict[str, object]] = []
         optional_added = False
         for definition in definitions:
+            if definition.code == not_entered:
+                continue
             if definition.required_for_complete:
                 values.append({"metric_code": definition.code, "value": "1", "quality_note": None})
             elif include_optional_zero and definition.zero_allowed and not optional_added:

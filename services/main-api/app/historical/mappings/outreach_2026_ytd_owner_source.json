@@ -1,0 +1,158 @@
+{
+  "code": "outreach_2026_ytd_owner_source",
+  "version": 1,
+  "domain": "outreach",
+  "priority": 1,
+  "source_reference": "database/historical-sources/outreach/outreach_2026_ytd.csv",
+  "parser": "year_columns",
+  "description": "2026 Community Outreach cumulative figures supplied by the project owner on 2026-10-01, stated as 'till August 17, 2026'. This is a year-to-date coverage-range baseline (2026-01-01 to 2026-08-17), not monthly data: no monthly values are inferred and no programme records are created from it. A trailing '+' in the source is a lower bound and is kept as the AT_LEAST qualifier. The thematic and audience tables are stored with the meaning the source supports (see each metric's note); no gender figures were supplied. Approved programme data for months that start after the coverage end may extend the year-to-date total; months that overlap the coverage are never added to it.",
+  "sections": {
+    "Summary": "summary",
+    "Thematic Counts": "themes",
+    "Audience Counts": "audience"
+  },
+  "header_labels": [
+    "Coverage",
+    "Metric",
+    "Category",
+    "Audience category"
+  ],
+  "rows": {
+    "summary": {
+      "Outreach Programs / Events": {
+        "metric_code": "total_programs",
+        "unit": "programmes"
+      },
+      "Volunteers Engaged": {
+        "metric_code": "volunteers_engaged",
+        "unit": "people"
+      },
+      "Volunteering Hours": {
+        "metric_code": "volunteer_hours",
+        "unit": "hours"
+      },
+      "Experts Involved": {
+        "metric_code": "experts_involved",
+        "unit": "people"
+      },
+      "Total Participants / Reach": {
+        "metric_code": "total_participants",
+        "unit": "people"
+      },
+      "Partner Organizations / Collaborations": {
+        "metric_code": "partner_organizations",
+        "unit": "organizations"
+      },
+      "Saplings / Seedlings": {
+        "metric_code": "saplings_planted",
+        "unit": "saplings"
+      }
+    },
+    "themes": {
+      "Biodiversity Conservation": {
+        "metric_code": "theme:biodiversity_conservation",
+        "unit": "programmes",
+        "note": "Programmes counted under this theme. The nine thematic counts total 24 while the summary reports 20+ programmes, so a programme may be counted under more than one theme; the thematic total is not the unique programme count."
+      },
+      "Campus Sustainability": {
+        "metric_code": "theme:campus_sustainability",
+        "unit": "programmes",
+        "note": "Programmes counted under this theme. The nine thematic counts total 24 while the summary reports 20+ programmes, so a programme may be counted under more than one theme; the thematic total is not the unique programme count."
+      },
+      "Climate Smart Agriculture": {
+        "metric_code": "theme:climate_smart_agriculture",
+        "unit": "programmes",
+        "note": "Programmes counted under this theme. The nine thematic counts total 24 while the summary reports 20+ programmes, so a programme may be counted under more than one theme; the thematic total is not the unique programme count."
+      },
+      "Water Conservation": {
+        "metric_code": "theme:water_conservation",
+        "unit": "programmes",
+        "note": "Programmes counted under this theme. The nine thematic counts total 24 while the summary reports 20+ programmes, so a programme may be counted under more than one theme; the thematic total is not the unique programme count."
+      },
+      "Waste Management": {
+        "metric_code": "theme:waste_management",
+        "unit": "programmes",
+        "note": "Programmes counted under this theme. The nine thematic counts total 24 while the summary reports 20+ programmes, so a programme may be counted under more than one theme; the thematic total is not the unique programme count."
+      },
+      "Afforestation": {
+        "metric_code": "theme:afforestation",
+        "unit": "programmes",
+        "note": "Programmes counted under this theme. The nine thematic counts total 24 while the summary reports 20+ programmes, so a programme may be counted under more than one theme; the thematic total is not the unique programme count."
+      },
+      "Climate Change": {
+        "metric_code": "theme:climate_change",
+        "unit": "programmes",
+        "note": "Programmes counted under this theme. The nine thematic counts total 24 while the summary reports 20+ programmes, so a programme may be counted under more than one theme; the thematic total is not the unique programme count."
+      },
+      "Human-Wildlife Conflict": {
+        "metric_code": "theme:hwcc",
+        "unit": "programmes",
+        "note": "Programmes counted under this theme. The nine thematic counts total 24 while the summary reports 20+ programmes, so a programme may be counted under more than one theme; the thematic total is not the unique programme count."
+      },
+      "Livelihood Development": {
+        "metric_code": "theme:livelihood_development",
+        "unit": "programmes",
+        "note": "Programmes counted under this theme. The nine thematic counts total 24 while the summary reports 20+ programmes, so a programme may be counted under more than one theme; the thematic total is not the unique programme count."
+      }
+    },
+    "audience": {
+      "School Students": {
+        "metric_code": "audience:school_students",
+        "unit": "count",
+        "note": "Source-reported count for this audience category. Not a participant count: the ten audience counts total 32 while the summary reports 2,009+ participants. The source does not define the measure further."
+      },
+      "College Students": {
+        "metric_code": "audience:college_students",
+        "unit": "count",
+        "note": "Source-reported count for this audience category. Not a participant count: the ten audience counts total 32 while the summary reports 2,009+ participants. The source does not define the measure further."
+      },
+      "Farmers / Agriculture": {
+        "metric_code": "audience:farmers_agriculture",
+        "unit": "count",
+        "note": "Source-reported count for this audience category. Not a participant count: the ten audience counts total 32 while the summary reports 2,009+ participants. The source does not define the measure further."
+      },
+      "Government / Forest": {
+        "metric_code": "audience:government",
+        "unit": "count",
+        "note": "Source label 'Government / Forest'. Source-reported count for this audience category. Not a participant count: the ten audience counts total 32 while the summary reports 2,009+ participants. The source does not define the measure further."
+      },
+      "Media / Press": {
+        "metric_code": "audience:media_press",
+        "unit": "count",
+        "note": "Source-reported count for this audience category. Not a participant count: the ten audience counts total 32 while the summary reports 2,009+ participants. The source does not define the measure further."
+      },
+      "Researchers / Experts": {
+        "metric_code": "audience:researchers_experts",
+        "unit": "count",
+        "note": "Source-reported count for this audience category. Not a participant count: the ten audience counts total 32 while the summary reports 2,009+ participants. The source does not define the measure further."
+      },
+      "Entrepreneurs / Startup": {
+        "metric_code": "audience:entrepreneurs_startup_founders",
+        "unit": "count",
+        "note": "Source label 'Entrepreneurs / Startup'. Source-reported count for this audience category. Not a participant count: the ten audience counts total 32 while the summary reports 2,009+ participants. The source does not define the measure further."
+      },
+      "Community / General": {
+        "metric_code": "audience:community_general",
+        "unit": "count",
+        "note": "Source-reported count for this audience category. Not a participant count: the ten audience counts total 32 while the summary reports 2,009+ participants. The source does not define the measure further."
+      },
+      "International / Exchange": {
+        "metric_code": "audience:international_exchange",
+        "unit": "count",
+        "note": "Source-reported count for this audience category. Not a participant count: the ten audience counts total 32 while the summary reports 2,009+ participants. The source does not define the measure further."
+      },
+      "Alumni": {
+        "metric_code": "audience:alumni",
+        "unit": "count",
+        "note": "Source-reported count for this audience category. Not a participant count: the ten audience counts total 32 while the summary reports 2,009+ participants. The source does not define the measure further."
+      }
+    }
+  },
+  "year_rules": {
+    "2026": {
+      "granularity": "YTD",
+      "coverage_start": "2026-01-01",
+      "coverage_end": "2026-08-17"
+    }
+  }
+}

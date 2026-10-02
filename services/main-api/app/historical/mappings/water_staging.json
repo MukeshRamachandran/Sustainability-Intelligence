@@ -3,7 +3,7 @@
   "version": 1,
   "domain": "water",
   "priority": 1,
-  "source_reference": "apps/public-dashboard-final-staging/data/water_master.csv",
+  "source_reference": "apps/public-dashboard/data/water_master.csv",
   "parser": "water_blocks",
   "description": "Institutional water workbook: 2025 monthly consumption column plus annual TWAD/Borewell/Total and recycled; 2026 monthly TWAD/Borewell/Procured.",
   "year_rules": {

@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -18,14 +18,17 @@ from app.models.sustainability import (
     SubmissionValue,
 )
 from app.schemas.submissions import (
+    EnergySummaryResponse,
     GenericSubmissionResponse,
     MetricValueResponse,
     MetricValueWrite,
     ReviewActionResponse,
 )
 from app.schemas.waste import WasteItemWrite
+from app.services import dg_methodology as dg
 from app.services import waste as waste_service
 from app.services.emission_factors import calculation_responses
+from app.services.publication import electricity_indicators
 
 GENERIC_DOMAINS = {
     OperationalDomain.TRANSPORT,
@@ -170,12 +173,32 @@ def serialize_submission(
             if submission.domain is OperationalDomain.WASTE
             else None
         ),
+        energy=(
+            EnergySummaryResponse.model_validate(
+                {
+                    **electricity_indicators(db, submission),
+                    "provisional": submission.status in EDITABLE_STATUSES,
+                }
+            )
+            if submission.domain is OperationalDomain.ENERGY
+            else None
+        ),
     )
 
 
+def _period_start(db: Session, submission: Submission) -> date:
+    period = db.get(ReportingPeriod, submission.reporting_period_id)
+    if period is None:
+        raise HTTPException(status_code=500, detail="Submission reporting period is missing.")
+    return period.period_start
+
+
 def _validated_values(
-    db: Session, domain: OperationalDomain, values: list[MetricValueWrite]
+    db: Session, domain: OperationalDomain, values: list[MetricValueWrite], period_start: date
 ) -> list[tuple[MetricDefinition, MetricValueWrite]]:
+    # The DG activity a Manager may not enter for this period: litres once the
+    # governed SFC is in force (they are derived from kWh), kWh before it.
+    superseded = dg.superseded_manager_metric(db, period_start) if domain is OperationalDomain.TRANSPORT else None
     codes = [item.metric_code for item in values]
     definitions = {
         item.code: item
@@ -191,6 +214,14 @@ def _validated_values(
         if not definition.manager_editable:
             raise HTTPException(
                 status_code=422, detail=f"Metric '{item.metric_code}' is calculated and cannot be written."
+            )
+        if item.metric_code == superseded and item.value is not None:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Metric '{item.metric_code}' is not the DG source for this reporting period; "
+                    f"enter '{dg.manager_source_metric(db, period_start)}' instead."
+                ),
             )
         if item.value is not None:
             value = Decimal(item.value)
@@ -226,7 +257,7 @@ def save_values(
         raise HTTPException(
             status_code=422, detail="waste_items is only valid for a waste submission."
         )
-    validated = _validated_values(db, submission.domain, values)
+    validated = _validated_values(db, submission.domain, values, _period_start(db, submission))
     editable_codes = db.scalars(
         select(MetricDefinition.code).where(
             MetricDefinition.operational_domain == submission.domain,
@@ -275,6 +306,8 @@ def validate_complete(db: Session, submission: Submission) -> None:
             )
         ).all()
     )
+    if submission.domain is OperationalDomain.TRANSPORT:
+        required.discard(dg.superseded_manager_metric(db, _period_start(db, submission)))
     supplied = set(
         db.scalars(
             select(SubmissionValue.metric_code).where(

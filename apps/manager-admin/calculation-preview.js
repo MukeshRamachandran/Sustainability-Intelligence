@@ -33,6 +33,43 @@
     return `${Number(item.result_value).toFixed(2)} ${item.result_unit || DEFAULT_RESULT_UNIT}`;
   }
 
+  /* Electrical indicators of an Energy submission, exactly as the backend
+     returned them: renewable electricity is on-campus + procured, and the
+     solar water heater is printed apart as thermal energy. Nothing is added,
+     divided or multiplied here. */
+  function renderEnergyIndicators(energy) {
+    const set = (id, text) => { const node = document.getElementById(id); if (node) node.textContent = text; };
+    const show = (item, digits) => {
+      if (!item || item.status !== 'available' || item.value == null) {
+        return `Unavailable — ${(item?.reason || 'save the draft to calculate').replaceAll('_', ' ')}`;
+      }
+      return `${Number(item.value).toLocaleString('en-IN', { maximumFractionDigits: digits })} ${item.unit}`;
+    };
+    set('prev-re-electricity', show(energy?.renewable_electricity_kwh, 2));
+    set('prev-total-electricity', show(energy?.total_electricity_consumption_kwh, 2));
+    set('prev-re-share', show(energy?.renewable_share_pct, 6));
+    set('prev-avoided', show(energy?.estimated_avoided_grid_emissions_tco2e, 6));
+    const thermal = energy?.solar_thermal;
+    set('prev-solar-thermal', thermal && thermal.value != null
+      ? `${Number(thermal.value).toLocaleString('en-IN', { maximumFractionDigits: 2 })} ${thermal.unit} (thermal)` : 'Not entered');
+  }
+
+  /* DG derivation, exactly as the backend returned it for the saved kWh:
+     generation -> SFC -> derived litres -> diesel factor -> emissions. Nothing
+     is multiplied here; an unsaved or unavailable value shows a dash. */
+  function renderDgDerivation(item) {
+    const set = (id, text) => { const node = document.getElementById(id); if (node) node.textContent = text; };
+    const number = (value, digits) => Number(value).toLocaleString('en-IN', { maximumFractionDigits: digits });
+    const derivation = item?.status === 'available' ? item.derivation : null;
+    set('prev-dg-kwh', derivation ? `${number(derivation.source_value, 2)} ${derivation.source_unit}` : '—');
+    set('prev-dg-sfc', derivation ? `${derivation.parameter_value} ${derivation.parameter_unit}` : '—');
+    set('prev-dg-litres', derivation
+      ? `${Number(derivation.derived_value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${derivation.derived_unit}` : '—');
+    set('prev-dg-ef', derivation && item.factor_value != null ? `${Number(item.factor_value)} ${item.factor_unit}` : '—');
+    set('prev-dg-emissions', derivation
+      ? `${Number(item.result_value).toFixed(6)} ${item.result_unit || DEFAULT_RESULT_UNIT}` : '—');
+  }
+
   function render(event) {
     const submission = event.detail.submission;
     const results = resultMap(submission);
@@ -43,6 +80,7 @@
         'prev-diesel-t': 'transport_diesel_emissions',
         'prev-diesel-dg': 'dg_diesel_emissions'
       };
+      renderDgDerivation(results.get('dg_diesel_emissions'));
       let total = 0;
       let complete = true;
       const units = new Set();
@@ -67,7 +105,7 @@
     }
     if (domain === 'energy') {
       document.getElementById('prev-scope2').textContent = display(results.get('grid_electricity_emissions'));
-      document.getElementById('prev-avoided').textContent = 'Methodology review required';
+      renderEnergyIndicators(submission?.energy);
     }
     if (domain === 'waste') {
       /* Waste has no emission factor. These are the backend-calculated
@@ -83,7 +121,7 @@
     if (domain === 'lpg') {
       const item = results.get('lpg_emissions');
       document.getElementById('prev-factor').textContent = item?.factor_value != null
-        ? `${item.factor_value} ${item.factor_unit || 'kgCO2e/L'} · ${item.factor_set_version || 'governed set'}`
+        ? `${item.factor_value} ${item.factor_unit || 'kgCO2e/kg'} · ${item.factor_set_version || 'governed set'}`
         : 'Not configured';
       document.getElementById('prev-emission').textContent = display(item);
     }

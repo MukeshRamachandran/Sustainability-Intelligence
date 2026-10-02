@@ -31,11 +31,14 @@ services:
         required: false
     environment:
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+      # Public certificate documents: their own root, never the evidence volumes or the database.
+      CERTIFICATE_STORAGE_ROOT: /app/certificate-storage
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
       - evidence_clean:/data/evidence/clean
       - evidence_quarantine:/data/evidence/quarantine
+      - certificate_storage:/app/certificate-storage
     depends_on:
       postgres:
         condition: service_healthy
@@ -67,3 +70,4 @@ volumes:
   postgres_data:
   evidence_clean:
   evidence_quarantine:
+  certificate_storage:

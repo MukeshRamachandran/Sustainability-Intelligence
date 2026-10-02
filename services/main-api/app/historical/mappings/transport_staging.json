@@ -3,7 +3,7 @@
   "version": 1,
   "domain": "transport",
   "priority": 1,
-  "source_reference": "apps/public-dashboard-final-staging/data/transport_master.csv",
+  "source_reference": "apps/public-dashboard/data/transport_master.csv",
   "parser": "paired_monthly",
   "description": "Fleet diesel and petrol monthly litres (side-by-side blocks), Jan 2025 - Apr 2026.",
   "options": {

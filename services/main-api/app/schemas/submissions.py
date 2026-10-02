@@ -1,5 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -81,6 +82,38 @@ class ReviewActionResponse(BaseModel):
     created_at: datetime
 
 
+class IndicatorResponse(BaseModel):
+    status: str
+    reason: str | None = None
+    value: float | int | None = None
+    unit: str
+    provenance: dict[str, Any] | None = None
+
+
+class SolarThermalResponse(BaseModel):
+    """Solar water heater: thermal energy, kept apart from every electrical value."""
+
+    metric_code: str
+    value: float | int | None = None
+    unit: str
+    included_in_electricity: bool = False
+
+
+class EnergySummaryResponse(BaseModel):
+    """Backend-derived electrical indicators of an Energy submission.
+
+    Renewable electricity is on-campus + procured only. Read-only: a wrong
+    figure is corrected through the Manager's source values.
+    """
+
+    renewable_electricity_kwh: IndicatorResponse
+    total_electricity_consumption_kwh: IndicatorResponse
+    renewable_share_pct: IndicatorResponse
+    estimated_avoided_grid_emissions_tco2e: IndicatorResponse
+    solar_thermal: SolarThermalResponse
+    provisional: bool
+
+
 class GenericSubmissionResponse(BaseModel):
     id: UUID
     domain: OperationalDomain
@@ -103,3 +136,6 @@ class GenericSubmissionResponse(BaseModel):
     # Populated for waste submissions only; the authoritative dry and total
     # quantities always come from here, never from client arithmetic.
     waste: WasteSummaryResponse | None = None
+    # Populated for energy submissions only: the authoritative electrical
+    # indicators (renewable electricity excludes the solar water heater).
+    energy: EnergySummaryResponse | None = None

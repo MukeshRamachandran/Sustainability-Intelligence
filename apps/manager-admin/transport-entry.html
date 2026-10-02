@@ -111,8 +111,9 @@
 
               <div class="grid-3 mb-2">
                 <div class="form-group">
-                  <label class="form-label">Diesel Generator Consumed (Litres)</label>
-                  <input type="number" class="form-control" id="diesel-dg" min="0" step="0.01">
+                  <label class="form-label">Diesel Generator Electricity Generated (kWh)</label>
+                  <input type="number" class="form-control" id="dg-generation" min="0" step="0.01">
+                  <small class="text-muted" style="font-size:12px;">Enter generation only. Diesel litres and emissions are calculated by the system.</small>
                 </div>
                 <div class="form-group">
                   <label class="form-label">Active Diesel Generators (NOs)</label>
@@ -120,7 +121,7 @@
                 </div>
                 <div class="form-group">
                   <label class="form-label">Evidence Proof</label>
-                  <input type="file" class="form-control" id="evidence-dg" accept=".pdf,.png,.jpg,.jpeg" data-evidence-input data-evidence-list="transport-dg" data-evidence-metric="dg_diesel_litres">
+                  <input type="file" class="form-control" id="evidence-dg" accept=".pdf,.png,.jpg,.jpeg" data-evidence-input data-evidence-list="transport-dg" data-evidence-metric="dg_generation_kwh">
                   <div data-evidence-container="transport-dg"></div>
                 </div>
               </div>
@@ -150,9 +151,18 @@
               <span class="text-muted">Transport Diesel:</span>
               <span id="prev-diesel-t">—</span>
             </div>
-            <div class="d-flex justify-between mb-3">
-              <span class="text-muted">DG Diesel:</span>
+            <div class="d-flex justify-between mb-2">
+              <span class="text-muted">DG Emissions:</span>
               <span id="prev-diesel-dg">—</span>
+            </div>
+            <!-- Read-only derivation returned by the backend for the saved kWh. -->
+            <div id="prev-dg-derivation" class="mb-3" style="font-size:12.5px; padding:10px 12px; border-radius:8px; background:#f3f7f4;">
+              <div style="font-weight:700; letter-spacing:.06em; font-size:10.5px; color:var(--text-muted,#6b7280); margin-bottom:6px;">PREVIEW · DG CALCULATION (BACKEND)</div>
+              <div class="d-flex justify-between"><span class="text-muted">DG generation:</span><span id="prev-dg-kwh">—</span></div>
+              <div class="d-flex justify-between"><span class="text-muted">SFC:</span><span id="prev-dg-sfc">—</span></div>
+              <div class="d-flex justify-between"><span class="text-muted">Derived diesel consumption:</span><span id="prev-dg-litres">—</span></div>
+              <div class="d-flex justify-between"><span class="text-muted">Diesel emission factor:</span><span id="prev-dg-ef">—</span></div>
+              <div class="d-flex justify-between"><span class="text-muted">DG emissions:</span><span id="prev-dg-emissions">—</span></div>
             </div>
 
             <hr style="border:none; border-top:1px solid #eee; margin-bottom: 16px;">
@@ -178,7 +188,7 @@
          preview as stale - it must never overwrite a real server value. */
       const markStale = () => window.KCosmosPreview?.markStale();
 
-      ['petrol', 'diesel-transport', 'diesel-dg'].forEach(id => {
+      ['petrol', 'diesel-transport', 'dg-generation'].forEach(id => {
         document.getElementById(id).addEventListener('input', markStale);
       });
 

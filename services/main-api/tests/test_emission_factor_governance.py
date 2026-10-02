@@ -3,12 +3,15 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
+import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
 from app.models.enums import FactorCode, FactorSetStatus, OperationalDomain, RoleCode
 from app.models.sustainability import CalculationResult, EmissionFactorSet, ReportingPeriod
+from app.schemas.emission_factors import FactorWrite
 from app.services.emission_factors import applicable_factor_set
 from tests.test_generic_submission_integration import _account, _client, _login, _period, _values
 
@@ -48,9 +51,9 @@ def _factor_payload(
     if lpg is not None:
         factors.append(
             {
-                "code": "LPG",
+                "code": "LPG_KG",
                 "factor_value": lpg,
-                "activity_unit": "L",
+                "activity_unit": "kg",
                 "result_unit": "kgCO2e",
                 "source_reference": "Synthetic isolated-test LPG source",
                 "source_url": "https://example.test/lpg",
@@ -214,18 +217,17 @@ def test_effective_date_resolution_and_grid_snapshot(postgres_engine: Engine) ->
         assert row.result_unit == "tCO2e"
 
 
-def test_missing_lpg_factor_is_explicitly_unavailable_with_litre_activity(postgres_engine: Engine) -> None:
+def test_missing_lpg_factor_is_explicitly_unavailable_with_kg_activity(postgres_engine: Engine) -> None:
     lpg_manager = _account(postgres_engine, RoleCode.MANAGER, OperationalDomain.LPG)
     period = _period(postgres_engine, 2031, 4)
     with _client(postgres_engine, period) as client:
         csrf = _login(client, lpg_manager)
+        values = _values(postgres_engine, OperationalDomain.LPG)
+        # lpg_weight_kg is the only required LPG metric; litres are no longer collected.
+        assert [item["metric_code"] for item in values] == ["lpg_weight_kg"]
         created = client.post(
             "/api/manager/lpg/submissions",
-            json={
-                "reporting_period_id": str(period.id),
-                "remarks": None,
-                "values": _values(postgres_engine, OperationalDomain.LPG),
-            },
+            json={"reporting_period_id": str(period.id), "remarks": None, "values": values},
             headers={"X-CSRF-Token": csrf},
         )
         assert created.status_code == 201, created.text
@@ -233,9 +235,9 @@ def test_missing_lpg_factor_is_explicitly_unavailable_with_litre_activity(postgr
         calculation = created.json()["calculations"][0]
         assert calculation["status"] == "unavailable"
         assert calculation["reason"] == "factor_not_configured"
-        assert calculation["activity_metric_code"] == "lpg_consumption_litres"
+        assert calculation["activity_metric_code"] == "lpg_weight_kg"
         assert Decimal(calculation["activity_value"]) == Decimal("1")
-        assert calculation["activity_unit"] == "L"
+        assert calculation["activity_unit"] == "kg"
         assert calculation["result_value"] is None
         assert client.post(
             f"/api/manager/lpg/submissions/{submission_id}/submit",
@@ -246,12 +248,12 @@ def test_missing_lpg_factor_is_explicitly_unavailable_with_litre_activity(postgr
         assert submitted["calculations"][0]["reason"] == "factor_not_configured"
 
 
-def test_lpg_factor_is_optional_but_if_present_must_use_litres(postgres_engine: Engine) -> None:
+def test_lpg_kg_factor_is_optional_but_if_present_must_use_kg(postgres_engine: Engine) -> None:
     admin = _account(postgres_engine, RoleCode.ADMIN)
     payload = _factor_payload("lpg-invalid-unit-2041", "2041-01-01", lpg="3.000")
-    lpg_factor = next(item for item in payload["factors"] if item["code"] == "LPG")  # type: ignore[union-attr]
-    # kg is the superseded basis; activation must reject it.
-    lpg_factor["activity_unit"] = "kg"
+    lpg_factor = next(item for item in payload["factors"] if item["code"] == "LPG_KG")  # type: ignore[union-attr]
+    # Litres are the retired basis; activation must reject them for LPG_KG.
+    lpg_factor["activity_unit"] = "L"
     with _client(postgres_engine) as client:
         csrf = _login(client, admin)
         created = client.post(
@@ -263,17 +265,35 @@ def test_lpg_factor_is_optional_but_if_present_must_use_litres(postgres_engine: 
             headers={"X-CSRF-Token": csrf},
         )
         assert denied.status_code == 422
-        assert "LPG has an incompatible unit" in denied.text
+        assert "LPG_KG has an incompatible unit" in denied.text
 
 
-def test_lpg_litre_calculation_ignores_reference_kg_and_freezes_provenance(
-    postgres_engine: Engine,
-) -> None:
-    """Deterministic K-COSMOS baseline case: 102087 L x 1.5571 kgCO2e/L.
+def test_retired_litre_lpg_factor_code_cannot_be_written(postgres_engine: Engine) -> None:
+    admin = _account(postgres_engine, RoleCode.ADMIN)
+    payload = _factor_payload("lpg-litre-refused-2042", "2042-01-01", lpg="1.5571")
+    lpg_factor = next(item for item in payload["factors"] if item["code"] == "LPG_KG")  # type: ignore[union-attr]
+    lpg_factor["code"] = "LPG"
+    lpg_factor["activity_unit"] = "L"
+    with _client(postgres_engine) as client:
+        csrf = _login(client, admin)
+        refused = client.post(
+            "/api/admin/emission-factor-sets", json=payload, headers={"X-CSRF-Token": csrf}
+        )
+        assert refused.status_code == 422
+    with Session(postgres_engine) as db:
+        assert db.scalar(
+            select(EmissionFactorSet.id).where(EmissionFactorSet.version == "lpg-litre-refused-2042")
+        ) is None
+    # The API hides validation detail; the schema names the reason.
+    with pytest.raises(ValidationError, match="litre-based LPG factor is retired"):
+        FactorWrite.model_validate(lpg_factor)
 
-    102087 * 1.5571 = 158959.6677 kgCO2e exactly, so result_value is
-    158.9596677 tCO2e and quantizes to 158.959668. The reference kg value is
-    present and must not influence the governed result.
+
+def test_lpg_kg_calculation_uses_weight_and_freezes_provenance(postgres_engine: Engine) -> None:
+    """Owner case, Jan 2026: 7429 kg x 2.98 kgCO2e/kg = 22138.42 kgCO2e = 22.13842 tCO2e.
+
+    The kg value is the governed activity and is never converted; the
+    cylinder count is reference metadata and must not influence the result.
     """
     admin = _account(postgres_engine, RoleCode.ADMIN)
     manager = _account(postgres_engine, RoleCode.MANAGER, OperationalDomain.LPG)
@@ -281,16 +301,25 @@ def test_lpg_litre_calculation_ignores_reference_kg_and_freezes_provenance(
     with _client(postgres_engine) as admin_client:
         csrf = _login(admin_client, admin)
         factor_set = _create_and_activate(
-            admin_client, csrf, _factor_payload("lpg-litre-2043-v1", "2043-01-01", lpg="1.5571")
+            admin_client, csrf, _factor_payload("lpg-kg-2043-v1", "2043-01-01", lpg="2.98")
         )
     with _client(postgres_engine, period) as client:
         csrf = _login(client, manager)
-        values = _values(postgres_engine, OperationalDomain.LPG)
-        for item in values:
-            if item["metric_code"] == "lpg_consumption_litres":
-                item["value"] = "102087"
-        # Reference metadata only; it must not drive the calculation.
-        values.append({"metric_code": "lpg_weight_kg", "value": "100", "quality_note": None})
+        values = [
+            {"metric_code": "lpg_weight_kg", "value": "7429", "quality_note": None},
+            {"metric_code": "lpg_cylinder_count", "value": "391", "quality_note": None},
+        ]
+        # The deprecated litre metric is inactive: a write is refused.
+        refused = client.post(
+            "/api/manager/lpg/submissions",
+            json={
+                "reporting_period_id": str(period.id),
+                "remarks": None,
+                "values": [*values, {"metric_code": "lpg_consumption_litres", "value": "1", "quality_note": None}],
+            },
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert refused.status_code == 422
         created = client.post(
             "/api/manager/lpg/submissions",
             json={"reporting_period_id": str(period.id), "remarks": None, "values": values},
@@ -306,15 +335,15 @@ def test_lpg_litre_calculation_ignores_reference_kg_and_freezes_provenance(
         assert len(calculations) == 1
         calculation = calculations[0]
         assert calculation["status"] == "available"
-        assert calculation["activity_metric_code"] == "lpg_consumption_litres"
-        assert Decimal(calculation["activity_value"]) == Decimal("102087")
-        assert calculation["activity_unit"] == "L"
-        assert calculation["factor_code"] == "LPG"
+        assert calculation["activity_metric_code"] == "lpg_weight_kg"
+        assert Decimal(calculation["activity_value"]) == Decimal("7429")
+        assert calculation["activity_unit"] == "kg"
+        assert calculation["factor_code"] == "LPG_KG"
         assert calculation["factor_set_version"] == factor_set["version"]
-        assert calculation["factor_unit"] == "kgCO2e/L"
-        assert Decimal(calculation["factor_value"]) == Decimal("1.5571")
-        assert Decimal(calculation["result_kgco2e"]) == Decimal("158959.667700")
-        assert Decimal(calculation["result_value"]) == Decimal("158.959668")
+        assert calculation["factor_unit"] == "kgCO2e/kg"
+        assert Decimal(calculation["factor_value"]) == Decimal("2.98")
+        assert Decimal(calculation["result_kgco2e"]) == Decimal("22138.420000")
+        assert Decimal(calculation["result_value"]) == Decimal("22.138420")
         assert calculation["result_unit"] == "tCO2e"
 
     with Session(postgres_engine) as db:
@@ -322,13 +351,14 @@ def test_lpg_litre_calculation_ignores_reference_kg_and_freezes_provenance(
             select(CalculationResult).where(CalculationResult.submission_id == submission_id)
         )
         assert frozen is not None
-        assert frozen.metric_code == "lpg_consumption_litres"
-        assert frozen.activity_value == Decimal("102087.000000")
-        assert frozen.activity_unit == "L"
-        assert frozen.factor_code == "LPG"
-        assert frozen.factor_value == Decimal("1.5571000000")
-        assert frozen.result_kgco2e == Decimal("158959.667700")
-        assert frozen.result_value == Decimal("158.959668")
+        assert frozen.metric_code == "lpg_weight_kg"
+        assert frozen.activity_value == Decimal("7429.000000")
+        assert frozen.activity_unit == "kg"
+        assert frozen.factor_code == "LPG_KG"
+        assert frozen.factor_value == Decimal("2.9800000000")
+        assert frozen.factor_unit == "kgCO2e/kg"
+        assert frozen.result_kgco2e == Decimal("22138.420000")
+        assert frozen.result_value == Decimal("22.138420")
 
 
 def test_activation_rejects_incomplete_core_set(postgres_engine: Engine) -> None:
@@ -365,10 +395,11 @@ def test_transport_petrol_and_diesel_calculations_share_governed_provenance(
     with _client(postgres_engine, period) as client:
         csrf = _login(client, manager)
         values = _values(postgres_engine, OperationalDomain.TRANSPORT)
+        # DG is entered as generation (kWh) under the kWh methodology.
         activity = {
             "transport_petrol_litres": "10",
             "transport_diesel_litres": "20",
-            "dg_diesel_litres": "30",
+            "dg_generation_kwh": "30",
         }
         for item in values:
             if item["metric_code"] in activity:
@@ -390,7 +421,10 @@ def test_transport_petrol_and_diesel_calculations_share_governed_provenance(
         }
         assert Decimal(calculations["transport_petrol_emissions"]["result_value"]) == Decimal("0.023880")
         assert Decimal(calculations["transport_diesel_emissions"]["result_value"]) == Decimal("0.054020")
-        assert Decimal(calculations["dg_diesel_emissions"]["result_value"]) == Decimal("0.081030")
+        # 30 kWh x 0.33 L/kWh = 9.9 L; 9.9 L x 2.701 kgCO2e/L / 1000 = 0.0267399 tCO2e.
+        assert Decimal(calculations["dg_diesel_emissions"]["result_value"]) == Decimal("0.026740")
+        assert calculations["dg_diesel_emissions"]["activity_metric_code"] == "dg_generation_kwh"
+        assert calculations["dg_diesel_emissions"]["derivation"]["derived_value"] == "9.9"
         assert calculations["transport_diesel_emissions"]["factor_code"] == "DIESEL"
         assert calculations["dg_diesel_emissions"]["factor_code"] == "DIESEL"
         assert calculations["transport_diesel_emissions"]["factor_set_id"] == factor_set["id"]
@@ -407,7 +441,7 @@ def test_submission_without_applicable_factor_freezes_unavailable_state(postgres
             json={
                 "reporting_period_id": str(period.id),
                 "remarks": None,
-                "values": _values(postgres_engine, OperationalDomain.TRANSPORT),
+                "values": _values(postgres_engine, OperationalDomain.TRANSPORT, period=period),
             },
             headers={"X-CSRF-Token": csrf},
         )

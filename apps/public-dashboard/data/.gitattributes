@@ -1,0 +1,4 @@
+# Historical import sources are evidence: their SHA-256 is recorded in the import batches,
+# so Git must never convert their line endings (same rule as database/historical-sources).
+*.csv -text
+*.json -text

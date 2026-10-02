@@ -82,6 +82,12 @@ class Observation:
     notes: list[str] = field(default_factory=list)
     # Monthly metrics whose summed value this aggregate must equal (default: itself).
     reconcile_against: tuple[str, ...] | None = None
+    # Stored with provenance but never AUTHORITATIVE: never public, never a
+    # calculation input (for example a source-reported cylinder count).
+    reference_only: bool = False
+    # A source-reported result the backend must independently reproduce; a
+    # disagreement is recorded as a reconciliation conflict.
+    compare_to_calculation: str | None = None
 
 
 @dataclass
@@ -90,6 +96,9 @@ class InternalCheck:
     expected: Decimal
     actual: Decimal
     affects: list[tuple[PeriodKey, str, str]]  # (period, domain, metric_code)
+    # An advisory check never blocks: a failure is kept as a quality note on the
+    # affected values instead of marking them CONFLICT.
+    advisory: bool = False
 
     @property
     def passed(self) -> bool:
@@ -185,6 +194,8 @@ def _observe(
         verification_hint=metric.get("verification", hint),
         notes=item_notes,
         reconcile_against=tuple(metric["reconcile_against"]) if metric.get("reconcile_against") else None,
+        reference_only=bool(metric.get("reference_only", False)),
+        compare_to_calculation=metric.get("compare_to_calculation"),
     )
     parsed.observations.append(observation)
     return observation
@@ -196,26 +207,74 @@ def _observe(
 
 
 def parse_wide_monthly(parsed: ParsedSource, mapping: dict[str, Any]) -> None:
-    """Header row, then one row per month: Year, Month, metric columns..."""
+    """Header row, then one row per month: Year, Month, metric columns...
+
+    A source without a year column states its year once in the mapping
+    (``fixed_year``). ``row_checks`` are per-row equations the source allows.
+    """
     options = mapping["options"]
     header_index = options["header_row"]
     header = [cell.strip() for cell in parsed.rows[header_index]]
     columns = {name.strip(): metric for name, metric in mapping["columns"].items()}
+    year_column = options.get("year_column")
     for name in header:
-        if name and name not in columns and name not in (options["year_column"], options["month_column"]):
-            parsed.ignored.append(f"column {name!r} (not mapped)")
+        if name and name not in columns and name not in (year_column, options["month_column"]):
+            parsed.ignored.append(f"column {name!r} (not mapped; kept in the raw source row)")
     for row_number, row in enumerate(parsed.rows[header_index + 1 :], start=header_index + 2):
         if not any(cell.strip() for cell in row):
             continue
-        year_raw = _cell(row, header.index(options["year_column"])).strip()
+        year_raw = (
+            _cell(row, header.index(year_column)).strip() if year_column else str(options.get("fixed_year", ""))
+        )
         month = parse_month(_cell(row, header.index(options["month_column"])))
         if not year_raw.isdigit() or month is None:
             parsed.invalid.append(f"row {row_number}: unrecognised year/month {row[:2]!r}")
             continue
         period = PeriodKey.monthly(int(year_raw), month)
+        observed = []
         for index, name in enumerate(header):
             if name in columns:
-                _observe(parsed, mapping, period, columns[name], _cell(row, index), row_number, name)
+                item = _observe(parsed, mapping, period, columns[name], _cell(row, index), row_number, name)
+                if item is not None:
+                    observed.append(item)
+        cells = {name: _cell(row, index) for index, name in enumerate(header) if name}
+        for check in options.get("row_checks", []):
+            _row_check(parsed, check, cells, period, observed)
+
+
+def _row_check(
+    parsed: ParsedSource,
+    check: dict[str, Any],
+    cells: dict[str, str],
+    period: PeriodKey,
+    observed: list[Observation],
+) -> None:
+    """expected = product(product) or sum(plus) - sum(minus); skipped if a cell is blank."""
+    expected = parse_number(cells.get(check["expected"], ""))
+    if "product" in check:
+        parts = [parse_number(cells.get(name, "")) for name in check["product"]]
+    else:
+        parts = [parse_number(cells.get(name, "")) for name in check["plus"] + check.get("minus", [])]
+    if expected is None or any(part is None for part in parts):
+        return
+    values = [part[0] for part in parts if part is not None]
+    if "product" in check:
+        actual = Decimal("1")
+        for value in values:
+            actual *= value
+    else:
+        plus = len(check["plus"])
+        actual = sum(values[:plus], Decimal("0")) - sum(values[plus:], Decimal("0"))
+    parsed.checks.append(
+        InternalCheck(
+            description=f"{period.label}: {check['description']}",
+            expected=expected[0],
+            actual=actual,
+            affects=[(item.period, item.domain, item.metric_code) for item in observed if not item.reference_only]
+            or [(item.period, item.domain, item.metric_code) for item in observed],
+            advisory=bool(check.get("advisory", False)),
+        )
+    )
 
 
 def parse_year_block_monthly(parsed: ParsedSource, mapping: dict[str, Any]) -> None:

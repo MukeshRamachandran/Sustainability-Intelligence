@@ -25,7 +25,7 @@ from app.models.sustainability import (
     SubmissionValue,
     WasteSubmissionItem,
 )
-from app.services.publication import build_release_payload, payload_checksum
+from app.services.publication import build_release_payload, lpg_payload_blockers, payload_checksum
 from tests.integration_support import unique_username
 
 PASSWORD = "Publication-Test-Local!"
@@ -232,7 +232,7 @@ def test_multidomain_release_snapshot_privacy_checksum_and_publish(postgres_engi
             managers[OperationalDomain.LPG],
             OperationalDomain.LPG,
             SubmissionStatus.APPROVED,
-            {"lpg_cylinder_count": 2, "lpg_weight_kg": 28, "lpg_consumption_litres": 52},
+            {"lpg_cylinder_count": 2, "lpg_weight_kg": 52},
             approved_by=admin,
         )
         db.add_all(
@@ -276,15 +276,15 @@ def test_multidomain_release_snapshot_privacy_checksum_and_publish(postgres_engi
                     submission_revision=1,
                     calculation_code="lpg_emissions",
                     calculation_status="available",
-                    metric_code="lpg_consumption_litres",
+                    metric_code="lpg_weight_kg",
                     activity_value=Decimal("52"),
-                    activity_unit="L",
+                    activity_unit="kg",
                     factor_set_version="synthetic-publication-test-v1",
-                    factor_code="LPG",
-                    factor_value=Decimal("1.5571"),
-                    factor_unit="kgCO2e/L",
-                    result_kgco2e=Decimal("80.9692"),
-                    result_value=Decimal("0.080969"),
+                    factor_code="LPG_KG",
+                    factor_value=Decimal("2.98"),
+                    factor_unit="kgCO2e/kg",
+                    result_kgco2e=Decimal("154.96"),
+                    result_value=Decimal("0.15496"),
                     result_unit="tCO2e",
                     formula_version="activity_x_factor_kgco2e_v1",
                 ),
@@ -357,30 +357,38 @@ def test_multidomain_release_snapshot_privacy_checksum_and_publish(postgres_engi
         candidate_same = _prepare(client, csrf, period, f"publication-{uuid4().hex}")
         payload = candidate_one["payload"]
 
-        assert payload["schema_version"] == "1.4"
+        assert payload["schema_version"] == "1.5"
         assert payload["period"] == {"id": str(period_id), "year": period.year, "month": period.month}
         assert payload["publication_status"] == {domain.value: "approved" for domain in OperationalDomain}
         assert set(payload["transport"]["metrics"]) == {
             "transport_petrol_litres",
             "transport_diesel_litres",
+            "dg_generation_kwh",
             "dg_diesel_litres",
         }
         assert payload["energy"]["metrics"]["grid_total_kwh"]["value"] == 30
-        assert payload["energy"]["metrics"]["renewable_total_kwh"]["value"] == 10
+        # The deprecated total that included the solar water heater (2 + 3 + 5)
+        # is no longer published; the governed indicator is on-campus + procured.
+        assert "renewable_total_kwh" not in payload["energy"]["metrics"]
+        assert payload["energy"]["metrics"]["solar_water_heater_kwh"]["value"] == 5
         assert payload["indicators"]["renewable_electricity_kwh"]["value"] == 5
         assert payload["indicators"]["total_electricity_consumption_kwh"]["value"] == 35
         assert payload["indicators"]["estimated_avoided_grid_emissions_tco2e"]["value"] == 0.003635
         assert payload["indicators"]["water_per_capita_l"]["value"] == 11
-        assert payload["lpg"]["metrics"] == {"lpg_consumption_litres": {"value": 52, "unit": "L"}}
+        # Schema 1.5: LPG is published as governed kg; litres and the
+        # admin-only cylinder count never appear.
+        assert payload["lpg"]["metrics"] == {"lpg_weight_kg": {"value": 52, "unit": "kg"}}
         assert payload["lpg"]["emissions"] == {
             "status": "available",
             "reason": None,
-            "value": 0.080969,
+            "value": 0.15496,
             "unit": "tCO2e",
         }
-        assert payload["lpg"]["calculations"][0]["factor_unit"] == "kgCO2e/L"
-        assert payload["lpg"]["calculations"][0]["activity_metric_code"] == "lpg_consumption_litres"
-        assert payload["lpg"]["calculations"][0]["activity_unit"] == "L"
+        assert payload["lpg"]["calculations"][0]["factor_code"] == "LPG_KG"
+        assert payload["lpg"]["calculations"][0]["factor_unit"] == "kgCO2e/kg"
+        assert payload["lpg"]["calculations"][0]["activity_metric_code"] == "lpg_weight_kg"
+        assert payload["lpg"]["calculations"][0]["activity_unit"] == "kg"
+        assert "lpg_consumption_litres" not in json.dumps(payload)
         assert payload["transport"]["calculations"][0]["factor_code"] == "PETROL"
         assert payload["energy"]["calculations"][0]["calculation_code"] == "grid_electricity_emissions"
         assert payload["indicators"]["total_ghg_tco2e"]["status"] == "unavailable"
@@ -392,6 +400,8 @@ def test_multidomain_release_snapshot_privacy_checksum_and_publish(postgres_engi
         assert payload["water"]["metrics"]["water_recycled_kl"]["value"] == 4
         assert payload["outreach"]["total_programs"] == 1
         assert payload["outreach"]["total_participants"] == 20
+        # The programme row above still holds legacy gender values; a new release never freezes them.
+        assert "gender" not in payload["outreach"]  # type: ignore[operator]
 
         # Schema 1.2 waste payload: metrics, backend category totals and rows.
         waste_payload = payload["waste"]
@@ -435,8 +445,10 @@ def test_multidomain_release_snapshot_privacy_checksum_and_publish(postgres_engi
             "private_data",
             "inlet_ph",
             "petrol_vehicle_count",
-            # Reference-only LPG metadata must never reach a public payload.
-            "lpg_weight_kg",
+            # Reference-only LPG metadata and the deprecated litre metric must
+            # never reach a public payload.
+            "lpg_cylinder_count",
+            "lpg_consumption_litres",
         ):
             assert forbidden not in serialized
 
@@ -618,7 +630,7 @@ def _frozen_calculation(
         "transport_petrol_emissions": "PETROL",
         "transport_diesel_emissions": "DIESEL",
         "dg_diesel_emissions": "DIESEL",
-        "lpg_emissions": "LPG",
+        "lpg_emissions": "LPG_KG",
         "grid_electricity_emissions": "GRID_ELECTRICITY",
     }[calculation_code]
     return CalculationResult(
@@ -673,7 +685,7 @@ def test_schema_1_4_publishes_governed_aggregates_and_backend_indicators(postgre
             managers[OperationalDomain.LPG],
             OperationalDomain.LPG,
             SubmissionStatus.APPROVED,
-            {"lpg_consumption_litres": 4},
+            {"lpg_weight_kg": 4},
             approved_by=admin,
         )
         energy = _submission(
@@ -740,8 +752,8 @@ def test_schema_1_4_publishes_governed_aggregates_and_backend_indicators(postgre
                     Decimal("3"), "L", Decimal("0.3"),
                 ),
                 _frozen_calculation(
-                    lpg, "lpg_emissions", "lpg_consumption_litres",
-                    Decimal("4"), "L", Decimal("0.4"),
+                    lpg, "lpg_emissions", "lpg_weight_kg",
+                    Decimal("4"), "kg", Decimal("0.4"),
                 ),
                 _frozen_calculation(
                     energy, "grid_electricity_emissions", "grid_total_kwh",
@@ -752,11 +764,12 @@ def test_schema_1_4_publishes_governed_aggregates_and_backend_indicators(postgre
         db.flush()
 
         payload = build_release_payload(db, period)
-        assert payload["schema_version"] == "1.4"
+        assert payload["schema_version"] == "1.5"
+        assert lpg_payload_blockers(payload) == []
         assert payload["energy"]["metrics"]["grid_ht_kwh"] == {"value": 10, "unit": "kWh"}  # type: ignore[index]
         assert payload["energy"]["metrics"]["grid_total_kwh"] == {"value": 30, "unit": "kWh"}  # type: ignore[index]
         assert payload["energy"]["metrics"]["renewable_on_campus_kwh"]["value"] == 50  # type: ignore[index]
-        assert payload["energy"]["metrics"]["renewable_total_kwh"]["value"] == 180  # type: ignore[index]
+        assert "renewable_total_kwh" not in payload["energy"]["metrics"]  # type: ignore[operator]
         assert payload["indicators"]["renewable_electricity_kwh"]["value"] == 110  # type: ignore[index]
         assert payload["indicators"]["total_electricity_consumption_kwh"]["value"] == 140  # type: ignore[index]
         assert payload["indicators"]["renewable_share_pct"]["value"] == 78.571428571429  # type: ignore[index]
@@ -779,6 +792,10 @@ def test_schema_1_4_publishes_governed_aggregates_and_backend_indicators(postgre
         assert payload["indicators"]["operational_ghg_tco2e"]["value"] == 1.5  # type: ignore[index]
         assert payload["indicators"]["operational_ghg_per_capita_kgco2e"]["value"] == 1.5  # type: ignore[index]
         assert payload["indicators"]["waste_per_capita_kg"]["value"] == 0.15  # type: ignore[index]
+        # Diverted from landfill is frozen with the release and equals the dry waste.
+        diverted = payload["indicators"]["waste_diverted_from_landfill_kg"]  # type: ignore[index]
+        dry = payload["waste"]["metrics"]["dry_waste_generated_kg"]  # type: ignore[index]
+        assert (diverted["status"], diverted["unit"], diverted["value"]) == ("available", "kg", dry["value"])
         legacy_avoided = payload["indicators"]["avoided_emissions_tco2e"]  # type: ignore[index]
         assert legacy_avoided["reason"] == "superseded_by_estimated_avoided_grid_emissions_tco2e"  # type: ignore[index]
         assert payload["indicators"]["renewable_share_percent"]["reason"] == "superseded_by_renewable_share_pct"  # type: ignore[index]

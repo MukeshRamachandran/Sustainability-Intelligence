@@ -22,6 +22,7 @@ REQUIRED_TABLES = {
         "review_actions",
         "emission_factor_sets",
         "emission_factors",
+        "calculation_parameters",
         "calculation_results",
     },
     "publication": {"public_releases", "public_release_payloads"},
@@ -32,7 +33,8 @@ PUBLIC_METRICS = {
     "transport_petrol_litres",
     "transport_diesel_litres",
     "dg_diesel_litres",
-    "lpg_consumption_litres",
+    "dg_generation_kwh",
+    "lpg_weight_kg",
     "grid_total_kwh",
     "grid_ht_kwh",
     "grid_commercial_kwh",
@@ -40,7 +42,6 @@ PUBLIC_METRICS = {
     "renewable_on_campus_kwh",
     "renewable_procured_kwh",
     "solar_water_heater_kwh",
-    "renewable_total_kwh",
     "water_twad_kl",
     "water_borewell_kl",
     "water_private_kl",
@@ -84,8 +85,8 @@ def test_roles_domains_and_metric_publication_are_seeded(postgres_engine: Engine
             .mappings()
             .all()
         )
-        # 46 original + 3 waste metrics (0009_waste_domain).
-        assert len(metrics) == 49
+        # 46 original + 3 waste metrics (0009_waste_domain) + DG generation (0015_dg_kwh_methodology).
+        assert len(metrics) == 50
         assert {row["code"] for row in metrics if row["publication_class"] == "public_aggregate"} == PUBLIC_METRICS
         internal = {row["code"] for row in metrics if row["publication_class"] == "internal_verification"}
         assert all(code.startswith(("inlet_", "outlet_", "stp_")) for code in internal)
@@ -98,8 +99,8 @@ def test_roles_domains_and_metric_publication_are_seeded(postgres_engine: Engine
             "dry_waste_generated_kg",
             "total_waste_generated_kg",
         }
-        # 0008_lpg_litre_governance places the K-COSMOS baseline LPG factor into
-        # the migration-seeded DRAFT set, on litres, exactly once.
+        # 0013_lpg_kg_governance_v2 replaces the 0008 draft-only litre LPG
+        # factor in the migration-seeded DRAFT set with LPG_KG on kg, once.
         seeded = (
             connection.execute(
                 text("""
@@ -114,16 +115,36 @@ def test_roles_domains_and_metric_publication_are_seeded(postgres_engine: Engine
             .mappings()
             .all()
         )
-        assert [row["code"] for row in seeded] == ["DIESEL", "GRID_ELECTRICITY", "LPG", "PETROL"]
-        lpg = next(row for row in seeded if row["code"] == "LPG")
-        assert lpg["factor_value"] == Decimal("1.5571000000")
-        assert lpg["activity_unit"] == "L"
+        assert [row["code"] for row in seeded] == ["DIESEL", "GRID_ELECTRICITY", "LPG_KG", "PETROL"]
+        lpg = next(row for row in seeded if row["code"] == "LPG_KG")
+        assert lpg["factor_value"] == Decimal("2.9800000000")
+        assert lpg["activity_unit"] == "kg"
         assert lpg["result_unit"] == "kgCO2e"
+        assert "institutional LPG kg calculation baseline" in lpg["source_reference"]
         # Every factor carries the baseline provenance, but the set stays a
         # draft with no effective date, so it cannot be activated accidentally.
         assert all(row["source_reference"] for row in seeded)
         assert lpg["status"] == "draft"
         assert lpg["effective_from"] is None
+        lpg_metrics = {
+            row["code"]: row
+            for row in connection.execute(
+                text("""
+                select code, canonical_unit, factor_code, required_for_complete, is_active,
+                       publication_class::text as publication_class
+                  from sustainability.metric_definitions where operational_domain = 'lpg'
+                """)
+            ).mappings()
+        }
+        assert lpg_metrics["lpg_weight_kg"]["factor_code"] == "LPG_KG"
+        assert lpg_metrics["lpg_weight_kg"]["canonical_unit"] == "kg"
+        assert lpg_metrics["lpg_weight_kg"]["required_for_complete"] is True
+        assert lpg_metrics["lpg_weight_kg"]["publication_class"] == "public_aggregate"
+        # The deprecated litre metric is kept for frozen audit records only.
+        assert lpg_metrics["lpg_consumption_litres"]["is_active"] is False
+        assert lpg_metrics["lpg_consumption_litres"]["factor_code"] is None
+        assert lpg_metrics["lpg_consumption_litres"]["publication_class"] == "admin_only"
+        assert lpg_metrics["lpg_cylinder_count"]["required_for_complete"] is False
 
 
 def test_owner_approved_population_reference_is_seeded_and_governed(postgres_engine: Engine) -> None:
@@ -236,15 +257,16 @@ def test_database_calculates_totals_and_preserves_null_zero(postgres_engine: Eng
         _value(connection, energy_submission, "renewable_on_campus_kwh", 0, "kWh")
         _value(connection, energy_submission, "renewable_procured_kwh", 0, "kWh")
         _value(connection, energy_submission, "solar_water_heater_kwh", 0, "kWh")
+        # 0016: the legacy trigger total (on-campus + procured + solar water
+        # heater) is no longer written; renewable electricity is derived by the
+        # backend from on-campus + procured only.
         assert (
-            float(
-                connection.scalar(
-                    text("""
-            select value from sustainability.submission_values
+            connection.scalar(
+                text("""
+            select count(*) from sustainability.submission_values
             where submission_id=:id and metric_code='renewable_total_kwh'
         """),
-                    {"id": energy_submission},
-                )
+                {"id": energy_submission},
             )
             == 0
         )

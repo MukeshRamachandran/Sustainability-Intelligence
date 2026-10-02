@@ -26,7 +26,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func, text
 
 from app.db.base import Base
 
@@ -145,6 +145,11 @@ class HistoricalMetricValue(Base):
         PGUUID(as_uuid=True), ForeignKey("history.metric_values.id", ondelete="RESTRICT")
     )
     notes: Mapped[str | None] = mapped_column(Text)
+    # False when the source reports only "<year> / to date": the value is
+    # owner-confirmed but its coverage end month is unknown (0014).
+    coverage_end_stated: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

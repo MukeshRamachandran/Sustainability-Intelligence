@@ -17,8 +17,9 @@ from app.models.identity import (
     User,
     UserRoleAssignment,
 )
-from app.models.publication import PublicRelease, PublicReleaseMetadata, PublicReleasePayload
+from app.models.publication import Certificate, PublicRelease, PublicReleaseMetadata, PublicReleasePayload
 from app.models.sustainability import (
+    CalculationParameter,
     CalculationResult,
     EmissionFactor,
     EmissionFactorSet,
@@ -34,7 +35,9 @@ from app.models.sustainability import (
 
 __all__ = [
     "AuditLog",
+    "CalculationParameter",
     "CalculationResult",
+    "Certificate",
     "EmissionFactor",
     "EmissionFactorSet",
     "EnvironmentIngestionRun",

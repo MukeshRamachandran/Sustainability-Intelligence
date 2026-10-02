@@ -3,7 +3,7 @@
   "version": 1,
   "domain": "energy",
   "priority": 1,
-  "source_reference": "apps/public-dashboard-final-staging/data/energy_master.csv",
+  "source_reference": "apps/public-dashboard/data/energy_master.csv",
   "parser": "wide_monthly",
   "description": "Final-staging energy workbook export: monthly grid connections, renewable electricity and solar water heater, Jan 2025 - Jun 2026.",
   "options": {

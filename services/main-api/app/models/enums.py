@@ -59,7 +59,14 @@ class FactorCode(StrEnum):
     PETROL = "PETROL"
     DIESEL = "DIESEL"
     GRID_ELECTRICITY = "GRID_ELECTRICITY"
+    # Legacy litre factor (kgCO2e/L). Kept only so retired factor sets and
+    # frozen litre-era calculations stay readable; new sets cannot use it.
     LPG = "LPG"
+    # Governed LPG factor on a weight basis (kgCO2e/kg), 0013_lpg_kg_governance_v2.
+    LPG_KG = "LPG_KG"
+
+
+LEGACY_FACTOR_CODES = frozenset({FactorCode.LPG})
 
 
 class ReleaseStatus(StrEnum):

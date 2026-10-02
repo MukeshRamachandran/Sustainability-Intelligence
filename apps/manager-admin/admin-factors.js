@@ -5,9 +5,10 @@
     { code: 'DIESEL', label: 'Diesel', unit: 'L' },
     { code: 'GRID_ELECTRICITY', label: 'Grid Electricity', unit: 'kWh' },
     // Optional mirrors the backend: CORE_FACTORS requires only petrol, diesel
-    // and grid, so a set still activates without LPG. The governed LPG unit is
-    // litres (0008_lpg_litre_governance).
-    { code: 'LPG', label: 'LPG (optional)', unit: 'L', optional: true }
+    // and grid, so a set still activates without LPG. LPG is governed on weight
+    // as LPG_KG (kgCO2e/kg, 0013_lpg_kg_governance_v2); the retired litre code
+    // LPG is rejected by the backend for any new or edited set.
+    { code: 'LPG_KG', label: 'LPG (optional)', unit: 'kg', optional: true }
   ];
   let sets = [];
   let selected = null;
@@ -34,7 +35,20 @@
       urlCell.append(url);
       row.append(name, valueCell, unit, sourceCell, urlCell);
       return row;
-    }));
+    }), ...legacyRows(factors));
+  }
+
+  /* A retired set may still hold a legacy factor (e.g. the litre LPG code).
+     It is shown read-only for audit and is never part of a write payload. */
+  function legacyRows(factors) {
+    const governed = new Set(definitions.map(definition => definition.code));
+    return factors.filter(factor => !governed.has(factor.code)).map(factor => {
+      const row = document.createElement('tr');
+      for (const value of [`${factor.code} (legacy, read-only)`, factor.factor_value, `${factor.result_unit}/${factor.activity_unit}`, factor.source_reference, factor.source_url]) {
+        const cell = document.createElement('td'); cell.textContent = text(value); row.append(cell);
+      }
+      return row;
+    });
   }
 
   function payload() {

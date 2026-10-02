@@ -170,6 +170,9 @@ def test_waste_totals_are_backend_authoritative_and_exact(postgres_engine: Engin
         assert Decimal(waste["dry_waste_generated_kg"]) == Decimal("176.000000")
         assert Decimal(waste["wet_waste_generated_kg"]) == Decimal("300.000000")
         assert Decimal(waste["total_waste_generated_kg"]) == Decimal("476.000000")
+        # Diverted from landfill is calculated (= dry waste), never entered.
+        assert Decimal(waste["waste_diverted_from_landfill_kg"]) == Decimal("176.000000")
+        assert waste["waste_per_capita_kg"] is None  # no population reference for this test year
         # Backend category totals, grouped from the material rows.
         by_category = {c["code"]: Decimal(c["quantity_kg"]) for c in waste["categories"]}
         assert by_category == {

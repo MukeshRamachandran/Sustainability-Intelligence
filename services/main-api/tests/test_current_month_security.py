@@ -76,7 +76,7 @@ def test_current_month_submit_once_and_historical_correction(
     previous, current, future = _three_periods(postgres_engine)
     manager = _account(postgres_engine, RoleCode.MANAGER, OperationalDomain.TRANSPORT)
     admin = _account(postgres_engine, RoleCode.ADMIN)
-    values = _values(postgres_engine, OperationalDomain.TRANSPORT, include_optional_zero=True)
+    values = _values(postgres_engine, OperationalDomain.TRANSPORT, include_optional_zero=True, period=current)
 
     with _client(postgres_engine, current) as manager_client:
         csrf = _login(manager_client, manager)
@@ -199,7 +199,7 @@ def test_current_period_create_is_enforced_for_all_manager_domains(
             )
         else:
             assert client.get(f"/api/manager/{domain.value}/current-period").json()["id"] == str(current.id)
-            values = _values(postgres_engine, domain)
+            values = _values(postgres_engine, domain, period=current)
             denied = client.post(
                 f"/api/manager/{domain.value}/submissions",
                 json={"reporting_period_id": str(previous.id), "remarks": None, "values": values},

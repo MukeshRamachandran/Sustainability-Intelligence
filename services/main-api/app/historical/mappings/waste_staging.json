@@ -3,7 +3,7 @@
   "version": 1,
   "domain": "waste",
   "priority": 1,
-  "source_reference": "apps/public-dashboard-final-staging/data/waste_master.csv",
+  "source_reference": "apps/public-dashboard/data/waste_master.csv",
   "parser": "year_columns",
   "description": "Waste inventory by material and wet/dry/total, one column per year (2025 annual; 2026 to date).",
   "sections": {
