@@ -10,6 +10,7 @@ reached through this helper.
 from __future__ import annotations
 
 import os
+import re
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -31,8 +32,16 @@ PUBLIC_ROUTES = frozenset(
         "/api/environment/latest",
         "/api/environment/history",
         "/api/environment/status",
+        # Read-only public certificate registry (published documents only).
+        "/api/public/certificates",
+        "/api/public/certificates/years",
     }
 )
+# A published certificate's file, addressed only by its UUID.
+CERTIFICATE_FILE_ROUTE = re.compile(
+    r"^/api/public/certificates/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/file$"
+)
+PASSTHROUGH_HEADERS = ("Content-Disposition", "X-Content-Type-Options")
 ROOT = Path(__file__).resolve().parent
 
 
@@ -49,6 +58,9 @@ class StagingHandler(SimpleHTTPRequestHandler):
                 self.send_response(response.status)
                 self.send_header("Content-Type", response.headers.get("Content-Type", "application/json"))
                 self.send_header("Cache-Control", "no-store")
+                for name in PASSTHROUGH_HEADERS:
+                    if response.headers.get(name):
+                        self.send_header(name, response.headers[name])
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
@@ -59,7 +71,7 @@ class StagingHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         route, _, query = self.path.partition("?")
-        if route in PUBLIC_ROUTES:
+        if route in PUBLIC_ROUTES or CERTIFICATE_FILE_ROUTE.fullmatch(route):
             self._proxy(route, query)
             return
         super().do_GET()

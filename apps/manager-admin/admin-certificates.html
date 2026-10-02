@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Certificates - MICROCOSM Portal</title><link rel="stylesheet" href="styles.css"></head>
+<body data-auth-role="microcosm_admin" data-login-page="admin-login.html">
+  <div class="app-container">
+    <aside class="sidebar"><div class="sidebar-header"><a href="admin-overview.html" class="sidebar-brand" style="display:flex;align-items:center;gap:10px;padding:4px 0;"><img src="kumaraguru-microcosm-logo.png" alt="MICROCOSM" style="height:auto;width:auto;max-height:48px;max-width:100%;"></a></div><nav class="sidebar-nav"><a href="admin-overview.html" class="nav-item">Admin Overview</a><a href="admin-queue.html" class="nav-item">Approval Queue</a><a href="admin-evidence.html" class="nav-item">Evidence Repository</a><a href="admin-certificates.html" class="nav-item active">Certificates</a><a href="admin-factors.html" class="nav-item">Emission Factors</a><a href="admin-preview.html" class="nav-item">Dashboard Preview</a><a href="admin-users.html" class="nav-item">Managers &amp; Access</a><a href="admin-audit.html" class="nav-item">Audit Log</a></nav></aside>
+    <main class="main-content">
+      <header class="topbar"><div class="topbar-left"><div class="current-period"><span>K-COSMOS</span><span>|</span><span>Administration</span></div></div><div class="topbar-right"><span class="user-badge">Admin</span><button class="btn btn-outline" id="logout-btn">Logout</button></div></header>
+      <div class="content-area">
+        <div class="mb-3 d-flex justify-between align-center"><div><h1>Certificates</h1><p>Public supporting documents. Upload creates a draft; a certificate is shown on the public dashboard only after you publish it.</p></div><button class="btn btn-primary" id="btn-new-certificate">Upload Certificate</button></div>
+        <div class="card mb-3" style="border-left:4px solid var(--warning);"><p style="margin:0;color:var(--text-dark);font-size:14px;"><strong>Documents only.</strong> A certificate's quantity is document metadata. It is never used in any waste, GHG or other sustainability figure.</p></div>
+        <form class="glass-card mb-3" id="certificate-filters"><div class="grid-3"><div class="form-group"><label class="form-label" for="filter-domain">Domain</label><select id="filter-domain" class="form-control"><option value="">All domains</option></select></div><div class="form-group"><label class="form-label" for="filter-year">Reporting year</label><select id="filter-year" class="form-control"><option value="">All years</option></select></div><div class="form-group"><label class="form-label" for="filter-status">Status</label><select id="filter-status" class="form-control"><option value="">All statuses</option><option value="DRAFT">Draft</option><option value="PUBLISHED">Published</option><option value="ARCHIVED">Archived</option></select></div></div></form>
+        <div class="glass-card"><div class="table-responsive"><table class="table"><thead><tr><th>Title</th><th>Domain</th><th>Reporting year</th><th>Received / disposal</th><th>Certificate date</th><th>Quantity</th><th>Status</th><th>Actions</th></tr></thead><tbody id="certificates-body"><tr><td colspan="8">Loading…</td></tr></tbody></table></div></div>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal-overlay" id="certificate-modal"><div class="modal-content" style="max-width:900px;max-height:90vh;overflow:auto;"><div class="modal-header"><h2 id="certificate-modal-title">Upload Certificate</h2><button class="btn-close" type="button" id="close-certificate-modal" aria-label="Close">&times;</button></div>
+    <form id="certificate-form">
+      <input type="hidden" id="certificate-id">
+      <div class="grid-3">
+        <div class="form-group"><label class="form-label" for="cert-domain">Domain</label><select id="cert-domain" class="form-control" required><option value="waste">Waste</option><option value="water">Water</option><option value="energy">Energy</option><option value="green">Green</option><option value="outreach">Outreach</option><option value="ghg">GHG</option></select></div>
+        <div class="form-group"><label class="form-label" for="cert-type">Certificate type</label><input id="cert-type" class="form-control" maxlength="200" required placeholder="E-Waste Disposal Certificate"></div>
+        <div class="form-group"><label class="form-label" for="cert-year">Reporting year</label><input id="cert-year" type="number" class="form-control" min="2000" max="2100" required></div>
+      </div>
+      <p class="text-muted" style="font-size:13px;margin-top:-6px;">The reporting year is <strong>not</strong> taken from the certificate date. Enter the year the activity belongs to: a certificate issued in January 2026 for waste received in November 2025 belongs to reporting year 2025.</p>
+      <div class="form-group"><label class="form-label" for="cert-title">Title</label><input id="cert-title" class="form-control" maxlength="300" required></div>
+      <div class="grid-3">
+        <div class="form-group"><label class="form-label" for="cert-issuer">Issuer</label><input id="cert-issuer" class="form-control" maxlength="300"></div>
+        <div class="form-group"><label class="form-label" for="cert-registration">Registration ID</label><input id="cert-registration" class="form-control" maxlength="100"></div>
+        <div class="form-group"><label class="form-label" for="cert-authorization">Authorization No</label><input id="cert-authorization" class="form-control" maxlength="100"></div>
+      </div>
+      <div class="grid-3">
+        <div class="form-group"><label class="form-label" for="cert-serial">Serial No</label><input id="cert-serial" class="form-control" maxlength="100"></div>
+        <div class="form-group"><label class="form-label" for="cert-date">Certificate date</label><input id="cert-date" type="date" class="form-control"></div>
+        <div class="form-group"><label class="form-label" for="cert-received">Received / disposal date</label><input id="cert-received" type="date" class="form-control"></div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label" for="cert-invoice">Invoice No</label><input id="cert-invoice" class="form-control" maxlength="200"></div>
+        <div class="form-group"><label class="form-label" for="cert-manifest">Manifest document No</label><input id="cert-manifest" class="form-control" maxlength="200"></div>
+      </div>
+      <div class="grid-3">
+        <div class="form-group"><label class="form-label" for="cert-quantity">Quantity</label><input id="cert-quantity" type="number" class="form-control" min="0" step="0.001"></div>
+        <div class="form-group"><label class="form-label" for="cert-unit">Unit</label><input id="cert-unit" class="form-control" maxlength="20" placeholder="kg"></div>
+        <div class="form-group"><label class="form-label" for="cert-order">Display order</label><input id="cert-order" type="number" class="form-control" min="0" max="100000" value="0"></div>
+      </div>
+      <div class="form-group"><label class="form-label" for="cert-notes">Notes (internal, not public)</label><textarea id="cert-notes" class="form-control" maxlength="4000" rows="2"></textarea></div>
+      <div class="form-group" id="cert-file-group"><label class="form-label" for="cert-file">File (PDF, PNG or JPG, up to 10 MB)</label><input id="cert-file" type="file" class="form-control" accept="application/pdf,image/png,image/jpeg"></div>
+      <p class="text-muted" id="cert-file-note" style="font-size:13px;display:none;">The file of an existing certificate cannot be replaced. Archive it and upload the new document instead.</p>
+      <div class="d-flex justify-between align-center" style="margin-top:12px;"><span class="text-muted" id="certificate-form-status" role="status"></span><div><button type="button" class="btn btn-outline" id="cancel-certificate">Cancel</button> <button type="submit" class="btn btn-primary" id="save-certificate">Save Draft</button></div></div>
+    </form>
+  </div></div>
+
+  <div class="modal-overlay" id="preview-modal"><div class="modal-content" style="max-width:1000px;max-height:92vh;overflow:auto;"><div class="modal-header"><h2 id="preview-title">Preview</h2><button class="btn-close" type="button" id="close-preview-modal" aria-label="Close">&times;</button></div><div id="preview-body" style="text-align:center;"></div><p style="margin-top:12px;"><a id="preview-open" target="_blank" rel="noopener">Open document in a new tab</a></p></div></div>
+
+  <script src="auth-client.js"></script><script src="role-auth.js"></script><script src="outreach-api.js"></script><script src="app.js"></script><script src="admin-certificates.js"></script>
+</body>
+</html>

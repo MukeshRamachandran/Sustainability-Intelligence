@@ -16,6 +16,14 @@ R3  A reported ANNUAL/YTD aggregate is compared with the sum of the genuine
 R4  A value whose source does not state its coverage stays UNVERIFIED.
 R5  Only VERIFIED values from the highest-priority agreeing source become
     AUTHORITATIVE; agreeing lower-priority copies stay SOURCE_REPORTED.
+    A reference-only value (mapping ``reference_only``) is never AUTHORITATIVE.
+An advisory internal check (``advisory``) never blocks: a failure becomes a
+quality note on the affected values, which keep their verification status.
+C1  An owner-approved coverage confirmation (resolutions.json
+    ``coverage_confirmations``) turns a value that R4 left UNVERIFIED into a
+    VERIFIED one. When the source does not state the end month, the value
+    keeps ``coverage_end_stated = False`` so it is never shown with a guessed
+    month range. CONFLICT and REJECTED values are never confirmed this way.
 """
 
 from __future__ import annotations
@@ -54,6 +62,9 @@ class PlannedValue:
     verification_status: str = "VERIFIED"
     authority_status: str = "SOURCE_REPORTED"
     notes: list[str] = field(default_factory=list)
+    coverage_end_stated: bool = True
+    # The owner-approved coverage confirmation applied to this value (C1), if any.
+    confirmation: dict[str, Any] | None = None
 
     @property
     def key(self) -> tuple[PeriodKey, str, str]:
@@ -135,7 +146,74 @@ def _resolution_index(resolutions: list[dict[str, Any]]) -> dict[tuple[str, str,
     return index
 
 
-def reconcile(sources: list[LoadedSource], resolutions: list[dict[str, Any]]) -> ReconciliationPlan:
+COVERAGE_CONFIRMATION_FIELDS = (
+    "id",
+    "mapping_code",
+    "granularity",
+    "coverage_start",
+    "coverage_end",
+    "domain",
+    "metric_codes",
+    "reason",
+    "approved_by",
+    "approved_at",
+)
+
+
+def _confirmation_index(
+    confirmations: list[dict[str, Any]],
+) -> dict[tuple[str, str, str, str, str, str], dict[str, Any]]:
+    index = {}
+    for entry in confirmations:
+        missing = [name for name in COVERAGE_CONFIRMATION_FIELDS if entry.get(name) in (None, "", [])]
+        if missing or not isinstance(entry.get("coverage_end_stated"), bool):
+            raise ValueError(f"coverage confirmation is missing {missing or ['coverage_end_stated']}: {entry}")
+        for metric in entry["metric_codes"]:
+            index[
+                (
+                    entry["mapping_code"],
+                    entry["granularity"],
+                    entry["coverage_start"],
+                    entry["coverage_end"],
+                    entry["domain"],
+                    metric,
+                )
+            ] = entry
+    return index
+
+
+def _apply_coverage_confirmations(
+    planned: list[PlannedValue], confirmations: list[dict[str, Any]]
+) -> None:
+    index = _confirmation_index(confirmations)
+    for value in planned:
+        period = value.observation.period
+        entry = index.get(
+            (
+                value.source.code,
+                period.granularity,
+                period.coverage_start.isoformat(),
+                period.coverage_end.isoformat(),
+                value.observation.domain,
+                value.observation.metric_code,
+            )
+        )
+        if entry is None or value.verification_status != "UNVERIFIED":
+            continue
+        value.verification_status = "VERIFIED"
+        value.coverage_end_stated = entry["coverage_end_stated"]
+        value.confirmation = entry
+        value.notes.append(
+            f"coverage confirmed by owner ({entry['id']}, {entry['approved_by']}, {entry['approved_at']})"
+            + ("" if entry["coverage_end_stated"] else "; coverage end month not stated in the source")
+        )
+
+
+def reconcile(
+    sources: list[LoadedSource],
+    resolutions: list[dict[str, Any]],
+    coverage_confirmations: list[dict[str, Any]] | None = None,
+) -> ReconciliationPlan:
     now = datetime.now(UTC)
     resolved = _resolution_index(resolutions)
     planned = [
@@ -158,6 +236,16 @@ def reconcile(sources: list[LoadedSource], resolutions: list[dict[str, Any]]) ->
     for source in sources:
         for check in source.parsed.checks:
             if check.passed:
+                continue
+            if check.advisory:
+                note = (
+                    f"quality note (advisory, not used in any calculation): {check.description}: "
+                    f"source states {check.expected}, arithmetic gives {check.actual}"
+                )
+                for period, domain, metric in check.affects:
+                    for value in by_key.get((period, domain, metric), []):
+                        if value.source is source:
+                            value.notes.append(note)
                 continue
             for period, domain, metric in check.affects:
                 for value in by_key.get((period, domain, metric), []):
@@ -338,9 +426,14 @@ def reconcile(sources: list[LoadedSource], resolutions: list[dict[str, Any]]) ->
                 conflict.detail += " (some monthly values are themselves contested)"
         conflicts.append(conflict)
 
-    # R4 / R5 - authority.
+    # C1 - owner-confirmed coverage, then R4 / R5 - authority.
+    _apply_coverage_confirmations(planned, coverage_confirmations or [])
     for values in by_key.values():
-        verified = [value for value in values if value.verification_status == "VERIFIED"]
+        verified = [
+            value
+            for value in values
+            if value.verification_status == "VERIFIED" and not value.observation.reference_only
+        ]
         if not verified:
             continue
         chosen = min(verified, key=lambda item: item.source.priority)

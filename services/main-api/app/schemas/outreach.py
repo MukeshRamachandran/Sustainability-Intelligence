@@ -58,9 +58,6 @@ class OutreachProgrammeWrite(BaseModel):
     industrial_experts: OptionalCount
     researchers_experts: OptionalCount
     government_participants: OptionalCount
-    male_participants: OptionalCount
-    female_participants: OptionalCount
-    other_not_disclosed_participants: OptionalCount
     saplings_planted: OptionalCount
     waste_collected_kg: Decimal | None = Field(default=None, ge=0, max_digits=12, decimal_places=2)
     species_identified_count: OptionalCount
@@ -85,32 +82,11 @@ class OutreachProgrammeWrite(BaseModel):
         return value or None
 
     @model_validator(mode="after")
-    def validate_theme_and_gender(self) -> "OutreachProgrammeWrite":
+    def validate_theme(self) -> "OutreachProgrammeWrite":
         if self.theme == "other" and not self.other_theme:
             raise ValueError("other_theme is required when theme is other")
         if self.theme != "other":
             self.other_theme = None
-        participant_total = sum(
-            value or 0
-            for value in (
-                self.school_students,
-                self.college_students,
-                self.farmers_agriculture,
-                self.industrial_experts,
-                self.researchers_experts,
-                self.government_participants,
-            )
-        )
-        gender_total = sum(
-            value or 0
-            for value in (
-                self.male_participants,
-                self.female_participants,
-                self.other_not_disclosed_participants,
-            )
-        )
-        if gender_total > participant_total:
-            raise ValueError("gender participant count cannot exceed total participants")
         return self
 
 
@@ -144,9 +120,6 @@ class OutreachProgrammeResponse(BaseModel):
     researchers_experts: int | None
     government_participants: int | None
     participant_total: int
-    male_participants: int | None
-    female_participants: int | None
-    other_not_disclosed_participants: int | None
     saplings_planted: int | None
     waste_collected_kg: Decimal | None
     species_identified_count: int | None

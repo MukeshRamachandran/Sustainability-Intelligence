@@ -1,11 +1,14 @@
 {
   "code": "lpg_staging",
-  "version": 1,
+  "version": 2,
   "domain": "lpg",
   "priority": 1,
   "source_reference": "apps/public-dashboard-final-staging/data/lpg_master.csv",
   "parser": "long_monthly",
-  "description": "LPG monthly litres, Jan - Dec 2025 (no 2026 rows).",
+  "description": "LPG monthly weight in kg, Jan - Dec 2025 (no 2026 rows). The source column is headed 'consumption_litre', but the project owner confirmed on 2026-09-30 that its values are kilograms. v1 normalized them as lpg_consumption_litres / L; v2 reinterprets the same source bytes as lpg_weight_kg / kg with no numeric conversion.",
+  "reinterprets": {
+    "unit_correction": "lpg-2025-source-values-are-kg"
+  },
   "options": {
     "year_column": "year",
     "month_column": "month",
@@ -13,8 +16,8 @@
   },
   "categories": {
     "_": {
-      "metric_code": "lpg_consumption_litres",
-      "unit": "L"
+      "metric_code": "lpg_weight_kg",
+      "unit": "kg"
     }
   }
 }

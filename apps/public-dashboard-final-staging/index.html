@@ -21,7 +21,7 @@
   <script src="vendor/chartjs-chart-treemap.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
   <script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
-  <link rel="stylesheet" href="styles.css?v=27">
+  <link rel="stylesheet" href="styles.css?v=29">
   <link rel="stylesheet" href="walkthrough.css?v=14">
   <link rel="stylesheet" href="mobile.css?v=1">
 </head>
@@ -118,6 +118,7 @@
             </div>
           </div>
         </div>
+        <div class="bal-partial-note" id="balPartialNote" aria-live="polite"></div>
         <div class="bal-footer"
           style="font-size: 11px; color: var(--muted, #8a988f); margin-top: auto; padding-top: 12px;">
           *Operational GHG covers the governed Scope 1 and Scope 2 boundary only. Scope 3 is not included.
@@ -205,7 +206,7 @@
         <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px;">
           <div>
             <h3>Emission Profile</h3>
-            <p class="hint">Split of emissions produced by all factors.</p>
+            <p class="hint">Split of emissions produced by all factors<span id="ghgProfilePeriod"></span>.</p>
           </div>
           <div class="ghg-toggles"
             style="display: flex; gap: 4px; background: var(--surface2); padding: 4px; border-radius: 8px;">
@@ -315,6 +316,7 @@
       <div class="card" style="display: flex; flex-direction: column;">
         <div class="chart-header">
           <h2>Wet <span style="font-size: 0.6em; color: var(--muted); vertical-align: middle;">vs</span> Dry Waste</h2>
+          <p class="hint">Dry waste = diverted from landfill<span id="wasteContext"></span></p>
         </div>
         <div style="flex: 1; display: flex; align-items: center; justify-content: center;">
           <div class="chart" style="width: 100%; height: 280px;"><canvas id="wastePieChartCanvas"></canvas></div>
@@ -322,14 +324,23 @@
       </div>
       <div class="card" style="display: flex; flex-direction: column;">
         <div class="chart-header" style="display: flex; justify-content: space-between; align-items: center;">
-          <h2>Waste Breakdown</h2>
+          <h2>Waste Material Breakdown</h2>
+          <p class="hint">Dry waste by material, kg<span id="wasteMaterialContext"></span></p>
         </div>
-        <div class="ep-src-breakdown" style="flex: 1; position: relative; min-height: 380px;">
-          <div class="chart" style="position: absolute; inset: 0; top: 0; min-height: 380px;"><canvas
-              id="wasteTreemapCanvas"></canvas></div>
-        </div>
+        <div class="chart" id="wasteMaterialBox" style="position: relative; width: 100%; height: 380px;"><canvas
+            id="wasteMaterialChartCanvas"></canvas></div>
       </div>
     </section>
+
+    <!-- Supporting documents. Years and certificates are loaded from the public certificate API. -->
+    <section class="card cert-entry" id="wasteCertEntry">
+      <div>
+        <h2>Certificates</h2>
+        <p class="hint">View official environmental disposal and compliance documents related to Waste Management.</p>
+      </div>
+      <button type="button" class="cert-btn" id="wasteCertOpen">View Certificates →</button>
+    </section>
+    <section class="cert-section" id="wasteCertificates" hidden></section>
   </main>
 
   <!-- ===================== WATER ===================== -->
@@ -354,7 +365,7 @@
         <div class="chart-header">
           <h2>Water Source Breakdown</h2>
         </div>
-        <p class="hint">Share of consumption by source</p>
+        <p class="hint">Share of consumption by source<span id="waterSourcePeriod"></span></p>
         <div class="chart"><canvas id="waterSourceChartCanvas"></canvas></div>
       </div>
     </section>
@@ -440,35 +451,21 @@
       <section class="kpi-grid" id="outreachKpis" style="grid-template-columns: repeat(3, 1fr);"></section>
     </div>
 
-    <section class="row g3" id="outreachChartsRow" style="margin-top: 24px;">
+    <section class="row g2" id="outreachChartsRow" style="margin-top: 24px;">
       <div class="card">
         <div class="chart-header">
-          <h2>Participants by Category</h2>
+          <h2 id="outreachAudienceTitle">Participants by Category</h2>
         </div>
-        <p class="hint">Approx. reach per audience - hover a slice for the figure</p>
+        <p class="hint" id="outreachAudienceHint">Approx. reach per audience - hover a slice for the figure</p>
         <div class="chart" style="height: 340px;"><canvas id="outreachAudienceChart"></canvas></div>
-      </div>
-      <div class="card">
-        <div class="chart-header">
-          <h2>Gender Breakdown</h2>
-        </div>
-        <p class="hint">Participant gender split</p>
-        <div class="chart" id="outreachGenderWrap" style="height: 340px; display: none;">
-          <canvas id="outreachGenderChart"></canvas>
-        </div>
-        <div class="chart-empty" id="outreachGenderEmpty"
-          style="height: 340px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; color: var(--faint);">
-          <div style="font-size: 13px; font-weight: 600; color: var(--muted);">No gender-disaggregated data yet</div>
-          <div style="font-size: 12px; max-width: 260px;">The active published release does not include a gender
-            split for this reporting period.</div>
-        </div>
       </div>
       <div class="card">
         <div class="chart-header">
           <h2>Thematic Areas Covered</h2>
         </div>
-        <p class="hint">Programmes delivered per theme - hover a slice for the count</p>
+        <p class="hint" id="outreachThematicHint">Programmes delivered per theme - hover a slice for the count</p>
         <div class="chart" style="height: 340px;"><canvas id="outreachThematicChart"></canvas></div>
+        <p class="hint" id="outreachThematicNote" style="margin-top: 8px;"></p>
       </div>
     </section>
   </main>
@@ -680,8 +677,9 @@
   </aside>
 
   <script src="public-api.js?v=3"></script>
-  <script src="public-data-loader.js?v=9"></script>
-  <script src="app.js?v=39"></script>
+  <script src="public-data-loader.js?v=13"></script>
+  <script src="app.js?v=45"></script>
+  <script src="certificates.js?v=1"></script>
   <script src="weather.js?v=7"></script>
   <script src="vendor/gsap-scrolltrigger.min.js"></script>
   <script src="walkthrough.js?v=20"></script>

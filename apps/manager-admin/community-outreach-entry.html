@@ -551,51 +551,6 @@
                 </div>
               </div>
 
-              <!-- SECTION 4 — OPTIONAL GENDER BREAKDOWN -->
-              <div class="glass-card mb-3">
-                <div class="section-header">
-                  <h3>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                    Gender Breakdown
-                  </h3>
-                  <span class="badge badge-draft">Optional</span>
-                </div>
-                <p class="section-subtitle">Optional — fill only when gender-disaggregated data is available.</p>
-
-                <div class="grid-3 mb-2">
-                  <div class="form-group">
-                    <label class="form-label" for="gender-male">Male Participants</label>
-                    <input type="number" class="form-control gender-input" id="gender-male" min="0" placeholder="0">
-                  </div>
-
-                  <div class="form-group">
-                    <label class="form-label" for="gender-female">Female Participants</label>
-                    <input type="number" class="form-control gender-input" id="gender-female" min="0" placeholder="0">
-                  </div>
-
-                  <div class="form-group">
-                    <label class="form-label" for="gender-other">Other / Not Disclosed</label>
-                    <input type="number" class="form-control gender-input" id="gender-other" min="0" placeholder="0">
-                  </div>
-                </div>
-
-                <div class="calc-preview-bar" style="background: rgba(23, 162, 184, 0.06); border-color: rgba(23, 162, 184, 0.2);">
-                  <div class="calc-preview-label" style="color: #0c5460;">
-                    <span>Gender Total <small style="font-weight: 400; color: var(--text-muted);">(Calculated Preview)</small></span>
-                  </div>
-                  <div class="d-flex align-center gap-2">
-                    <input type="number" class="form-control" id="gender-total" readonly value="0" style="width: 130px; text-align: right; font-weight: 700; font-size: 16px; color: #0c5460; background: #ffffff;">
-                  </div>
-                </div>
-
-                <div id="gender-helper-text" style="font-size: 12.5px; color: var(--text-muted); margin-top: 8px; font-style: italic;">
-                  No gender-disaggregated data recorded.
-                </div>
-                <div id="gender-mismatch-warning" class="invalid-feedback" style="margin-top: 6px; font-weight: 600;">
-                  ⚠️ Note: Gender total exceeds total participants count.
-                </div>
-              </div>
-
               <!-- SECTION 5 — OUTREACH IMPACT -->
               <div class="glass-card mb-3">
                 <div class="section-header">
@@ -843,11 +798,6 @@
                 <span class="summary-val" style="font-size: 16px; color: var(--primary);" id="summary-total-participants">0</span>
               </div>
 
-              <div class="summary-item">
-                <span class="summary-label">Gender Breakdown:</span>
-                <span class="summary-val" id="summary-gender-preview" style="font-size: 12px;">Not recorded</span>
-              </div>
-
               <hr style="border:none; border-top:1px solid #eee; margin: 12px 0;">
 
               <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.5px;">Outreach Deliverables</div>
@@ -966,15 +916,6 @@
       const partTotal = document.getElementById('participant-total');
       const participantInputs = document.querySelectorAll('.participant-input');
 
-      // Gender Inputs
-      const genderMale = document.getElementById('gender-male');
-      const genderFemale = document.getElementById('gender-female');
-      const genderOther = document.getElementById('gender-other');
-      const genderTotal = document.getElementById('gender-total');
-      const genderInputs = document.querySelectorAll('.gender-input');
-      const genderHelperText = document.getElementById('gender-helper-text');
-      const genderMismatchWarning = document.getElementById('gender-mismatch-warning');
-
       // Impact Inputs
       const saplingsInput = document.getElementById('saplings-planted');
       const wasteInput = document.getElementById('waste-collected-kg');
@@ -1009,7 +950,6 @@
       const sumPartner = document.getElementById('summary-partner');
       const sumLocation = document.getElementById('summary-location');
       const sumTotalParts = document.getElementById('summary-total-participants');
-      const sumGenderPreview = document.getElementById('summary-gender-preview');
       const sumSaplings = document.getElementById('summary-saplings');
       const sumWaste = document.getElementById('summary-waste');
       const sumSpecies = document.getElementById('summary-species');
@@ -1176,34 +1116,6 @@
         return total;
       }
 
-      // Calculate Gender Breakdown
-      function calculateGender() {
-        let m = parseFloat(genderMale.value) || 0;
-        let f = parseFloat(genderFemale.value) || 0;
-        let o = parseFloat(genderOther.value) || 0;
-        const hasData = (genderMale.value !== '' || genderFemale.value !== '' || genderOther.value !== '');
-        
-        const gTotal = m + f + o;
-        genderTotal.value = gTotal;
-
-        if (!hasData || gTotal === 0) {
-          genderHelperText.textContent = 'No gender-disaggregated data recorded.';
-          genderMismatchWarning.style.display = 'none';
-          sumGenderPreview.textContent = 'Not recorded';
-        } else {
-          genderHelperText.textContent = `Recorded: ${m} Male, ${f} Female, ${o} Other/Not Disclosed`;
-          sumGenderPreview.textContent = `M: ${m} | F: ${f} | O: ${o} (Total: ${gTotal})`;
-          
-          const totalParts = parseFloat(partTotal.value) || 0;
-          if (totalParts > 0 && gTotal > totalParts) {
-            genderMismatchWarning.style.display = 'block';
-          } else {
-            genderMismatchWarning.style.display = 'none';
-          }
-        }
-        return gTotal;
-      }
-
       // Update Live Summary Preview
       function updateSummaryPreview() {
         const progName = progNameInput.value.trim() || '—';
@@ -1233,7 +1145,6 @@
         const totalP = calculateParticipants();
         sumTotalParts.textContent = totalP.toLocaleString();
 
-        calculateGender();
 
         sumSaplings.textContent = (parseFloat(saplingsInput.value) || 0).toLocaleString();
         sumWaste.textContent = (parseFloat(wasteInput.value) || 0).toFixed(2);
@@ -1252,7 +1163,7 @@
       const reactiveElements = [
         yearSelect, monthSelect, progDateInput, progNameInput, progThemeSelect,
         otherThemeInput, partnerInput, locationInput, descInput,
-        ...participantInputs, ...genderInputs, ...impactInputs,
+        ...participantInputs, ...impactInputs,
         wasteInput, speciesCountInput, speciesNotesInput, remarksInput
       ];
 

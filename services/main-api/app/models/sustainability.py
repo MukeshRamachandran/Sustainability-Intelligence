@@ -292,6 +292,9 @@ class OutreachProgramme(Base):
             persisted=True,
         ),
     )
+    # LEGACY / AUDIT ONLY. Outreach is no longer reported by gender: these three
+    # columns are never written by new submissions, never aggregated and never
+    # published. They are kept so older programme rows stay intact.
     male_participants: Mapped[int | None] = mapped_column(Integer)
     female_participants: Mapped[int | None] = mapped_column(Integer)
     other_not_disclosed_participants: Mapped[int | None] = mapped_column(Integer)
@@ -412,6 +415,29 @@ class EmissionFactor(Base):
     notes: Mapped[str | None] = mapped_column(Text)
 
 
+class CalculationParameter(Base):
+    """Governed, effective-dated conversion parameter that is not an emission factor
+    (for example DG specific fuel consumption, L/kWh). Append-only: a change is a
+    new row with a later ``effective_from``."""
+
+    __tablename__ = "calculation_parameters"
+    __table_args__ = (
+        UniqueConstraint("code", "effective_from", name="uq_calculation_parameter_code_effective"),
+        CheckConstraint("parameter_value >= 0", name="calculation_parameter_non_negative"),
+        CheckConstraint("length(trim(source_reference)) > 0", name="calculation_parameter_source_required"),
+        {"schema": "sustainability"},
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    code: Mapped[str] = mapped_column(String(80), nullable=False)
+    parameter_value: Mapped[Decimal] = mapped_column(Numeric(20, 10), nullable=False)
+    unit: Mapped[str] = mapped_column(String(40), nullable=False)
+    effective_from: Mapped[date] = mapped_column(Date, nullable=False)
+    source_reference: Mapped[str] = mapped_column(Text, nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class CalculationResult(Base):
     __tablename__ = "calculation_results"
     __table_args__ = (
@@ -450,4 +476,7 @@ class CalculationResult(Base):
     result_value: Mapped[Decimal | None] = mapped_column(Numeric(20, 6))
     result_unit: Mapped[str | None] = mapped_column(String(40))
     formula_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    # Frozen derivation behind a result whose activity is derived from another
+    # source (kWh-based DG: source kWh, SFC applied, derived litres). 0015.
+    derivation: Mapped[dict[str, object] | None] = mapped_column(JSONB)
     calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     ALLOWED_EVIDENCE_TYPES: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["application/pdf", "image/png", "image/jpeg"]
     )
+    # Public certificate documents: their own root, never the evidence volumes or the database.
+    CERTIFICATE_STORAGE_ROOT: Path = Path(".local/certificates")
     LOGIN_MAX_FAILURES: int = Field(default=5, ge=3, le=20)
     LOGIN_LOCK_MINUTES: int = Field(default=15, ge=1, le=1440)
     PASSWORD_MIN_LENGTH: int = Field(default=12, ge=12, le=128)

@@ -16,6 +16,8 @@ from sqlalchemy.orm import Session
 
 from app.models.enums import OperationalDomain
 from app.models.sustainability import (
+    InstitutionalPopulationReference,
+    ReportingPeriod,
     Submission,
     SubmissionValue,
     WasteCategory,
@@ -30,6 +32,7 @@ from app.schemas.waste import (
     WasteItemWrite,
     WasteSummaryResponse,
 )
+from app.services import sustainability_formulas as formulas
 
 WET_METRIC = "wet_waste_generated_kg"
 DRY_METRIC = "dry_waste_generated_kg"
@@ -200,10 +203,16 @@ def summary(db: Session, submission: Submission) -> WasteSummaryResponse:
              "quantity_kg": Decimal("0")},
         )
         bucket["quantity_kg"] = bucket["quantity_kg"] + item.quantity_kg  # type: ignore[operator]
+    period = db.get(ReportingPeriod, submission.reporting_period_id)
+    reference = db.get(InstitutionalPopulationReference, period.year) if period is not None else None
+    per_person = formulas.waste_per_capita_kg(total, reference.population if reference is not None else None)
+    diverted = formulas.waste_diverted_from_landfill_kg(dry)
     return WasteSummaryResponse(
         wet_waste_generated_kg=wet,
         dry_waste_generated_kg=dry,
         total_waste_generated_kg=total.quantize(QUANTUM),
+        waste_diverted_from_landfill_kg=(diverted if diverted is not None else Decimal("0")).quantize(QUANTUM),
+        waste_per_capita_kg=None if per_person is None else per_person.quantize(QUANTUM),
         items=items,
         categories=[
             WasteCatalogCategory(

@@ -97,15 +97,6 @@ def aggregate_approved_outreach(
         for item in programmes
         if item.partner_organisation and item.partner_organisation.strip()
     }
-    gender_available = any(
-        value is not None
-        for item in programmes
-        for value in (
-            item.male_participants,
-            item.female_participants,
-            item.other_not_disclosed_participants,
-        )
-    )
     theme_counts = Counter(item.theme for item in programmes if item.theme in THEMES)
     return {
         "total_programs": len(programmes),
@@ -122,12 +113,6 @@ def aggregate_approved_outreach(
             "industrial_experts": total("industrial_experts"),
             "researchers_experts": total("researchers_experts"),
             "government": total("government_participants"),
-        },
-        "gender": {
-            "available": gender_available,
-            "male": total("male_participants") if gender_available else None,
-            "female": total("female_participants") if gender_available else None,
-            "other_not_disclosed": total("other_not_disclosed_participants") if gender_available else None,
         },
         "themes": {theme: theme_counts[theme] for theme in THEMES},
     }

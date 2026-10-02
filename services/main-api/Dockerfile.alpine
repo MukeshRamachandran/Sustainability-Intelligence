@@ -1,0 +1,38 @@
+# CANDIDATE - Alpine variant of Dockerfile. Not used by compose.yaml.
+# Only the operating-system layer differs from Dockerfile:
+#   * base image python:3.12.11-slim-bookworm -> python:3.12.11-alpine3.22 (same Python)
+#   * groupadd/useradd -> addgroup/adduser (same uid/gid 10001, same home)
+#   * tzdata installed: Alpine ships no zone database and the app uses zoneinfo
+#   * constraints.alpine.txt pins every package to the version in the current image
+# Application source, command, port, user and environment contract are unchanged.
+# Every dependency installs from a prebuilt wheel, so no compiler or build stage is needed.
+FROM python:3.12.11-alpine3.22
+
+ARG INSTALL_DEV=false
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+RUN apk add --no-cache tzdata \
+    && addgroup -S -g 10001 microcosm \
+    && adduser -S -D -H -u 10001 -G microcosm -h /app microcosm \
+    && mkdir -p /data/evidence/quarantine /data/evidence/clean /app/certificate-storage \
+    && chown -R microcosm:microcosm /app /data/evidence
+
+COPY pyproject.toml README.md constraints.alpine.txt ./
+COPY app ./app
+COPY alembic ./alembic
+COPY alembic.ini ./
+COPY tests ./tests
+
+RUN pip install --upgrade "pip==25.2" \
+    && if [ "$INSTALL_DEV" = "true" ]; then pip install --only-binary=:all: -c constraints.alpine.txt ".[dev]"; else pip install --only-binary=:all: -c constraints.alpine.txt .; fi
+
+USER microcosm
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]

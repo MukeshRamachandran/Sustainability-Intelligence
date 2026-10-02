@@ -25,6 +25,7 @@ from app.schemas.emission_factors import (
     FactorSetResponse,
     FactorSetWrite,
 )
+from app.services import dg_methodology as dg
 from app.services import sustainability_formulas as formulas
 
 CORE_FACTORS = {FactorCode.PETROL, FactorCode.DIESEL, FactorCode.GRID_ELECTRICITY}
@@ -32,19 +33,24 @@ EXPECTED_UNITS = {
     FactorCode.PETROL: "L",
     FactorCode.DIESEL: "L",
     FactorCode.GRID_ELECTRICITY: "kWh",
+    # Legacy: only a retired set can still hold it (writes reject the code).
     FactorCode.LPG: "L",
+    FactorCode.LPG_KG: "kg",
 }
-# The governed activity metric for each calculation. LPG is litre-based
-# (0008_lpg_litre_governance); lpg_weight_kg is reference metadata only and
-# must never appear here.
+# The governed activity metric for each calculation. LPG is weight-based
+# (0013_lpg_kg_governance_v2): lpg_weight_kg x LPG_KG. The deprecated
+# litre metric is not an activity and must never appear here.
 CALCULATION_CODES = {
     "transport_petrol_litres": "transport_petrol_emissions",
     "transport_diesel_litres": "transport_diesel_emissions",
     "dg_diesel_litres": "dg_diesel_emissions",
     "grid_total_kwh": "grid_electricity_emissions",
-    "lpg_consumption_litres": "lpg_emissions",
+    "lpg_weight_kg": "lpg_emissions",
 }
 FORMULA_VERSION = "activity_x_factor_kgco2e_v1"
+# DG from the governed SFC's effective date: generation (kWh) x SFC -> derived
+# litres x DIESEL factor (0015_dg_kwh_methodology).
+DG_KWH_FORMULA_VERSION = "dg_kwh_x_sfc_x_factor_kgco2e_v1"
 EDITABLE_STATUSES = {SubmissionStatus.DRAFT, SubmissionStatus.CORRECTION_REQUESTED}
 
 
@@ -147,13 +153,18 @@ def applicable_factor_set(db: Session, period: ReportingPeriod) -> EmissionFacto
     )
 
 
-def _unavailable(submission: Submission, reason: str) -> list[CalculationResponse]:
+def _unavailable(
+    submission: Submission, reason: str, dg_metric: str = dg.DG_LITRES_METRIC
+) -> list[CalculationResponse]:
     if submission.domain.value == "transport":
-        codes = list(CALCULATION_CODES.items())[:3]
+        codes = [
+            (dg_metric if calculation == dg.DG_EMISSIONS else metric, calculation)
+            for metric, calculation in list(CALCULATION_CODES.items())[:3]
+        ]
     elif submission.domain.value == "energy":
         codes = [("grid_total_kwh", CALCULATION_CODES["grid_total_kwh"])]
     elif submission.domain.value == "lpg":
-        codes = [("lpg_consumption_litres", CALCULATION_CODES["lpg_consumption_litres"])]
+        codes = [("lpg_weight_kg", CALCULATION_CODES["lpg_weight_kg"])]
     else:
         return []
     return [
@@ -174,6 +185,17 @@ def _unavailable_with_activity(
             select(SubmissionValue).where(SubmissionValue.submission_id == submission.id)
         ).all()
     }
+    period = db.get(ReportingPeriod, submission.reporting_period_id)
+    dg_metric = (
+        dg.DG_GENERATION_METRIC
+        if dg.DG_GENERATION_METRIC in values
+        or (
+            dg.DG_LITRES_METRIC not in values
+            and period is not None
+            and dg.manager_source_metric(db, period.period_start) == dg.DG_GENERATION_METRIC
+        )
+        else dg.DG_LITRES_METRIC
+    )
     return [
         item.model_copy(
             update={
@@ -183,8 +205,54 @@ def _unavailable_with_activity(
         )
         if item.activity_metric_code in values
         else item
-        for item in _unavailable(submission, reason)
+        for item in _unavailable(submission, reason, dg_metric)
     ]
+
+
+def _dg_generation_result(
+    db: Session,
+    period: ReportingPeriod,
+    generation: SubmissionValue,
+    factor_set: EmissionFactorSet,
+    factors: dict[str, EmissionFactor],
+) -> CalculationResponse:
+    """DG emission from generation (kWh): governed SFC -> derived litres -> governed DIESEL factor.
+
+    The Manager supplies only the kWh. Litres and emissions are derived here,
+    and the derivation (source kWh, SFC, derived litres) is returned so it can
+    be shown read-only and frozen with the result.
+    """
+
+    def unavailable(reason: str) -> CalculationResponse:
+        return CalculationResponse(
+            status="unavailable", reason=reason, calculation_code=dg.DG_EMISSIONS,
+            activity_metric_code=dg.DG_GENERATION_METRIC, activity_value=generation.value,
+            activity_unit=generation.canonical_unit, formula_version=DG_KWH_FORMULA_VERSION, provisional=True,
+        )
+
+    if generation.canonical_unit != dg.GENERATION_UNIT:
+        return unavailable("incompatible_unit")
+    derivation = dg.derive_litres(db, generation.value, period.period_start)
+    if derivation is None:
+        return unavailable("dg_sfc_not_effective")
+    factor = factors.get(dg.DG_FACTOR)
+    if factor is None:
+        return unavailable("factor_not_configured")
+    if factor.activity_unit != dg.LITRES_UNIT:
+        return unavailable("incompatible_unit")
+    kgco2e = formulas.activity_emissions_kgco2e(derivation.litres, factor.factor_value)
+    tonnes_co2e = formulas.activity_emissions_tco2e(derivation.litres, factor.factor_value)
+    if kgco2e is None or tonnes_co2e is None:
+        return unavailable("not_calculable")
+    return CalculationResponse(
+        status="available", calculation_code=dg.DG_EMISSIONS,
+        activity_metric_code=dg.DG_GENERATION_METRIC, activity_value=generation.value,
+        activity_unit=generation.canonical_unit, factor_set_id=factor_set.id,
+        factor_set_version=factor_set.version, factor_code=FactorCode(factor.code),
+        factor_value=factor.factor_value, factor_unit=f"{factor.result_unit}/{factor.activity_unit}",
+        result_kgco2e=kgco2e.quantize(Decimal("0.000001")), result_value=tonnes_co2e, result_unit="tCO2e",
+        formula_version=DG_KWH_FORMULA_VERSION, provisional=True, derivation=derivation.as_json(),
+    )
 
 
 def calculate_provisional(db: Session, submission: Submission) -> list[CalculationResponse]:
@@ -204,10 +272,21 @@ def calculate_provisional(db: Session, submission: Submission) -> list[Calculati
             MetricDefinition.factor_code.is_not(None),
         )
     ).all()
+    # A kWh DG source is authoritative for its period: any litre value beside
+    # it is not used, so DG is never counted through both pathways.
+    generation = db.scalar(
+        select(SubmissionValue).where(
+            SubmissionValue.submission_id == submission.id,
+            SubmissionValue.metric_code == dg.DG_GENERATION_METRIC,
+            SubmissionValue.value.is_not(None),
+        )
+    )
     results: list[CalculationResponse] = []
     for value, definition in rows:
         calculation_code = CALCULATION_CODES.get(definition.code)
         if not calculation_code or value.value is None:
+            continue
+        if generation is not None and definition.code == dg.DG_LITRES_METRIC:
             continue
         factor = factors.get(definition.factor_code or "")
         if factor is None:
@@ -240,6 +319,8 @@ def calculate_provisional(db: Session, submission: Submission) -> list[Calculati
             result_unit="tCO2e", formula_version=FORMULA_VERSION,
             provisional=True,
         ))
+    if generation is not None:
+        results.append(_dg_generation_result(db, period, generation, factor_set, factors))
     return results or _unavailable_with_activity(db, submission, "activity_not_submitted")
 
 
@@ -267,7 +348,8 @@ def freeze_calculations(db: Session, submission: Submission) -> None:
             result_kgco2e=result.result_kgco2e,
             result_value=result.result_value,
             result_unit=result.result_unit,
-            formula_version=FORMULA_VERSION,
+            formula_version=result.formula_version or FORMULA_VERSION,
+            derivation=result.derivation,
         ))
     db.flush()
 
@@ -300,6 +382,7 @@ def calculation_responses(db: Session, submission: Submission) -> list[Calculati
         factor_value=row.factor_value, factor_unit=row.factor_unit,
         result_kgco2e=row.result_kgco2e, result_value=row.result_value,
         result_unit=row.result_unit, formula_version=row.formula_version, provisional=False,
+        derivation=row.derivation,
     ) for row in rows]
 
 

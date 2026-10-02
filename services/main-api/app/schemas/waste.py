@@ -50,5 +50,10 @@ class WasteSummaryResponse(BaseModel):
     wet_waste_generated_kg: Decimal
     dry_waste_generated_kg: Decimal
     total_waste_generated_kg: Decimal
+    # Calculated by the backend, never entered: diverted from landfill = dry
+    # waste; per person = total / the year's governed population (None when no
+    # population reference exists for the reporting year).
+    waste_diverted_from_landfill_kg: Decimal
+    waste_per_capita_kg: Decimal | None = None
     items: list[WasteItemResponse]
     categories: list[WasteCatalogCategory]

@@ -1,10 +1,11 @@
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
 
-from app.models.enums import FactorCode, FactorSetStatus
+from app.models.enums import LEGACY_FACTOR_CODES, FactorCode, FactorSetStatus
 
 
 class FactorWrite(BaseModel):
@@ -22,6 +23,13 @@ class FactorWrite(BaseModel):
     def finite_value(cls, value: Decimal) -> Decimal:
         if not value.is_finite():
             raise ValueError("factor value must be finite")
+        return value
+
+    @field_validator("code")
+    @classmethod
+    def governed_code(cls, value: FactorCode) -> FactorCode:
+        if value in LEGACY_FACTOR_CODES:
+            raise ValueError("the litre-based LPG factor is retired; use LPG_KG (kgCO2e/kg)")
         return value
 
 
@@ -93,3 +101,6 @@ class CalculationResponse(BaseModel):
     result_unit: str | None = None
     formula_version: str | None = None
     provisional: bool = False
+    # Present only when the activity behind the result is derived from another
+    # source value (kWh-based DG): source kWh, governed SFC and derived litres.
+    derivation: dict[str, Any] | None = None

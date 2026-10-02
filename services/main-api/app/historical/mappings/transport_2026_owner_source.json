@@ -1,0 +1,24 @@
+{
+  "code": "transport_2026_owner_source",
+  "version": 1,
+  "domain": "transport",
+  "priority": 1,
+  "source_reference": "database/historical-sources/transport/transport_fuels_2026.csv",
+  "parser": "wide_monthly",
+  "description": "Institutional transport-fuel sheet 2026: petrol and fleet diesel monthly litres for May - Jul 2026, transcribed from the sheet supplied and approved for import by the project owner on 2026-10-01. Litres are the only source activity. The sheet's emission factor and emission columns are informational and were not transcribed: emissions are calculated by the backend with the governed PETROL and DIESEL factors. Jan - Apr 2026 are already held from transport_staging and are not part of this source; August 2026 has not been approved for import.",
+  "options": {
+    "header_row": 0,
+    "year_column": "year",
+    "month_column": "month"
+  },
+  "columns": {
+    "petrol_litres": {
+      "metric_code": "transport_petrol_litres",
+      "unit": "L"
+    },
+    "fleet_diesel_litres": {
+      "metric_code": "transport_diesel_litres",
+      "unit": "L"
+    }
+  }
+}

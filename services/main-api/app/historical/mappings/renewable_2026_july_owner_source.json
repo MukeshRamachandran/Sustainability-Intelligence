@@ -1,0 +1,24 @@
+{
+  "code": "renewable_2026_july_owner_source",
+  "version": 1,
+  "domain": "energy",
+  "priority": 1,
+  "source_reference": "database/historical-sources/energy/renewable_2026_july.csv",
+  "parser": "wide_monthly",
+  "description": "Institutional renewable-energy sheet 2026: renewable electricity for July 2026 only (on-campus solar and procured renewable, kWh), transcribed from the Excel screenshot supplied and approved for import by the project owner on 2026-10-01. Only these two source activities are imported. The sheet's Solar Water Heater figure (thermal), its Total RE KWH (which includes the solar water heater) and its Emission Reduced figure were not transcribed: the backend derives renewable electricity, total electricity, renewable share and avoided grid emissions with its existing formulas and the governed GRID_ELECTRICITY factor. Jan - Jun 2026 are already governed and are not part of this source; August 2026 has not been approved for import.",
+  "options": {
+    "header_row": 0,
+    "year_column": "year",
+    "month_column": "month"
+  },
+  "columns": {
+    "renewable_on_campus_kwh": {
+      "metric_code": "renewable_on_campus_kwh",
+      "unit": "kWh"
+    },
+    "renewable_procured_kwh": {
+      "metric_code": "renewable_procured_kwh",
+      "unit": "kWh"
+    }
+  }
+}

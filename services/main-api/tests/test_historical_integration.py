@@ -36,7 +36,7 @@ from app.models.sustainability import EmissionFactor, EmissionFactorSet
 from app.services.publication import payload_checksum
 from tests.test_publication_integration import _account, _client
 
-GRID, PETROL, DIESEL, LPG = Decimal("0.5"), Decimal("2"), Decimal("3"), Decimal("1.5")
+GRID, PETROL, DIESEL, LPG_KG = Decimal("0.5"), Decimal("2"), Decimal("3"), Decimal("1.5")
 
 
 def _free_year(db: Session) -> int:
@@ -66,7 +66,7 @@ def _factor_set(db: Session, year: int) -> None:
         ("GRID_ELECTRICITY", GRID, "kWh"),
         ("PETROL", PETROL, "L"),
         ("DIESEL", DIESEL, "L"),
-        ("LPG", LPG, "L"),
+        ("LPG_KG", LPG_KG, "kg"),
     ):
         db.add(
             EmissionFactor(
@@ -260,8 +260,9 @@ def test_annual_and_ytd_never_become_monthly(postgres_engine: Engine, tmp_path: 
     # The annual waste/outreach figures are NOT a March value.
     for code in ("total_waste_generated_kg", "wet_waste_generated_kg", "total_programs", "total_participants"):
         assert code not in march["values"]
-    assert march["domains"]["waste"]["state"] == "aggregate_only"
-    assert "Monthly Waste data unavailable" in march["domains"]["waste"]["message"]
+    # Waste is a year-aggregate domain: March points at the year's record.
+    assert march["domains"]["waste"]["state"] == "year_aggregate"
+    assert "the selected month does not filter it" in march["domains"]["waste"]["message"]
     assert march["domains"]["outreach"]["state"] == "aggregate_only"
     annual_key = march["domains"]["waste"]["alternative_key"]
     annual = timeline["periods"][annual_key]
@@ -632,16 +633,21 @@ def test_active_test_release_is_not_served_as_the_public_dashboard(postgres_engi
         assert body["release"]["version"] == version
 
 
+def _reporting_domains(period: dict[str, Any]) -> int:
+    return sum(1 for state in period["domains"].values() if state["state"] == "available")
+
+
 def test_default_period_is_latest_official_month(postgres_engine: Engine, tmp_path: Path, year: int) -> None:
     suffix = uuid4().hex[:8]
     energy = _mapping("energy_staging", suffix)
     _write(tmp_path, energy, _energy_csv(year + 1, [("June", "1", "2", "3", "4", "5", "6")]))
     _import(postgres_engine, tmp_path, [energy])
     timeline = _timeline(postgres_engine)
-    latest = max(
-        (item for item in timeline["periods"].values() if item["granularity"] == "MONTHLY"),
-        key=lambda item: (item["year"], item["month"]),
-    )
+    monthly = [item for item in timeline["periods"].values() if item["granularity"] == "MONTHLY"]
+    # The default is the latest month reported by at least two domains; a
+    # single-domain month stays selectable but never becomes the default.
+    institution_wide = [item for item in monthly if _reporting_domains(item) >= 2]
+    latest = max(institution_wide or monthly, key=lambda item: (item["year"], item["month"]))
     assert timeline["default_key"] == latest["key"]
     options = next(item for item in timeline["selector"] if item["year"] == year + 1)["options"]
     assert [option["key"] for option in options] == [f"{year + 1}-YTD", f"{year + 1}-06"]
@@ -682,7 +688,7 @@ def test_month_display_uses_annual_context_without_creating_monthly_data(
     march = timeline["periods"][f"{year}-03"]
     shown = march["display"]["total_waste_generated_kg"]
     assert shown["value"] == 1150
-    assert shown["display_label"] == f"{year} Annual Data"
+    assert shown["display_label"] == f"{year} Full Year"  # waste is a year aggregate
     assert shown["display_context"] is True and shown["source_granularity"] == "ANNUAL"
     assert shown["source_key"] == f"{year}-FY" and shown["source_month"] is None
     assert march["display"]["total_participants"]["qualifier"] == "AT_LEAST"
@@ -709,7 +715,7 @@ def test_month_display_uses_annual_context_without_creating_monthly_data(
         assert monthly_waste is None
     # The Full Year view shows the annual record as its own data, not as context.
     full_year = timeline["periods"][f"{year}-FY"]["display"]["total_waste_generated_kg"]
-    assert full_year["display_context"] is False and full_year["display_label"] == f"{year} Annual Data"
+    assert full_year["display_context"] is False and full_year["display_label"] == f"{year} Full Year"
 
 
 def test_exact_month_beats_annual_and_ytd_context_is_labelled(
@@ -738,7 +744,7 @@ def test_exact_month_beats_annual_and_ytd_context_is_labelled(
     assert jan["water_recycled_kl"]["display_context"] is True
 
 
-def test_no_partial_official_ghg_and_missing_is_omitted(postgres_engine: Engine, tmp_path: Path, year: int) -> None:
+def test_partial_ghg_is_labelled_and_missing_is_omitted(postgres_engine: Engine, tmp_path: Path, year: int) -> None:
     suffix = uuid4().hex[:8]
     energy = _mapping("energy_staging", suffix)
     _write(
@@ -749,10 +755,17 @@ def test_no_partial_official_ghg_and_missing_is_omitted(postgres_engine: Engine,
     _import(postgres_engine, tmp_path, [energy])
     timeline = _timeline(postgres_engine)
     feb = timeline["periods"][f"{year}-02"]["display"]
-    for code in ("grid_total_kwh", "scope2_tco2e", "grid_temporary_kwh"):
+    for code in ("grid_total_kwh", "grid_temporary_kwh"):
         assert code not in feb  # no value, no fallback: omitted, never zero
+    jan = timeline["periods"][f"{year}-01"]["display"]
+    assert jan["scope2_tco2e"]["calculation_status"] == "COMPLETE"
+    # Available-data rule: the two meters that reported produce a Scope 2
+    # value that is labelled PARTIAL and names the missing meter.
+    assert feb["scope2_tco2e"]["calculation_status"] == "PARTIAL"
+    assert [item["code"] for item in feb["scope2_tco2e"]["missing_contributors"]] == ["grid_temporary_kwh"]
     ytd = timeline["periods"][f"{year}-YTD"]["display"]
-    assert "scope2_tco2e" not in ytd and "grid_electricity_emissions" not in ytd  # never a partial Scope total
+    for code in ("scope2_tco2e", "grid_electricity_emissions"):
+        assert ytd[code]["calculation_status"] == "PARTIAL"  # shown, but never as a complete total
     assert ytd["grid_total_kwh"]["value"] == 125
     assert ytd["grid_total_kwh"]["display_label"] == f"{year} · 1 of 2 months"
     assert ytd["renewable_electricity_kwh"]["display_label"] == f"{year} YTD · Jan–Feb"

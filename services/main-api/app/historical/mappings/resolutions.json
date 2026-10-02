@@ -11,6 +11,273 @@
       "reason": "Project-owner approved 2025 institutional annual Total Water Usage reference (195,708 KL = TWAD 39,708 + Borewell 156,000). The 2025 monthly 'Water Consumption (KL)' column (sum 39,835 KL) is not used as total water usage.",
       "approved_by": "Project owner",
       "approved_at": "2026-09-25"
+    },
+    {
+      "granularity": "MONTHLY",
+      "coverage_start": "2025-01-01",
+      "coverage_end": "2025-01-31",
+      "domain": "energy",
+      "metric_code": "grid_commercial_kwh",
+      "chosen_mapping_code": "energy_staging",
+      "reason": "Project-owner source-authority decision: energy_staging is selected as authoritative for historical Grid electricity (HT / Commercial / Temporary) conflicts. The competing energy_legacy_public and energy_manager_electricity copies are retained unchanged as historical evidence.",
+      "approved_by": "Project owner",
+      "approved_at": "2026-09-30"
+    },
+    {
+      "granularity": "MONTHLY",
+      "coverage_start": "2025-01-01",
+      "coverage_end": "2025-01-31",
+      "domain": "energy",
+      "metric_code": "grid_ht_kwh",
+      "chosen_mapping_code": "energy_staging",
+      "reason": "Project-owner source-authority decision: energy_staging is selected as authoritative for historical Grid electricity (HT / Commercial / Temporary) conflicts. The competing energy_legacy_public and energy_manager_electricity copies are retained unchanged as historical evidence.",
+      "approved_by": "Project owner",
+      "approved_at": "2026-09-30"
+    },
+    {
+      "granularity": "MONTHLY",
+      "coverage_start": "2025-06-01",
+      "coverage_end": "2025-06-30",
+      "domain": "energy",
+      "metric_code": "grid_commercial_kwh",
+      "chosen_mapping_code": "energy_staging",
+      "reason": "Project-owner source-authority decision: energy_staging is selected as authoritative for historical Grid electricity (HT / Commercial / Temporary) conflicts. The competing energy_legacy_public and energy_manager_electricity copies are retained unchanged as historical evidence.",
+      "approved_by": "Project owner",
+      "approved_at": "2026-09-30"
+    },
+    {
+      "granularity": "MONTHLY",
+      "coverage_start": "2025-06-01",
+      "coverage_end": "2025-06-30",
+      "domain": "energy",
+      "metric_code": "grid_temporary_kwh",
+      "chosen_mapping_code": "energy_staging",
+      "reason": "Project-owner source-authority decision: energy_staging is selected as authoritative for historical Grid electricity (HT / Commercial / Temporary) conflicts. The competing energy_legacy_public and energy_manager_electricity copies are retained unchanged as historical evidence.",
+      "approved_by": "Project owner",
+      "approved_at": "2026-09-30"
+    },
+    {
+      "granularity": "MONTHLY",
+      "coverage_start": "2025-08-01",
+      "coverage_end": "2025-08-31",
+      "domain": "energy",
+      "metric_code": "grid_ht_kwh",
+      "chosen_mapping_code": "energy_staging",
+      "reason": "Project-owner source-authority decision: energy_staging is selected as authoritative for historical Grid electricity (HT / Commercial / Temporary) conflicts. The competing energy_legacy_public and energy_manager_electricity copies are retained unchanged as historical evidence.",
+      "approved_by": "Project owner",
+      "approved_at": "2026-09-30"
+    },
+    {
+      "granularity": "MONTHLY",
+      "coverage_start": "2025-09-01",
+      "coverage_end": "2025-09-30",
+      "domain": "energy",
+      "metric_code": "grid_ht_kwh",
+      "chosen_mapping_code": "energy_staging",
+      "reason": "Project-owner source-authority decision: energy_staging is selected as authoritative for historical Grid electricity (HT / Commercial / Temporary) conflicts. The competing energy_legacy_public and energy_manager_electricity copies are retained unchanged as historical evidence.",
+      "approved_by": "Project owner",
+      "approved_at": "2026-09-30"
+    },
+    {
+      "granularity": "MONTHLY",
+      "coverage_start": "2026-01-01",
+      "coverage_end": "2026-01-31",
+      "domain": "energy",
+      "metric_code": "grid_commercial_kwh",
+      "chosen_mapping_code": "energy_staging",
+      "reason": "Project-owner source-authority decision: energy_staging is selected as authoritative for historical Grid electricity (HT / Commercial / Temporary) conflicts. The competing energy_legacy_public and energy_manager_electricity copies are retained unchanged as historical evidence.",
+      "approved_by": "Project owner",
+      "approved_at": "2026-09-30"
+    },
+    {
+      "granularity": "MONTHLY",
+      "coverage_start": "2026-01-01",
+      "coverage_end": "2026-01-31",
+      "domain": "energy",
+      "metric_code": "grid_temporary_kwh",
+      "chosen_mapping_code": "energy_staging",
+      "reason": "Project-owner source-authority decision: energy_staging is selected as authoritative for historical Grid electricity (HT / Commercial / Temporary) conflicts. The competing energy_legacy_public and energy_manager_electricity copies are retained unchanged as historical evidence.",
+      "approved_by": "Project owner",
+      "approved_at": "2026-09-30"
+    },
+    {
+      "granularity": "MONTHLY",
+      "coverage_start": "2026-02-01",
+      "coverage_end": "2026-02-28",
+      "domain": "energy",
+      "metric_code": "grid_commercial_kwh",
+      "chosen_mapping_code": "energy_staging",
+      "reason": "Project-owner source-authority decision: energy_staging is selected as authoritative for historical Grid electricity (HT / Commercial / Temporary) conflicts. The competing energy_legacy_public and energy_manager_electricity copies are retained unchanged as historical evidence.",
+      "approved_by": "Project owner",
+      "approved_at": "2026-09-30"
+    },
+    {
+      "granularity": "MONTHLY",
+      "coverage_start": "2026-02-01",
+      "coverage_end": "2026-02-28",
+      "domain": "energy",
+      "metric_code": "grid_ht_kwh",
+      "chosen_mapping_code": "energy_staging",
+      "reason": "Project-owner source-authority decision: energy_staging is selected as authoritative for historical Grid electricity (HT / Commercial / Temporary) conflicts. The competing energy_legacy_public and energy_manager_electricity copies are retained unchanged as historical evidence.",
+      "approved_by": "Project owner",
+      "approved_at": "2026-09-30"
+    },
+    {
+      "granularity": "MONTHLY",
+      "coverage_start": "2026-02-01",
+      "coverage_end": "2026-02-28",
+      "domain": "energy",
+      "metric_code": "grid_temporary_kwh",
+      "chosen_mapping_code": "energy_staging",
+      "reason": "Project-owner source-authority decision: energy_staging is selected as authoritative for historical Grid electricity (HT / Commercial / Temporary) conflicts. The competing energy_legacy_public and energy_manager_electricity copies are retained unchanged as historical evidence.",
+      "approved_by": "Project owner",
+      "approved_at": "2026-09-30"
+    },
+    {
+      "granularity": "MONTHLY",
+      "coverage_start": "2026-03-01",
+      "coverage_end": "2026-03-31",
+      "domain": "energy",
+      "metric_code": "grid_commercial_kwh",
+      "chosen_mapping_code": "energy_staging",
+      "reason": "Project-owner source-authority decision: energy_staging is selected as authoritative for historical Grid electricity (HT / Commercial / Temporary) conflicts. The competing energy_legacy_public and energy_manager_electricity copies are retained unchanged as historical evidence.",
+      "approved_by": "Project owner",
+      "approved_at": "2026-09-30"
+    },
+    {
+      "granularity": "MONTHLY",
+      "coverage_start": "2026-03-01",
+      "coverage_end": "2026-03-31",
+      "domain": "energy",
+      "metric_code": "grid_ht_kwh",
+      "chosen_mapping_code": "energy_staging",
+      "reason": "Project-owner source-authority decision: energy_staging is selected as authoritative for historical Grid electricity (HT / Commercial / Temporary) conflicts. The competing energy_legacy_public and energy_manager_electricity copies are retained unchanged as historical evidence.",
+      "approved_by": "Project owner",
+      "approved_at": "2026-09-30"
+    },
+    {
+      "granularity": "MONTHLY",
+      "coverage_start": "2026-03-01",
+      "coverage_end": "2026-03-31",
+      "domain": "energy",
+      "metric_code": "grid_temporary_kwh",
+      "chosen_mapping_code": "energy_staging",
+      "reason": "Project-owner source-authority decision: energy_staging is selected as authoritative for historical Grid electricity (HT / Commercial / Temporary) conflicts. The competing energy_legacy_public and energy_manager_electricity copies are retained unchanged as historical evidence.",
+      "approved_by": "Project owner",
+      "approved_at": "2026-09-30"
+    },
+    {
+      "granularity": "MONTHLY",
+      "coverage_start": "2026-04-01",
+      "coverage_end": "2026-04-30",
+      "domain": "energy",
+      "metric_code": "grid_commercial_kwh",
+      "chosen_mapping_code": "energy_staging",
+      "reason": "Project-owner source-authority decision: energy_staging is selected as authoritative for historical Grid electricity (HT / Commercial / Temporary) conflicts. The competing energy_legacy_public and energy_manager_electricity copies are retained unchanged as historical evidence.",
+      "approved_by": "Project owner",
+      "approved_at": "2026-09-30"
+    },
+    {
+      "granularity": "MONTHLY",
+      "coverage_start": "2026-04-01",
+      "coverage_end": "2026-04-30",
+      "domain": "energy",
+      "metric_code": "grid_ht_kwh",
+      "chosen_mapping_code": "energy_staging",
+      "reason": "Project-owner source-authority decision: energy_staging is selected as authoritative for historical Grid electricity (HT / Commercial / Temporary) conflicts. The competing energy_legacy_public and energy_manager_electricity copies are retained unchanged as historical evidence.",
+      "approved_by": "Project owner",
+      "approved_at": "2026-09-30"
+    },
+    {
+      "granularity": "MONTHLY",
+      "coverage_start": "2026-04-01",
+      "coverage_end": "2026-04-30",
+      "domain": "energy",
+      "metric_code": "grid_temporary_kwh",
+      "chosen_mapping_code": "energy_staging",
+      "reason": "Project-owner source-authority decision: energy_staging is selected as authoritative for historical Grid electricity (HT / Commercial / Temporary) conflicts. The competing energy_legacy_public and energy_manager_electricity copies are retained unchanged as historical evidence.",
+      "approved_by": "Project owner",
+      "approved_at": "2026-09-30"
+    }
+  ],
+  "unit_corrections": [
+    {
+      "id": "lpg-2025-source-values-are-kg",
+      "mapping_code": "lpg_staging",
+      "from_mapping_version": 1,
+      "to_mapping_version": 2,
+      "domain": "lpg",
+      "from_metric_code": "lpg_consumption_litres",
+      "from_unit": "L",
+      "to_metric_code": "lpg_weight_kg",
+      "to_unit": "kg",
+      "numeric_values_unchanged": true,
+      "reason": "Project owner confirmed on 2026-09-30 that historical LPG source activity values are kilograms. The previous litre normalization was incorrect. Numeric source values are preserved unchanged; only metric/unit interpretation is corrected to lpg_weight_kg / kg.",
+      "approved_by": "Project owner",
+      "approved_at": "2026-09-30"
+    }
+  ],
+  "coverage_confirmations": [
+    {
+      "id": "water-recycled-2026-ytd-confirmed",
+      "mapping_code": "water_staging",
+      "metric_codes": [
+        "water_recycled_kl"
+      ],
+      "granularity": "YTD",
+      "coverage_start": "2026-01-01",
+      "coverage_end": "2026-06-30",
+      "domain": "water",
+      "coverage_end_stated": false,
+      "reason": "Project owner confirmed on 2026-09-30 that this source-reported 2026 figure is a valid current-year / year-to-date institutional total. The source states only '2026' / 'to date', so its end month is not claimed; it is published as '2026 YTD'. coverage_start/coverage_end identify the stored import period (its Jan-Jun end is the importer's placeholder), not a confirmed window.",
+      "approved_by": "Project owner",
+      "approved_at": "2026-09-30"
+    },
+    {
+      "id": "waste-total-2026-ytd-confirmed",
+      "mapping_code": "waste_staging",
+      "metric_codes": [
+        "total_waste_generated_kg"
+      ],
+      "granularity": "YTD",
+      "coverage_start": "2026-01-01",
+      "coverage_end": "2026-06-30",
+      "domain": "waste",
+      "coverage_end_stated": false,
+      "reason": "Project owner confirmed on 2026-09-30 that this source-reported 2026 figure is a valid current-year / year-to-date institutional total. The source states only '2026' / 'to date', so its end month is not claimed; it is published as '2026 YTD'. coverage_start/coverage_end identify the stored import period (its Jan-Jun end is the importer's placeholder), not a confirmed window.",
+      "approved_by": "Project owner",
+      "approved_at": "2026-09-30"
+    },
+    {
+      "id": "waste-2026-ytd-jan-jun-confirmed",
+      "mapping_code": "waste_staging",
+      "metric_codes": [
+        "wet_waste_generated_kg",
+        "dry_waste_generated_kg",
+        "total_waste_generated_kg",
+        "material:COLOUR_PAPER",
+        "material:WHITE_PAPER",
+        "material:IRON",
+        "material:LITE_WEIGHT",
+        "material:CARDBOARD",
+        "material:PP_CARDBOARDS",
+        "material:MIXED_PLASTICS",
+        "material:BLACK_PLASTIC_PP",
+        "material:PET",
+        "material:ALUMINIUM",
+        "material:HDPE",
+        "material:LDPE",
+        "material:NEWS_PAPER",
+        "material:TYRE"
+      ],
+      "granularity": "YTD",
+      "coverage_start": "2026-01-01",
+      "coverage_end": "2026-06-30",
+      "domain": "waste",
+      "coverage_end_stated": true,
+      "reason": "Project owner confirmed on 2026-10-02 that the 2026 Waste Inventory figures cover 1 January to 30 June 2026 and are valid institutional year-to-date values: wet waste 3000 kg, dry waste 76590.6 kg and the 14 material quantities (which sum to 76590.6 kg). The coverage end is therefore stated (2026-06-30). This supersedes the 2026-09-30 confirmation of the total alone (waste-total-2026-ytd-confirmed), whose end month was not then stated. K-COSMOS derives the total from wet + dry; dry waste is the waste diverted from landfill. No monthly record is created.",
+      "approved_by": "Project owner",
+      "approved_at": "2026-10-02"
     }
   ]
 }

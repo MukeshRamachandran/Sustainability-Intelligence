@@ -76,9 +76,6 @@ def _programme(period: ReportingPeriod, name: str = "Programme A") -> dict[str, 
         "industrial_experts": None,
         "researchers_experts": None,
         "government_participants": None,
-        "male_participants": None,
-        "female_participants": None,
-        "other_not_disclosed_participants": None,
         "saplings_planted": 5,
         "waste_collected_kg": "12.50",
         "species_identified_count": 2,
@@ -125,10 +122,11 @@ def test_outreach_security_and_validation(postgres_engine: Engine) -> None:
             client.post("/api/manager/outreach/programmes", json=forged, headers={"X-CSRF-Token": csrf}).status_code
             == 422
         )
-        too_much_gender = {**payload, "male_participants": 151}
+        # Gender is no longer an outreach field: a request carrying one is rejected.
+        with_gender = {**payload, "male_participants": 10}
         assert (
             client.post(
-                "/api/manager/outreach/programmes", json=too_much_gender, headers={"X-CSRF-Token": csrf}
+                "/api/manager/outreach/programmes", json=with_gender, headers={"X-CSRF-Token": csrf}
             ).status_code
             == 422
         )
@@ -182,8 +180,6 @@ def test_complete_outreach_review_release_workflow(postgres_engine: Engine) -> N
             "experts_involved": 3,
             "volunteers_engaged": 6,
             "volunteer_hours": "3.75",
-            "male_participants": 10,
-            "female_participants": 5,
         }
         second = manager_client.post(
             "/api/manager/outreach/programmes",

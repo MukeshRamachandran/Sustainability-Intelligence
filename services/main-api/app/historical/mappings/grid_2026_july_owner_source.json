@@ -1,0 +1,28 @@
+{
+  "code": "grid_2026_july_owner_source",
+  "version": 1,
+  "domain": "energy",
+  "priority": 1,
+  "source_reference": "database/historical-sources/energy/grid_2026_july.csv",
+  "parser": "wide_monthly",
+  "description": "Institutional electricity sheet 2026: grid electricity for July 2026 only (HT/Industrial, Commercial and Temporary connections, kWh), transcribed from the source supplied and approved for import by the project owner on 2026-10-01. The connections are identified by the sheet's consumption columns (Industrial Consumption -> grid_ht_kwh, Commercial Consumption -> grid_commercial_kwh, Temp Consumption -> grid_temporary_kwh), which reproduce the governed Jan - Jun 2026 series exactly; the sheet's repeated Equipment labels are not used. The grid total and Scope 2 emissions are not source data: the backend sums the three meters and applies the governed GRID_ELECTRICITY factor. Jan - Jun 2026 are already governed and are not part of this source; August 2026 has not been approved for import.",
+  "options": {
+    "header_row": 0,
+    "year_column": "year",
+    "month_column": "month"
+  },
+  "columns": {
+    "grid_ht_kwh": {
+      "metric_code": "grid_ht_kwh",
+      "unit": "kWh"
+    },
+    "grid_commercial_kwh": {
+      "metric_code": "grid_commercial_kwh",
+      "unit": "kWh"
+    },
+    "grid_temporary_kwh": {
+      "metric_code": "grid_temporary_kwh",
+      "unit": "kWh"
+    }
+  }
+}

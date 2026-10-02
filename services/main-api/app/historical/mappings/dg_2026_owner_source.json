@@ -1,0 +1,21 @@
+{
+  "code": "dg_2026_owner_source",
+  "version": 1,
+  "domain": "transport",
+  "priority": 1,
+  "source_reference": "database/historical-sources/dg/dg_generation_2026.csv",
+  "parser": "long_monthly",
+  "description": "Institutional DG Generator 2026 source: monthly electricity generation in kWh for May - Jul 2026, supplied and approved for import by the project owner on 2026-10-01. Generation (kWh) is the governed DG source activity from 2026-05-01 (0015_dg_kwh_methodology). Diesel litres and emissions are not source data: the backend derives litres with the governed DG_SFC and calculates emissions with the governed DIESEL factor. August 2026 is not part of this source; it has not been approved for import.",
+  "options": {
+    "year_column": "year",
+    "month_column": "month",
+    "category_column": "activity",
+    "value_column": "generation_kwh"
+  },
+  "categories": {
+    "Diesel Generator": {
+      "metric_code": "dg_generation_kwh",
+      "unit": "kWh"
+    }
+  }
+}

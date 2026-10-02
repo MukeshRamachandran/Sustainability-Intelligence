@@ -18,9 +18,10 @@ const loginContracts = {
 };
 
 const managerContracts = {
-  'transport-entry.html': ['transport', 'petrol', 'diesel-transport', 'active-vehicles-petrol', 'active-vehicles-diesel', 'ev-consumption', 'diesel-dg', 'active-dg'],
+
+  'transport-entry.html': ['transport', 'petrol', 'diesel-transport', 'active-vehicles-petrol', 'active-vehicles-diesel', 'ev-consumption', 'dg-generation', 'active-dg'],
   'energy-entry.html': ['energy', 'grid-ht', 'grid-comm', 'grid-temp', 'ren-campus', 'ren-procured', 'ren-solar', 'grid-total', 'ren-total'],
-  'lpg-entry.html': ['lpg', 'lpg-litres', 'lpg-cylinders', 'lpg-kg'],
+  'lpg-entry.html': ['lpg', 'lpg-kg', 'lpg-cylinders'],
   'water-entry.html': ['water', 'water-twad', 'water-borewell', 'water-priv', 'water-waste', 'water-recycled', 'water-consumed'],
   'waste-entry.html': ['waste', 'wet-waste']
 };
@@ -188,22 +189,34 @@ test('emission factor governance uses backend data and authoritative calculation
   assert.doesNotMatch(`${read('transport-entry.html')}\n${read('energy-entry.html')}`, /2\.388|2\.701|0\.727/);
   assert.match(calculations, /submission\?\.calculations/);
   assert.match(calculations, /factor_not_configured|Unavailable/);
-  // Avoided emissions stay declared-unavailable, now owned by the single
-  // preview renderer rather than duplicated into the entry page.
-  assert.match(calculations, /Methodology review required/);
-  assert.match(factors, /code: 'LPG'/);
-  // LPG is governed on litres (0008_lpg_litre_governance).
-  assert.match(factors, /code: 'LPG'[^}]*unit: 'L'/);
-  assert.doesNotMatch(factors, /unit: 'kg'/);
+  // Electrical avoided emissions are the backend's governed result (renewable
+  // electricity x grid factor), printed by the single preview renderer - never
+  // a placeholder and never duplicated into the entry page.
+  assert.match(calculations, /set\('prev-avoided', show\(energy\?\.estimated_avoided_grid_emissions_tco2e, 6\)\)/);
+  assert.doesNotMatch(calculations, /Methodology review required/);
+  // LPG is governed on weight as LPG_KG (0013_lpg_kg_governance_v2); the
+  // retired litre code is never offered for a new or edited factor set.
+  assert.match(factors, /code: 'LPG_KG'[^}]*unit: 'kg'/);
+  assert.doesNotMatch(factors, /code: 'LPG'[,\s]/);
+  assert.doesNotMatch(factors, /unit: 'L', optional/);
+  // A retired set's legacy factor is shown read-only and never written back.
+  assert.match(factors, /function legacyRows\(factors\)/);
+  assert.match(factors, /const factors = definitions\.flatMap/);
   const lpgPage = read('lpg-entry.html');
   const submissions = read('manager-submissions-api.js');
-  // lpg_consumption_litres is the governed activity; kg is reference only.
-  assert.match(submissions, /'lpg-litres': 'lpg_consumption_litres'/);
-  assert.match(lpgPage, /id="lpg-litres"/);
-  assert.match(lpgPage, /LPG Consumption \(litres\)/);
-  assert.doesNotMatch(lpgPage, /LPG Consumed \(Kg\)/);
-  // The kg field must be present but clearly marked non-authoritative.
-  assert.match(lpgPage, /LPG Weight \(kg\)[\s\S]{0,200}optional, reference/);
+  // lpg_weight_kg is the governed, required activity; litres are not collected.
+  assert.match(submissions, /'lpg-kg': 'lpg_weight_kg'/);
+  assert.doesNotMatch(submissions, /lpg_consumption_litres|'lpg-litres'/);
+  assert.match(lpgPage, /<label class="form-label" for="lpg-kg">LPG Consumption \(kg\)<\/label>/);
+  assert.match(lpgPage, /id="lpg-kg" min="0" step="0.01" required/);
+  assert.doesNotMatch(lpgPage, /id="lpg-litres"|LPG Consumption \(litres\)/);
+  // The cylinder count stays optional reference metadata, and the browser
+  // never derives kg from cylinders (the backend freezes the entered kg).
+  assert.match(lpgPage, /No\. of Cylinders Used[\s\S]{0,200}optional, reference/);
+  assert.doesNotMatch(lpgPage, /cylinders?[^\n]*\*\s*19|\*\s*cylinder/i);
+  assert.match(lpgPage, /toFixed\(2\) \+ ' kg'/);
+  assert.match(calculations, /kgCO2e\/kg/);
+  assert.doesNotMatch(calculations, /kgCO2e\/L/);
 });
 
 test('waste manager page is governed, catalog-driven and backend-authoritative', () => {
@@ -259,7 +272,8 @@ test('calculation-preview.js is the only writer of governed emission preview nod
 
   // Entry pages may echo typed activity, but must never write the nodes that
   // hold a governed server result.
-  const owned = ['prev-scope2', 'prev-avoided', 'prev-emission', 'prev-factor', 'prev-total', 'prev-petrol', 'prev-diesel-t', 'prev-diesel-dg'];
+  const owned = ['prev-scope2', 'prev-avoided', 'prev-emission', 'prev-factor', 'prev-total', 'prev-petrol', 'prev-diesel-t', 'prev-diesel-dg',
+    'prev-re-electricity', 'prev-total-electricity', 'prev-re-share', 'prev-solar-thermal'];
   for (const page of ['transport-entry.html', 'energy-entry.html', 'lpg-entry.html']) {
     const source = read(page);
     const inline = source.slice(source.indexOf('<script>'));
@@ -471,7 +485,7 @@ test('Outreach save/submit restores by programme URL and uses the safe notifier'
 });
 
 test('reloaded values re-trigger the page calculators on every domain', () => {
-  // Page-level calculators (participant/gender/species totals, energy and water
+  // Page-level calculators (participant/species totals, energy and water
   // sums) listen for `input` on each field. An event dispatched on the form
   // bubbles UP and never reaches those children, which left read-only totals
   // showing 0 after a reload even though the fields held values.
@@ -671,4 +685,268 @@ test('release rehydration reads the backend, never browser storage', () => {
   assert.doesNotMatch(html, /localStorage|sessionStorage|indexedDB/);
   assert.match(html, /release_id=\$\{encodeURIComponent\(preparedRelease\.id\)\}/);
   assert.doesNotMatch(html, /release_id=\$\{[^}]*requestId/);
+});
+
+// ---- DG generator methodology: the Manager enters kWh, never litres ----------
+test('Transport entry collects DG generation in kWh and shows the backend derivation as a preview', () => {
+  const read = file => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+  const html = read('transport-entry.html');
+  const api = read('manager-submissions-api.js');
+  const preview = read('calculation-preview.js');
+
+  // The input is electricity generated in kWh; the litre input is gone.
+  assert.match(html, /<label class="form-label">Diesel Generator Electricity Generated \(kWh\)<\/label>\s*<input type="number" class="form-control" id="dg-generation" min="0" step="0\.01">/);
+  assert.doesNotMatch(html, /Diesel Generator Consumed \(Litres\)/);
+  assert.doesNotMatch(html, /id="diesel-dg"/);
+  assert.match(html, /data-evidence-list="transport-dg" data-evidence-metric="dg_generation_kwh"/);
+  // Only the source kWh is sent; derived litres and emissions are never submitted.
+  assert.match(api, /'dg-generation': 'dg_generation_kwh'/);
+  assert.doesNotMatch(api, /dg_diesel_litres|dg_diesel_emissions/);
+  // DG stays on the Transport + DG Manager page (no domain move).
+  assert.match(html, /Transport \+ DG Manager/);
+  assert.doesNotMatch(read('energy-entry.html'), /dg-generation|dg_generation_kwh/);
+
+  // Read-only derivation block, clearly labelled as a backend preview.
+  assert.match(html, /PREVIEW · DG CALCULATION \(BACKEND\)/);
+  for (const id of ['prev-dg-kwh', 'prev-dg-sfc', 'prev-dg-litres', 'prev-dg-ef', 'prev-dg-emissions']) {
+    assert.match(html, new RegExp(`<span id="${id}">`));
+    assert.doesNotMatch(html, new RegExp(`<input[^>]*id="${id}"`));
+  }
+  assert.match(html, /\['petrol', 'diesel-transport', 'dg-generation'\]\.forEach/);
+
+  // The preview prints the API's derivation; it holds no SFC, no factor and no arithmetic.
+  for (const field of ['source_value', 'parameter_value', 'parameter_unit', 'derived_value', 'derived_unit']) {
+    assert.match(preview, new RegExp(`derivation\\.${field}`));
+  }
+  assert.doesNotMatch(preview + html + api, /0\.33\b|2\.701/);
+  const block = preview.match(/function renderDgDerivation\(item\) \{[\s\S]*?\n  \}/)[0];
+  assert.doesNotMatch(block, /\*|\/ ?1000/);
+
+  // Run the real renderer against a backend response.
+  const nodes = {};
+  const context = {
+    document: { getElementById: id => (nodes[id] ||= { textContent: '' }) }, Number, DEFAULT_RESULT_UNIT: 'tCO2e'
+  };
+  const render = vm.runInNewContext(`${block}\nrenderDgDerivation`, context);
+  render({
+    status: 'available', result_value: '8.027318', result_unit: 'tCO2e', factor_value: '2.7010000000', factor_unit: 'kgCO2e/L',
+    derivation: { source_value: '9006', source_unit: 'kWh', parameter_value: '0.33', parameter_unit: 'L/kWh', derived_value: '2971.98', derived_unit: 'L' }
+  });
+  assert.equal(nodes['prev-dg-kwh'].textContent, '9,006 kWh');
+  assert.equal(nodes['prev-dg-sfc'].textContent, '0.33 L/kWh');
+  assert.equal(nodes['prev-dg-litres'].textContent, '2,971.98 L');
+  assert.equal(nodes['prev-dg-ef'].textContent, '2.701 kgCO2e/L');
+  assert.equal(nodes['prev-dg-emissions'].textContent, '8.027318 tCO2e');
+  // Nothing saved yet, or an unavailable result: dashes, never a client-side figure.
+  render({ status: 'unavailable', reason: 'activity_not_submitted' });
+  for (const id of ['prev-dg-kwh', 'prev-dg-sfc', 'prev-dg-litres', 'prev-dg-ef', 'prev-dg-emissions']) {
+    assert.equal(nodes[id].textContent, '—');
+  }
+});
+
+test('Admin review shows the Manager-entered kWh and the read-only derivation', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'admin-queue.html'), 'utf8');
+  assert.match(html, /<th>Manager-entered activity<\/th><th>Derived activity<\/th><th>Result<\/th>/);
+  assert.match(html, /item\.derivation\.source_value\} \$\{item\.derivation\.source_unit\} × \$\{item\.derivation\.parameter_value\} \$\{item\.derivation\.parameter_unit\} \(\$\{item\.derivation\.parameter_code\}\) = \$\{item\.derivation\.derived_value\} \$\{item\.derivation\.derived_unit\}/);
+  // The Admin has no input for a derived value; a correction is requested on the source.
+  const section = html.slice(html.indexOf('function calculationsHtml'), html.indexOf('function wasteHtml'));
+  assert.doesNotMatch(section, /<input|contenteditable/);
+  assert.doesNotMatch(section, /0\.33\b|2\.701/);
+});
+
+// ---- Renewable electricity excludes the solar water heater (thermal) --------
+test('Energy entry separates renewable electricity from solar thermal and never adds them together', () => {
+  const read = file => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+  const html = read('energy-entry.html');
+  const api = read('manager-submissions-api.js');
+
+  // Clear source labels; the solar water heater is not called renewable electricity.
+  assert.match(html, /<label class="form-label">On-Campus Renewable Electricity \(kWh\)<\/label>\s*<input type="number" class="form-control ren-input" id="ren-campus" min="0">/);
+  assert.match(html, /<label class="form-label">Procured Renewable Electricity \(kWh\)<\/label>\s*<input type="number" class="form-control ren-input" id="ren-procured" min="0">/);
+  assert.match(html, /<label class="form-label">Solar Water Heater \/ Solar Thermal \(kWh\)<\/label>\s*<input type="number" class="form-control thermal-input" id="ren-solar" min="0">/);
+  assert.match(html, /Section B — Renewable Electricity<\/h3>/);
+  assert.match(html, /Section C — Solar Thermal \(not electricity\)<\/h3>/);
+  assert.match(html, /Renewable Electricity Total \(kWh\)<\/label>/);
+  assert.doesNotMatch(html, /Total Renewable \(kWh\)|Renewable Total:|Section B — Renewable Energy/);
+  // The solar field is structurally outside the electricity sum: it is not a .ren-input.
+  assert.equal((html.match(/class="form-control ren-input"/g) || []).length, 2);
+  assert.doesNotMatch(html, /ren-input"[^>]*id="ren-solar"/);
+
+  // Still three independent source inputs; the legacy total is never sent.
+  assert.match(api, /'ren-campus': 'renewable_on_campus_kwh'/);
+  assert.match(api, /'ren-procured': 'renewable_procured_kwh'/);
+  assert.match(api, /'ren-solar': 'solar_water_heater_kwh'/);
+  assert.doesNotMatch(api, /renewable_total_kwh|renewable_electricity_kwh/);
+
+  // Run the page's own calculator: 18595 + 286334 with a 62500 solar water heater.
+  const inline = html.slice(html.indexOf('<script>\n    document.addEventListener'), html.lastIndexOf('</script>\n  <script src="evidence-api.js">'));
+  const body = inline.slice(inline.indexOf('{', inline.indexOf("'DOMContentLoaded'")) + 1, inline.lastIndexOf('});'));
+  const node = (id, value = '', cls = '') => ({ id, value, className: cls, checked: true, readOnly: true, style: {}, textContent: '', listeners: {}, addEventListener(type, fn) { this.listeners[type] = fn; } });
+  const nodes = {
+    'grid-ht': node('grid-ht', '39366', 'grid-input'), 'grid-comm': node('grid-comm', '1261', 'grid-input'),
+    'grid-temp': node('grid-temp', '267', 'grid-input'), 'ren-campus': node('ren-campus', '18595', 'ren-input'),
+    'ren-procured': node('ren-procured', '286334', 'ren-input'), 'ren-solar': node('ren-solar', '62500', 'thermal-input'),
+    'ren-total': node('ren-total'), 'auto-calc': node('auto-calc'), 'grid-total': node('grid-total'),
+    'grid-auto-calc': node('grid-auto-calc'), 'prev-grid-total': node('prev-grid-total'),
+    'prev-ren-total': node('prev-ren-total'), 'reset-btn': node('reset-btn'), 'entry-form': node('entry-form')
+  };
+  let stale = 0;
+  const document = {
+    getElementById: id => nodes[id],
+    querySelectorAll: selector => Object.values(nodes).filter(item => item.className === selector.slice(1))
+  };
+  vm.runInNewContext(body, { document, window: { KCosmosPreview: { markStale: () => { stale += 1; } } }, parseFloat });
+  nodes['ren-campus'].listeners.input();
+  assert.equal(nodes['ren-total'].value, 304929);
+  assert.equal(nodes['prev-ren-total'].textContent, '304929.00 kWh');
+  assert.equal(nodes['grid-total'].value, 40894);
+  // A huge or zero solar value never moves the electricity total; it only marks the preview stale.
+  for (const solar of ['0', '999999999']) {
+    nodes['ren-solar'].value = solar;
+    const before = stale;
+    nodes['ren-solar'].listeners.input();
+    assert.equal(stale, before + 1);
+    nodes['ren-procured'].listeners.input();
+    assert.equal(nodes['ren-total'].value, 304929);
+  }
+  assert.notEqual(nodes['ren-total'].value, 367429);
+});
+
+test('Manager preview prints the backend electrical indicators and shows solar thermal apart', () => {
+  const preview = fs.readFileSync(path.join(__dirname, '..', 'calculation-preview.js'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'energy-entry.html'), 'utf8');
+  assert.match(html, /PREVIEW · RENEWABLE ELECTRICITY \(BACKEND\)/);
+  for (const id of ['prev-re-electricity', 'prev-total-electricity', 'prev-re-share', 'prev-avoided', 'prev-solar-thermal']) {
+    assert.match(html, new RegExp(`id="${id}"`));
+    assert.doesNotMatch(html, new RegExp(`<input[^>]*id="${id}"`));  // read-only text, never an input
+  }
+  assert.match(html, /Thermal energy, shown separately\. Not included in any electrical value above\./);
+
+  const block = preview.match(/function renderEnergyIndicators\(energy\) \{[\s\S]*?\n  \}/)[0];
+  // The renderer holds no factor and performs no arithmetic on the values.
+  assert.doesNotMatch(block, /0\.727|[^=!<>]\s[*/+]\s|solar_thermal\.value\s*[+*]/);
+  const nodes = {};
+  const render = vm.runInNewContext(`${block}\nrenderEnergyIndicators`, {
+    document: { getElementById: id => (nodes[id] ||= { textContent: '' }) }, Number
+  });
+  render({
+    renewable_electricity_kwh: { status: 'available', value: 304929, unit: 'kWh' },
+    total_electricity_consumption_kwh: { status: 'available', value: 345823, unit: 'kWh' },
+    renewable_share_pct: { status: 'available', value: 88.174875586644, unit: '%' },
+    estimated_avoided_grid_emissions_tco2e: { status: 'available', value: 221.683383, unit: 'tCO2e' },
+    solar_thermal: { metric_code: 'solar_water_heater_kwh', value: 62500, unit: 'kWh', included_in_electricity: false }
+  });
+  assert.equal(nodes['prev-re-electricity'].textContent, '3,04,929 kWh');
+  assert.equal(nodes['prev-total-electricity'].textContent, '3,45,823 kWh');
+  assert.equal(nodes['prev-re-share'].textContent, '88.174876 %');
+  assert.equal(nodes['prev-avoided'].textContent, '221.683383 tCO2e');
+  assert.equal(nodes['prev-solar-thermal'].textContent, '62,500 kWh (thermal)');
+  // The combined figure is never produced.
+  assert.doesNotMatch(Object.values(nodes).map(item => item.textContent).join(' '), /3,67,429|367429/);
+
+  // Missing source: unavailable with the backend's reason, never a zero; solar thermal "Not entered".
+  render({
+    renewable_electricity_kwh: { status: 'unavailable', value: null, unit: 'kWh', reason: 'renewable_electricity_source_missing' },
+    solar_thermal: { value: null, unit: 'kWh' }
+  });
+  assert.equal(nodes['prev-re-electricity'].textContent, 'Unavailable — renewable electricity source missing');
+  assert.equal(nodes['prev-solar-thermal'].textContent, 'Not entered');
+  // A zero solar water heater is a reported value and is shown as 0.
+  render({ solar_thermal: { value: 0, unit: 'kWh' } });
+  assert.equal(nodes['prev-solar-thermal'].textContent, '0 kWh (thermal)');
+});
+
+test('Admin review separates derived electrical values from solar thermal, read-only', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'admin-queue.html'), 'utf8');
+  const source = html.match(/function energyHtml\(energy\) \{[\s\S]*?\n      \}/)[0];
+  const energyHtml = vm.runInNewContext(`${source}\nenergyHtml`, { escapeHtml: value => String(value) });
+  const out = energyHtml({
+    renewable_electricity_kwh: { status: 'available', value: 304929, unit: 'kWh' },
+    total_electricity_consumption_kwh: { status: 'available', value: 345823, unit: 'kWh' },
+    renewable_share_pct: { status: 'available', value: 88.174875586644, unit: '%' },
+    estimated_avoided_grid_emissions_tco2e: { status: 'available', value: 221.683383, unit: 'tCO2e' },
+    solar_thermal: { value: 62500, unit: 'kWh' }
+  });
+  assert.match(out, /<h3>Derived electrical values \(read-only\)<\/h3>/);
+  assert.match(out, /Renewable electricity total \(on-campus \+ procured\)<\/td><td>304929 kWh/);
+  assert.match(out, /Total electricity \(grid \+ renewable electricity\)<\/td><td>345823 kWh/);
+  assert.match(out, /Renewable share<\/td><td>88\.174875586644 %/);
+  assert.match(out, /Electrical avoided emissions<\/td><td>221\.683383 tCO2e/);
+  assert.match(out, /<h3[^>]*>Solar thermal \(separate from electricity\)<\/h3><p><strong>Solar water heater:<\/strong> 62500 kWh — thermal energy, not included in any electrical value above\./);
+  assert.doesNotMatch(out, /367429/);
+  assert.doesNotMatch(out, /<input|contenteditable/);  // the Admin cannot edit a derived value
+  assert.equal(energyHtml(null), '');  // non-energy submissions render nothing
+  // Wired into the review modal, and source rows state what they are.
+  assert.match(html, /\$\{energyHtml\(currentSubmission\.energy\)\}\$\{calculationsHtml\(/);
+  assert.match(html, /solar_water_heater_kwh: 'Solar thermal \(source\) — not electricity'/);
+  assert.match(html, /renewable_total_kwh: 'Legacy total incl\. solar water heater — deprecated, as originally recorded, not used'/);
+});
+
+test('Admin review shows diverted waste and waste per person as backend-derived, never editable', () => {
+  const queue = fs.readFileSync(path.join(__dirname, '..', 'admin-queue.html'), 'utf8');
+  assert.match(queue, /Waste Diverted from Landfill \(derived\)/);
+  assert.match(queue, /waste\.waste_diverted_from_landfill_kg/);
+  assert.match(queue, /Waste per Person \(derived\)/);
+  assert.match(queue, /diverted from landfill = dry/);
+  // The Manager form has no input for any calculated waste value.
+  const entry = fs.readFileSync(path.join(__dirname, '..', 'waste-entry.html'), 'utf8');
+  assert.doesNotMatch(entry, /<input[^>]*(?:diverted|per_capita|total_waste|dry_waste)/i);
+});
+
+test('Outreach Manager form, its payload and Admin review carry no gender field', () => {
+  const read = name => fs.readFileSync(path.join(__dirname, '..', name), 'utf8');
+  const entry = read('community-outreach-entry.html');
+  const integration = read('outreach-integration.js');
+  const api = read('outreach-api.js');
+  const queue = read('admin-queue.html');
+  for (const [name, source] of [['community-outreach-entry.html', entry], ['outreach-integration.js', integration], ['outreach-api.js', api], ['admin-queue.html', queue]]) {
+    assert.doesNotMatch(source, /gender|male_participants|female_participants|other_not_disclosed|Not Disclosed/i, name);
+  }
+  // No placeholder zeros are sent in place of the removed fields.
+  assert.doesNotMatch(integration, /(?:male|female|other)[\w-]*\s*:\s*0\b/i);
+  // The participant total still comes from the six participant categories.
+  for (const id of ['participant-school', 'participant-college', 'participant-farmers', 'participant-industrial', 'participant-researchers', 'participant-government']) {
+    assert.ok(integration.includes(`nullableInteger('${id}')`), id);
+    assert.ok(entry.includes(`id="${id}"`), id);
+  }
+  assert.match(entry, /id="participant-total" readonly/);
+  assert.match(entry, /function calculateParticipants\(\)/);
+  assert.doesNotMatch(entry, /function calculateGender/);
+  // Admin review lists whatever programme fields the API returns; the API no longer returns gender.
+  assert.match(queue, /Object\.entries\(programme\)\.filter\(\(\[key\]\) => !ignored\.has\(key\)\)/);
+});
+
+test('Admin has a Certificates page that manages documents through the admin API only', () => {
+  const read = name => fs.readFileSync(path.join(__dirname, '..', name), 'utf8');
+  const page = read('admin-certificates.html');
+  const script = read('admin-certificates.js');
+  // Admin-only page, reachable from every Admin page's navigation.
+  assert.match(page, /<body data-auth-role="microcosm_admin" data-login-page="admin-login\.html">/);
+  for (const name of ['admin-overview.html', 'admin-queue.html', 'admin-evidence.html', 'admin-factors.html', 'admin-preview.html', 'admin-users.html', 'admin-audit.html']) {
+    assert.ok(read(name).includes('<a href="admin-certificates.html" class="nav-item">Certificates</a>'), name);
+  }
+  // Every metadata field of the upload form.
+  for (const id of ['cert-domain', 'cert-type', 'cert-year', 'cert-title', 'cert-issuer', 'cert-registration', 'cert-authorization', 'cert-serial', 'cert-date', 'cert-received', 'cert-invoice', 'cert-manifest', 'cert-quantity', 'cert-unit', 'cert-order', 'cert-notes', 'cert-file']) {
+    assert.ok(page.includes(`id="${id}"`), id);
+    if (id !== 'cert-file') assert.ok(script.includes(`'${id}'`), id);
+  }
+  assert.match(page, /accept="application\/pdf,image\/png,image\/jpeg"/);
+  assert.match(page, /The reporting year is <strong>not<\/strong> taken from the certificate date\./);
+  assert.match(page, /never used in any waste, GHG or other sustainability figure/);
+  for (const id of ['filter-domain', 'filter-year', 'filter-status']) assert.ok(page.includes(`id="${id}"`), id);
+  // Upload (multipart, CSRF), metadata edit, publish, archive and preview go through /api/admin/certificates.
+  assert.match(script, /const BASE = '\/api\/admin\/certificates';/);
+  assert.match(script, /csrf: !\['GET', 'HEAD'\]\.includes/);
+  assert.match(script, /new FormData\(\)/);
+  assert.match(script, /body\.append\('file', file\)/);
+  assert.match(script, /method: 'PATCH', body: JSON\.stringify\(values\)/);
+  assert.match(script, /\$\{BASE\}\/\$\{encodeURIComponent\(item\.id\)\}\/\$\{action\}`, \{ method: 'POST' \}/);
+  for (const action of ['preview', 'edit', 'publish', 'archive']) assert.ok(script.includes(`data-action="${action}"`), action);
+  assert.match(script, /\/file`\)/);
+  // No delete, and nothing about a particular certificate is written into the page.
+  assert.doesNotMatch(script, /method: 'DELETE'/);
+  assert.doesNotMatch(script + page, /Green India|\b1640\b|\b1390\b|2041-|GIR\/|1718109/);
+  assert.doesNotMatch(script, /\b20[2-9]\d\b/);
+  // Values from the API are escaped before they are placed in the table.
+  assert.match(script, /escapeHtml\(item\.title\)/);
 });

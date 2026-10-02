@@ -1,0 +1,76 @@
+# CANDIDATE - isolated Alpine validation stack. NOT the working runtime.
+#
+#   docker compose -f compose.alpine-test.yaml up -d postgres
+#
+# Its own Compose project, its own volumes and its own host port (18000), so it
+# never touches the microcosm-local stack, its volumes or port 8000. The database
+# is filled only by pg_restore from a logical dump; no existing volume is attached.
+# The environment worker is deliberately absent: its browser driver (Playwright)
+# has no Alpine build, so the worker stays on its current image.
+name: kcosmos-alpine-validation
+
+services:
+  postgres:
+    image: postgres:17.6-alpine3.22
+    environment:
+      POSTGRES_DB: microcosm
+      POSTGRES_USER: microcosm_app
+      POSTGRES_PASSWORD: microcosm_dev_only
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U microcosm_app -d microcosm"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.alpine
+      args:
+        INSTALL_DEV: "true"
+    environment:
+      APP_ENV: development
+      DATABASE_URL: ${ALPINE_VALIDATION_DATABASE_URL:-postgresql+psycopg://microcosm_app:microcosm_dev_only@postgres:5432/microcosm_clean_20260922}
+      LOG_LEVEL: INFO
+      PUBLIC_BASE_URL: http://localhost:8000
+      INSTITUTION_TIMEZONE: Asia/Kolkata
+      ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      SECRET_KEY: development-only-change-me
+      CSRF_SECRET: development-csrf-change-me
+      SESSION_COOKIE_NAME: microcosm_session
+      CSRF_COOKIE_NAME: microcosm_csrf
+      SESSION_IDLE_MINUTES: 60
+      SESSION_ABSOLUTE_HOURS: 8
+      SESSION_COOKIE_SECURE: "false"
+      SESSION_COOKIE_SAMESITE: lax
+      EVIDENCE_ROOT: /data/evidence
+      EVIDENCE_STORAGE_DIR: /data/evidence/clean
+      MAX_EVIDENCE_FILE_SIZE_BYTES: 10485760
+      ALLOWED_EVIDENCE_TYPES: application/pdf,image/png,image/jpeg
+      MAX_UPLOAD_BYTES: 10485760
+      LOGIN_MAX_FAILURES: 5
+      LOGIN_LOCK_MINUTES: 15
+      PASSWORD_MIN_LENGTH: 12
+    ports:
+      - "127.0.0.1:18000:8000"
+    volumes:
+      - evidence_quarantine:/data/evidence/quarantine
+      - evidence_clean:/data/evidence/clean
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: "no"
+
+volumes:
+  postgres_data:
+  evidence_quarantine:
+  evidence_clean:

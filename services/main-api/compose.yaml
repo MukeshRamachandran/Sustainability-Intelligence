@@ -43,6 +43,7 @@ services:
       SESSION_COOKIE_SAMESITE: lax
       EVIDENCE_ROOT: /data/evidence
       EVIDENCE_STORAGE_DIR: /data/evidence/clean
+      CERTIFICATE_STORAGE_ROOT: /app/certificate-storage
       MAX_EVIDENCE_FILE_SIZE_BYTES: 10485760
       ALLOWED_EVIDENCE_TYPES: application/pdf,image/png,image/jpeg
       MAX_UPLOAD_BYTES: 10485760
@@ -54,6 +55,8 @@ services:
     volumes:
       - microcosm_evidence_quarantine:/data/evidence/quarantine
       - microcosm_evidence_clean:/data/evidence/clean
+      # Public certificate documents: their own volume and lifecycle.
+      - microcosm_certificate_storage:/app/certificate-storage
     depends_on:
       postgres:
         condition: service_healthy
@@ -69,3 +72,4 @@ volumes:
   microcosm_postgres_data:
   microcosm_evidence_quarantine:
   microcosm_evidence_clean:
+  microcosm_certificate_storage:

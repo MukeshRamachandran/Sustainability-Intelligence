@@ -24,7 +24,19 @@ from app.services.outreach import aggregate_approved_outreach
 from app.services.publication_readiness import REQUIRED_PUBLICATION_DOMAINS
 
 # Older frozen payloads remain immutable and retain their stored schema version.
-RELEASE_SCHEMA_VERSION = "1.4"
+# 1.5: LPG activity is lpg_weight_kg (kg) x LPG_KG (kgCO2e/kg); the litre metric
+# is never published (0013_lpg_kg_governance_v2).
+RELEASE_SCHEMA_VERSION = "1.5"
+# Schemas whose derived energy/water indicators must be complete to publish.
+DERIVED_INDICATOR_SCHEMA_VERSIONS = frozenset({"1.4", "1.5"})
+LPG_ACTIVITY_METRIC = "lpg_weight_kg"
+LPG_ACTIVITY_UNIT = "kg"
+LPG_FACTOR_UNIT = "kgCO2e/kg"
+LEGACY_LPG_METRIC = "lpg_consumption_litres"
+# LEGACY - kept only so frozen release payloads and older clients stay readable.
+# It is NOT the waste-diversion methodology: waste diverted from landfill is the
+# dry waste generated (sustainability_formulas.waste_diverted_from_landfill_kg).
+# Never derive a quantity from this percentage or apply it to another year.
 LANDFILL_DIVERSION_STATIC_REFERENCE_PCT = Decimal("88.1")
 GENERIC_PUBLICATION_DOMAINS = (
     OperationalDomain.TRANSPORT,
@@ -72,6 +84,10 @@ def _public_calculation(item: CalculationResponse) -> dict[str, object]:
         "result_value": _json_number(item.result_value),
         "result_unit": item.result_unit,
         "formula_version": item.formula_version,
+        # Only present for a derived activity (kWh-based DG): source kWh, the
+        # governed SFC and the derived litres. Absent for every other result,
+        # so litre-based calculations keep their exact shape.
+        **({"derivation": item.derivation} if item.derivation else {}),
     }
 
 
@@ -275,6 +291,12 @@ def _schema_1_3_indicators(
             "kg/person",
             "waste_or_population_unavailable",
         ),
+        # Owner-approved methodology: diverted from landfill = dry waste.
+        "waste_diverted_from_landfill_kg": _indicator(
+            formulas.waste_diverted_from_landfill_kg(_decimal_metric(waste, "dry_waste_generated_kg")),
+            "kg",
+            "dry_waste_unavailable",
+        ),
         # Retain the legacy broad-total key honestly; Operational GHG is the
         # explicitly bounded Scope 1 + Scope 2 indicator, not an all-scope total.
         "total_ghg_tco2e": {
@@ -379,9 +401,41 @@ def _schema_1_4_indicators(payload: dict[str, object]) -> dict[str, object]:
     return indicators
 
 
+ELECTRICITY_INDICATOR_CODES = (
+    "renewable_electricity_kwh",
+    "total_electricity_consumption_kwh",
+    "renewable_share_pct",
+    "estimated_avoided_grid_emissions_tco2e",
+)
+SOLAR_THERMAL_METRIC = "solar_water_heater_kwh"
+
+
+def electricity_indicators(db: Session, submission: Submission) -> dict[str, object]:
+    """Electrical indicators of one Energy submission, for the Manager and Admin.
+
+    The same calculation a release freezes (``_schema_1_4_indicators``):
+    renewable electricity = on-campus + procured, total electricity = grid
+    total + renewable electricity, share and avoided grid emissions from those.
+    The solar water heater is thermal: it is returned separately and is never
+    an input here. Nothing is stored; the values are derived from the
+    submission's source values each time.
+    """
+    energy = _generic_domain_payload(db, submission)
+    indicators = _schema_1_4_indicators({OperationalDomain.ENERGY.value: energy})
+    return {
+        **{code: indicators[code] for code in ELECTRICITY_INDICATOR_CODES},
+        "solar_thermal": {
+            "metric_code": SOLAR_THERMAL_METRIC,
+            "value": _json_number(_decimal_metric(energy, SOLAR_THERMAL_METRIC)),
+            "unit": "kWh",
+            "included_in_electricity": False,
+        },
+    }
+
+
 def derived_payload_blockers(payload: dict[str, object]) -> list[dict[str, str]]:
     """Block newly prepared governed releases with incomplete derived sources."""
-    if payload.get("schema_version") != RELEASE_SCHEMA_VERSION:
+    if payload.get("schema_version") not in DERIVED_INDICATOR_SCHEMA_VERSIONS:
         return []
     indicators = payload.get("indicators")
     if not isinstance(indicators, dict):
@@ -393,6 +447,34 @@ def derived_payload_blockers(payload: dict[str, object]) -> list[dict[str, str]]
             reason = entry.get("reason", "indicator_missing") if isinstance(entry, dict) else "indicator_missing"
             domain = "water" if code == "water_per_capita_l" else "energy"
             blockers.append({"domain": domain, "status": "invalid", "reason": f"{code}:{reason}"})
+    return blockers
+
+
+def lpg_payload_blockers(payload: dict[str, object]) -> list[dict[str, str]]:
+    """Refuse to prepare or publish a release whose LPG block is not kg-based.
+
+    Applied at prepare and at publish, so a litre-era candidate (or a period
+    whose LPG submission was frozen against the litre factor) cannot become a
+    new public release. Already-published releases are never re-validated.
+    """
+    lpg = payload.get(OperationalDomain.LPG.value)
+    if not isinstance(lpg, dict):
+        return []
+    blockers: list[dict[str, str]] = []
+    metrics = lpg.get("metrics")
+    if isinstance(metrics, dict) and LEGACY_LPG_METRIC in metrics:
+        blockers.append({"domain": "lpg", "status": "invalid", "reason": "lpg_litre_metric_superseded_by_kg"})
+    calculations = lpg.get("calculations")
+    for item in calculations if isinstance(calculations, list) else []:
+        if not isinstance(item, dict) or item.get("calculation_code") != "lpg_emissions":
+            continue
+        if item.get("activity_metric_code") != LPG_ACTIVITY_METRIC or item.get("activity_unit") not in (
+            LPG_ACTIVITY_UNIT,
+            None,
+        ):
+            blockers.append({"domain": "lpg", "status": "invalid", "reason": "lpg_activity_is_not_governed_kg"})
+        elif item.get("status") == "available" and item.get("factor_unit") != LPG_FACTOR_UNIT:
+            blockers.append({"domain": "lpg", "status": "invalid", "reason": "lpg_factor_is_not_governed_kg"})
     return blockers
 
 

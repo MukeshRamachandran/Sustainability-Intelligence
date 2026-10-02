@@ -1,0 +1,29 @@
+{
+  "code": "water_2026_july_owner_source",
+  "version": 1,
+  "domain": "water",
+  "priority": 1,
+  "source_reference": "database/historical-sources/water/water_2026_july.csv",
+  "parser": "wide_monthly",
+  "description": "Institutional water consumption sheet 2026: water supply for July 2026 only (TWAD, borewell and procured/private water, KL), transcribed from the spreadsheet screenshot supplied and approved for import by the project owner. Only these three source values are imported. The sheet's Total Consumption (20467.27 KL) is a reference figure and is not imported: total water consumed is calculated by the backend from the three components. The sheet supplies no July value for recycled water, wastewater, STP or water quality, so none is created and none is treated as zero. Jan - Jun 2026 are already governed and are not part of this source; August 2026 and later are out of scope.",
+  "options": {
+    "header_row": 0,
+    "year_column": "year",
+    "month_column": "month"
+  },
+  "columns": {
+    "water_twad_kl": {
+      "metric_code": "water_twad_kl",
+      "unit": "KL"
+    },
+    "water_borewell_kl": {
+      "metric_code": "water_borewell_kl",
+      "unit": "KL"
+    },
+    "water_private_kl": {
+      "metric_code": "water_private_kl",
+      "unit": "KL",
+      "note": "Source column 'Quantity of Water Procured'; water_private_kl is the existing canonical metric for procured/private water supply."
+    }
+  }
+}
