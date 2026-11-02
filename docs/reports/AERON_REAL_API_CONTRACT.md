@@ -1,10 +1,31 @@
 # Aeron real API contract — verified
 
+## REST API v1 (current, used by the worker)
+
+Verified live on 2026-11-02 at 11:02 UTC with three requests, one per endpoint. The key was never printed or stored. The sanitized responses, with the device IMEI redacted, are in [`services/main-api/tests/fixtures/aeron/aeron_v1_sample_sanitized.json`](../../services/main-api/tests/fixtures/aeron/aeron_v1_sample_sanitized.json).
+
+| Item | Verified value |
+| --- | --- |
+| Base URL | `https://live3.aeronsystems.com/api/v1` |
+| Auth | `Authorization: Bearer <API key>` |
+| `GET /stations` | 200 JSON `{"stations": [{id, name, type, location, latitude, longitude, timezone, status, lastDataAt, expiryDate, region, organizationId, reportingIntervalMs, …}]}`. One station: Air Quality KCT, XTM-XG930, `Asia/Kolkata`, `reportingIntervalMs` 60000 |
+| `GET /parameters?station={id}` | 200 JSON `{"parameters": [{code, unit, description}]}`, 35 entries. Every code and unit matches `PARAMETER_MAP`, except AQI, whose source unit is `Unit` where the map says `index` |
+| `GET /timeseries?station={id}` | 200 JSON `{"station", "resolution": "latest", "reading": {"timestamp": "2026-11-02T10:58:01.000Z", "epoch_ms": 1793617081000, "values": {"<id>": <number>, …35}}}` |
+| Rate limits (response headers) | `X-Ratelimit-Limit-Minute: 60`, `X-Ratelimit-Limit-Day: 10000`, `X-Ratelimit-Remaining-*`, `X-Ratelimit-Reset` (epoch seconds), `X-Ratelimit-Bucket: cheap` |
+| Timestamp | UTC with `Z`. `epoch_ms` is the same instant. 10:58:01Z = 16:28:01 IST. No +330. |
+| Device health | Not present in v1 |
+| History parameters | **Not verified.** Not used. |
+| Push / webhook | None documented or observed. Not used. |
+
+The rest of this document records the earlier cookie-route verification. It remains the evidence that Aeron timestamps are true UTC.
+
+## Historical: cookie-authenticated internal route (retired 2026-11-02)
+
 Verified live on 2026-09-25 (03:18–04:04 UTC) against station **Air Quality KCT**. This replaces the earlier "blocked" report: the blocker was the wrong Python path; the project-local interpreter `C:\Projects\AERON-PLAYWRIGHT\AQI-integration--main\.venv\Scripts\python.exe` (Python 3.13.14, Playwright 1.63.0, Chromium 153 headless) works.
 
 Every statement below comes from a real authenticated response. No secret was printed, logged, persisted or committed. The sanitized sample is [`services/main-api/tests/fixtures/aeron/aeron_real_sample_sanitized.json`](services/main-api/tests/fixtures/aeron/aeron_real_sample_sanitized.json).
 
-## Authentication
+### Authentication
 
 | Question | Verified result |
 | --- | --- |

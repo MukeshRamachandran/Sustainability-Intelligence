@@ -3021,3 +3021,16 @@ test('no certificate content is written into the dashboard code', () => {
   assert.match(source, /const YEARS_ROUTE = '\/api\/public\/certificates\/years';/);
   assert.match(source, /domain: 'waste', pageId: 'waste'/);
 });
+
+test('Weather shows the last successful sync and assigns no unconfirmed AQI category or humidity unit', () => {
+  const weather = read('weather.js');
+  const code = weather.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+  assert.match(code, /request\('\/status'\)/);
+  assert.match(code, /last_successful_sync/);
+  assert.match(code, /server unreachable, showing last stored reading/);
+  for (const category of ['Unhealthy', 'Hazardous', "'Good'", "'Moderate'"]) {
+    assert.ok(!code.includes(category), `AQI category ${category} must not be assigned until the standard is confirmed`);
+  }
+  assert.match(code, /statCard\('Relative Humidity', 'wx-humidity', 'Per'/);
+  assert.doesNotMatch(code, /Humidity \(%\)/);
+});

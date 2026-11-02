@@ -20,6 +20,8 @@ class EnvironmentReadingResponse(BaseModel):
     station_id: str
     observed_at: datetime
     ingested_at: datetime
+    # When the worker received the reading from Aeron; NULL on rows stored before API v1.
+    fetched_at: datetime | None = None
     recorded_at: datetime
     source_recorded_at: datetime
     freshness: Freshness | None = None
@@ -87,3 +89,14 @@ class EnvironmentStatusResponse(BaseModel):
     last_successful_sync: datetime | None
     data_availability: str
     connection_status: str
+
+
+class EnvironmentParameterResponse(BaseModel):
+    """One Aeron parameter: the reading field it fills, its source name, unit and category."""
+
+    parameter_id: str
+    field: str
+    name: str
+    unit: str
+    category: str
+    note: str | None = None

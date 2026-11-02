@@ -32,8 +32,7 @@ Path:
 services/main-api/app/environment
 
 Responsibilities:
-- Playwright session acquisition/refresh (worker only)
-- Aeron readings HTTP polling (worker only, every 5 minutes)
+- Aeron REST API v1 polling with a Bearer API key (worker only, every 60 s by default)
 - sensor normalization and validation
 - environmental persistence (`environment` schema)
 - freshness classification

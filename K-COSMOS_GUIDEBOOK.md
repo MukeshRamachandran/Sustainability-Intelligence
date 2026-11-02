@@ -179,14 +179,11 @@ The heart of the system. A **FastAPI** (Python 3.12) application backed by **Pos
 
 | File | What it does | In simple words |
 | --- | --- | --- |
-| `pyproject.toml` | Python package definition. Runtime deps: FastAPI, SQLAlchemy, psycopg, Alembic, Argon2, Pydantic, structlog, uvicorn. Extras: `dev` (pytest, ruff, mypy) and `aeron-worker` (Playwright). Configures ruff (lint) and mypy (strict types). | The shopping list of libraries plus the code-quality settings. |
+| `pyproject.toml` | Python package definition. Runtime deps: FastAPI, SQLAlchemy, psycopg, Alembic, Argon2, Pydantic, structlog, uvicorn. httpx (Aeron REST client). Extra: `dev` (pytest, ruff, mypy). Configures ruff (lint) and mypy (strict types). | The shopping list of libraries plus the code-quality settings. |
 | `uv.lock` | Exact locked versions of every dependency. | Makes installs reproducible. |
 | `.env.example` | Template of every setting (database URL, secrets, cookie names, session times, evidence folder, login lockout, Aeron worker settings). | Copy to `.env` for local runs. **Contains what look like real Aeron credentials — see §17.** |
 | `compose.yaml` | Docker Compose for local dev: a `postgres:17.6` container and the `api` container on `127.0.0.1:8000`, plus volumes for the database and evidence files. Points at the clean database `microcosm_clean_20260922`. | One command (`docker compose up`) starts the database and the API. |
-| `compose.worker.yaml` | Adds the `environment-worker` container (the Aeron poller). Requires Aeron station/username/password from your environment. | Starts the sensor-reading worker. |
-| `compose.yaml.before-aeron-worker` | Backup of `compose.yaml` before the worker was added. | Safety copy; not used. |
 | `Dockerfile` | Builds the API image as a non-root user, creates evidence folders, runs `uvicorn app.main:app`. | Recipe for the API container. |
-| `Dockerfile.worker` | Builds the worker image with Playwright + Chromium, runs `python -m app.environment.worker`. | Recipe for the worker container (the only image with a browser). |
 | `alembic.ini`, `alembic/env.py`, `alembic/script.py.mako` | Alembic configuration and migration template. | Tells Alembic how to reach the database. |
 | `README.md` | How to run with Docker, run checks, apply migrations, and bootstrap accounts. | Setup notes (partly outdated — it still says "D3 contains no schema migration"). |
 | `DELIVERY_SOURCE_OF_TRUTH.md` | Early checkpoint note: which folders were authoritative and which demo behaviours must be removed from the production path. | Historical note; its paths point to another machine (`C:\Users\Ram\...`). |
@@ -304,15 +301,15 @@ Imports older institutional CSVs into the `history` schema without ever pretendi
 
 | File | What it does |
 | --- | --- |
-| `config.py` | Worker-only settings (station ID, Aeron URLs, credentials as `SecretStr`, poll interval 300 s, timeouts). Read from the process environment. |
-| `parameters.py` | The 35 Aeron parameter IDs with captions and source units, verified against the live station on 2026-09-25. No unit conversion. |
-| `normalizer.py` | Turns one Aeron payload into a reading. `recordedAt` is treated as true UTC — **no +330-minute correction** (verified). Records quality flags. |
-| `source.py` | `AeronReadingsClient` (plain HTTP with the session cookie) and `PlaywrightLogin` (headless browser used only to log in and get cookies, roughly hourly). Errors carry fixed codes, never upstream text or secrets. |
+| `config.py` | Worker-only settings (station ID, API v1 base URL, `AERON_API_KEY` as `SecretStr`, poll interval 60 s, timeouts, retry attempts). Read from `services/main-api/.env`. |
+| `parameters.py` | `PARAMETER_MAP`: the 35 Aeron parameter IDs with name, unit and category, bound to the existing reading columns, plus verification notes. Checked against the live API on 2026-11-02. No unit conversion. |
+| `normalizer.py` | Turns one `/timeseries` response into a reading. `reading.timestamp` is true UTC — **no +330-minute correction** (verified). Missing values become NULL with a quality flag; unknown IDs go to `unmapped_values`. |
+| `source.py` | `AeronApiClient`: httpx with Bearer auth, connection reuse, timeouts, bounded jittered retries for timeouts/5xx only, `Retry-After` on 429. Errors carry fixed codes, never upstream text or the key. |
 | `repository.py` | Inserts a reading once per station + timestamp; reads latest/history; records worker runs. |
 | `freshness.py` | LIVE / STALE / OFFLINE classification from server time. |
-| `worker.py` | `python -m app.environment.worker` (loop) or `--once`. Each cycle: reuse session → fetch latest → re-login once if expired → normalise → insert if new → record the run. A PostgreSQL advisory lock guarantees only one worker runs. |
+| `worker.py` | `python -m app.environment.worker` (loop) or `--once`. Each cycle: fetch latest → normalise → insert if new → record the run. `PollScheduler` waits the interval, honours `Retry-After`, and backs off 5 min → 1 h on 401/403/404. A PostgreSQL advisory lock guarantees only one worker runs. |
 
-**In simple words:** a robot that checks the campus weather station every five minutes and writes down what it sees. The website only reads the robot's notebook.
+**In simple words:** a robot that checks the campus weather station every minute and writes down what it sees. The website only reads the robot's notebook.
 
 ### 7.11 Database migrations — `alembic/versions/`
 
@@ -610,7 +607,7 @@ Found while preparing this guide. Most urgent first.
 
 | # | Issue | Where | Suggested action |
 | --- | --- | --- | --- |
-| 1 | **A tracked template file contains what appear to be real Aeron login credentials.** | `services/main-api/.env.example` (the `AERON_USERNAME` / `AERON_PASSWORD` lines) | Rotate the Aeron password, replace the values with placeholders, and consider scrubbing git history. The worker is designed to read these from the environment only. |
+| 1 | **Real Aeron login credentials remain in Git history** (removed from the current `.env.example`; the REST API v1 worker no longer uses them). | Commits `0aa3a94`, `c94d10b` (`services/main-api/.env.example`) | Rotate the Aeron account password. Scrubbing history is a separate, explicitly approved operation. |
 | 2 | Root JS tests fail 11/11: they look for `app.js`, `data-loader.js` etc. in `tests/` instead of the app folder. | `tests/manager-admin/*.test.js` (`root = path.resolve(__dirname, '..')`) | Fix the path, or retire them if the app-local suites already cover them. |
 | 3 | Waste is missing from some admin/manager helpers: overview counts, history entry links and evidence labels list only five domains. | `admin-overview-api.js`, `manager-history.js`, `admin-evidence.js` | Add `waste`. |
 | 4 | Legacy login route points to a page that doesn't exist (`manager.html`). | `login.html`, `admin.html`, `portal-router.js`, `portal-guard.js` | Remove, or clearly mark as legacy. |

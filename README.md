@@ -58,7 +58,7 @@ The API, worker, Compose, and backup scripts read one file: `services/main-api/.
 | `PASSWORD_MIN_LENGTH` | Minimum 12 |
 | `ALLOWED_ORIGINS` | `https://sustainability.kct.ac.in` |
 | `SESSION_COOKIE_SECURE` | `true` in production |
-| `AERON_STATION_ID`, `AERON_USERNAME`, `AERON_PASSWORD` | Environment worker only |
+| `AERON_STATION_ID`, `AERON_API_KEY` | Environment worker only (Aeron REST API v1, Bearer key). Never put the key in a frontend file. |
 
 `OPENAPI_ENABLED` overrides the default, which hides `/docs` in production.
 
@@ -106,7 +106,7 @@ cd services/main-api
 docker compose up -d environment-worker
 ```
 
-The worker polls Aeron and writes environment readings. It needs the `AERON_*` variables in `.env`.
+The worker polls Aeron's REST API v1 every `AERON_POLL_INTERVAL_SECONDS` (default 60) and writes environment readings. It needs `AERON_STATION_ID` and `AERON_API_KEY` in `.env`. It runs from the API image; no browser is involved. See `docs/reports/AERON_INTEGRATION_ARCHITECTURE.md`.
 
 ## Production deployment
 

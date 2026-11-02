@@ -52,7 +52,7 @@ public_base="$(env_value PUBLIC_BASE_URL)"
 [[ "${cookie_secure}" == "true" ]] || die "SESSION_COOKIE_SECURE must be true"
 [[ "${public_base}" == https://* ]] || die "PUBLIC_BASE_URL must use HTTPS"
 
-for aeron_key in AERON_STATION_ID AERON_USERNAME AERON_PASSWORD; do
+for aeron_key in AERON_STATION_ID AERON_API_KEY; do
   [[ -n "$(env_value "${aeron_key}")" ]] || die "${aeron_key} is empty"
 done
 

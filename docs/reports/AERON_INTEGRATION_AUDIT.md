@@ -1,5 +1,7 @@
 # AERON integration — Phase 1 read-only architecture audit
 
+> **Historical (superseded 2026-11-02).** This document describes the retired Playwright/cookie integration. The current design, which uses the REST API v1 with a Bearer key, is in [AERON_INTEGRATION_ARCHITECTURE.md](AERON_INTEGRATION_ARCHITECTURE.md).
+
 Date: 2026-09-25. Scope: `C:\Projects\AERON-PLAYWRIGHT` and `C:\Projects\K-COSMOS-FINAL`. This document is analysis only: no ingestion, deployment, UI, database, sustainability, or publication changes were made. No live Aeron call or credentialed browser run was performed.
 
 ## Executive finding and provenance

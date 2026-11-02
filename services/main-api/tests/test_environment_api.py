@@ -7,14 +7,15 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings
-from app.environment.normalizer import normalize_reading
+from app.environment.normalizer import normalize_timeseries
+from app.environment.parameters import PARAMETER_MAP
 from app.environment.repository import insert_reading
 from app.main import create_app
-from app.models.environment import EnvironmentIngestionRun
+from app.models.environment import EnvironmentIngestionRun, EnvironmentReading
 from app.schemas.environment import EnvironmentReadingResponse
-from tests.environment_support import environment_sqlite_engine, real_latest_payload, real_station_id
+from tests.environment_support import environment_sqlite_engine, real_station_id, timeseries_payload_at
 
-OBSERVED = datetime(2026, 9, 24, 22, 34, tzinfo=UTC)
+OBSERVED = datetime(2026, 11, 2, 10, 58, 1, tzinfo=UTC)
 STATION = real_station_id()
 
 
@@ -47,13 +48,18 @@ def api(tmp_path: Path, factory: sessionmaker[Session], clock: Clock) -> Iterato
 
 
 def store(factory: sessionmaker[Session], minutes_after: int = 0, temperature: float | None = None) -> None:
-    payload = real_latest_payload()
-    payload["recordedAt"] = (OBSERVED + timedelta(minutes=minutes_after)).isoformat().replace("+00:00", "Z")
+    observed_at = OBSERVED + timedelta(minutes=minutes_after)
+    payload = timeseries_payload_at(observed_at)
     if temperature is not None:
-        payload["data"]["63d0dbfe0a111"] = temperature
-    ingested_at = OBSERVED + timedelta(minutes=minutes_after, seconds=40)
+        payload["reading"]["values"]["63d0dbfe0a111"] = temperature
+    ingested_at = observed_at + timedelta(seconds=40)
     with factory() as db:
-        insert_reading(db, normalize_reading(payload, STATION), ingested_at=ingested_at)
+        insert_reading(
+            db,
+            normalize_timeseries(payload, STATION),
+            ingested_at=ingested_at,
+            fetched_at=observed_at + timedelta(seconds=39),
+        )
         db.commit()
 
 
@@ -81,11 +87,14 @@ def test_latest_returns_the_ui_contract_with_server_side_freshness(
     assert body["station_id"] == STATION
     assert parse(body["observed_at"]) == parse(body["recorded_at"]) == parse(body["source_recorded_at"]) == OBSERVED
     assert parse(body["ingested_at"]) == OBSERVED + timedelta(seconds=40)
+    assert parse(body["fetched_at"]) == OBSERVED + timedelta(seconds=39)
     assert body["freshness"] == "LIVE"
-    assert body["temperature_c"] == pytest.approx(27.113262)
+    assert body["temperature_c"] == pytest.approx(33.312846)
+    assert body["air_quality_index"] == 107.0
     assert body["barometric_pressure_mba"] == 150.0
-    assert body["network"] == 4
-    assert "raw_payload" not in body and "quality_flags" not in body
+    assert body["network"] is None
+    for private in ("raw_payload", "quality_flags", "unmapped_values", "source_epoch_ms"):
+        assert private not in body
 
 
 @pytest.mark.parametrize(("minutes", "expected"), [(9, "LIVE"), (10, "STALE"), (30, "STALE"), (31, "OFFLINE")])
@@ -169,3 +178,51 @@ def test_status_reports_freshness_and_worker_health(
 def test_environment_routes_are_read_only(api: TestClient) -> None:
     for path in ("/api/environment/latest", "/api/environment/sync", "/api/sync/aeron"):
         assert api.post(path).status_code in (404, 405)
+
+
+def test_parameters_route_serves_the_static_map_with_verification_notes(api: TestClient) -> None:
+    response = api.get("/api/environment/parameters")
+
+    assert response.status_code == 200
+    rows = {row["parameter_id"]: row for row in response.json()}
+    assert set(rows) == set(PARAMETER_MAP)
+    assert rows["6422ae0f8147e"] == {
+        "parameter_id": "6422ae0f8147e",
+        "field": "air_quality_index",
+        "name": "AQI",
+        "unit": "index",
+        "category": "air_quality",
+        "note": "AQI calculation standard unconfirmed; no health category is assigned.",
+    }
+    assert rows["63d0dc28f109d"]["unit"] == "Per" and rows["63d0dc28f109d"]["note"]
+
+
+def test_rows_from_the_retired_cookie_worker_are_still_served_unchanged(
+    api: TestClient, factory: sessionmaker[Session]
+) -> None:
+    legacy_at = OBSERVED - timedelta(days=38)
+    with factory() as db:
+        db.add(
+            EnvironmentReading(
+                station_id=STATION,
+                observed_at=legacy_at,
+                ingested_at=legacy_at + timedelta(minutes=1),
+                source_recorded_at_raw="2026-09-24T22:34:00.000Z",
+                source="aeron-live3",
+                source_route="GET /api/stations/{station_id}/readings?mode=latest&region=india",
+                normalizer_version=1,
+                quality_flags=[],
+                raw_payload={"recordedAt": "2026-09-24T22:34:00.000Z"},
+                temperature_c=27.113262,
+                network=4,
+            )
+        )
+        db.commit()
+    store(factory)
+
+    history = api.get("/api/environment/history?limit=10").json()
+
+    assert [row["temperature_c"] for row in history] == [pytest.approx(33.312846), 27.113262]
+    legacy = history[1]
+    assert parse(legacy["observed_at"]) == legacy_at
+    assert legacy["fetched_at"] is None and legacy["network"] == 4

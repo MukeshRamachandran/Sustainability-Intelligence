@@ -1,0 +1,258 @@
+{
+  "_provenance": {
+    "source": "GET https://live3.aeronsystems.com/api/v1 (Bearer API key)",
+    "captured_at_utc": "2026-11-02T11:02:46Z",
+    "station_id": "b1ce41c2-586a-4a26-9382-9d8bfe757e78",
+    "sanitized": "device IMEI redacted; no credentials or headers stored",
+    "rate_limit_headers": {
+      "X-Ratelimit-Limit-Minute": "60",
+      "X-Ratelimit-Limit-Day": "10000",
+      "X-Ratelimit-Bucket": "cheap"
+    }
+  },
+  "stations": {
+    "stations": [
+      {
+        "id": "b1ce41c2-586a-4a26-9382-9d8bfe757e78",
+        "imei": "REDACTED",
+        "name": "Air Quality KCT",
+        "type": "XTM-XG930",
+        "location": "Kumaraguru College Of Technology KCT",
+        "latitude": 11.077777777777778,
+        "longitude": 76.98944444444444,
+        "timezone": "Asia/Kolkata",
+        "status": "active",
+        "lastDataAt": "2026-11-02T10:59:43.491Z",
+        "expiryDate": "2026-12-31T00:00:00.000Z",
+        "region": "india",
+        "pinned": false,
+        "organizationId": "95110905-7a63-4db2-9a31-d1ee39da817f",
+        "reportingIntervalMs": 60000
+      }
+    ]
+  },
+  "parameters": {
+    "parameters": [
+      {
+        "code": "63d0da020016a",
+        "unit": "mg/m3",
+        "description": "CO"
+      },
+      {
+        "code": "63d0da885f1a0",
+        "unit": "ug/m3",
+        "description": "NO2"
+      },
+      {
+        "code": "63d0daa4740ba",
+        "unit": "ug/m3",
+        "description": "SO2"
+      },
+      {
+        "code": "63d0daf2bcb74",
+        "unit": "ug/m3",
+        "description": "O3"
+      },
+      {
+        "code": "63d0db066e993",
+        "unit": "ug/m3",
+        "description": "NO"
+      },
+      {
+        "code": "63d0db8f77ecb",
+        "unit": "ug/m3",
+        "description": "PM 2.5"
+      },
+      {
+        "code": "63d0dbb867a7c",
+        "unit": "ug/m3",
+        "description": "PM 10"
+      },
+      {
+        "code": "63d0dbfe0a111",
+        "unit": "degC",
+        "description": "Ambient Temperature"
+      },
+      {
+        "code": "63d0dc28f109d",
+        "unit": "Per",
+        "description": "Relative Humidity"
+      },
+      {
+        "code": "63d0dc5164112",
+        "unit": "mm",
+        "description": "RAIN"
+      },
+      {
+        "code": "63d0dd3721886",
+        "unit": "kmph",
+        "description": "Wind Speed"
+      },
+      {
+        "code": "63d0dd4ff30c9",
+        "unit": "Deg",
+        "description": "Wind Direction"
+      },
+      {
+        "code": "63d0ddf115956",
+        "unit": "db",
+        "description": "Noise Average"
+      },
+      {
+        "code": "63d0de104027f",
+        "unit": "db",
+        "description": "Min value of Noise level"
+      },
+      {
+        "code": "63d0de34a0b72",
+        "unit": "db",
+        "description": "Max value of Noise level"
+      },
+      {
+        "code": "63d0de7568a3b",
+        "unit": "index",
+        "description": "UV"
+      },
+      {
+        "code": "63d0ea1253e8f",
+        "unit": "ppm",
+        "description": "CO2"
+      },
+      {
+        "code": "63d0ea927306d",
+        "unit": "mv",
+        "description": "CO_WE"
+      },
+      {
+        "code": "63d0eb32b7070",
+        "unit": "mV",
+        "description": "CO_AUX"
+      },
+      {
+        "code": "63d0eb591ee3a",
+        "unit": "mV",
+        "description": "NO2_WE"
+      },
+      {
+        "code": "63d0eb7f49e34",
+        "unit": "mV",
+        "description": "NO2_AUX"
+      },
+      {
+        "code": "63d0eba20cd96",
+        "unit": "mV",
+        "description": "SO2_WE"
+      },
+      {
+        "code": "63d0ebc89f18d",
+        "unit": "mV",
+        "description": "SO2_AUX"
+      },
+      {
+        "code": "63d0ebfa17c49",
+        "unit": "mV",
+        "description": "O3_WE"
+      },
+      {
+        "code": "63d0ec7aa5a61",
+        "unit": "mV",
+        "description": "O3_AUX"
+      },
+      {
+        "code": "63d0ec9873bc3",
+        "unit": "mV",
+        "description": "NO_WE"
+      },
+      {
+        "code": "63d0ecc9829f2",
+        "unit": "mV",
+        "description": "NO_AUX"
+      },
+      {
+        "code": "63d0ee3fcd99a",
+        "unit": "mBa",
+        "description": "Baromteric Pressure"
+      },
+      {
+        "code": "63d0eeb2aaeef",
+        "unit": "ltr",
+        "description": "Molecular Volume"
+      },
+      {
+        "code": "641d7b36d4413",
+        "unit": "ppb",
+        "description": "CO_ppm"
+      },
+      {
+        "code": "6421673518c4f",
+        "unit": "ppb",
+        "description": "NO2_ppb"
+      },
+      {
+        "code": "64216914170b7",
+        "unit": "ppb",
+        "description": "SO2_ppb"
+      },
+      {
+        "code": "64216a7500e46",
+        "unit": "ppb",
+        "description": "O3_ppb"
+      },
+      {
+        "code": "64216b8187e5e",
+        "unit": "ppb",
+        "description": "NO_ppb"
+      },
+      {
+        "code": "6422ae0f8147e",
+        "unit": "Unit",
+        "description": "Air Quality Index"
+      }
+    ]
+  },
+  "timeseries_latest": {
+    "station": "b1ce41c2-586a-4a26-9382-9d8bfe757e78",
+    "resolution": "latest",
+    "reading": {
+      "timestamp": "2026-11-02T10:58:01.000Z",
+      "epoch_ms": 1793617081000,
+      "values": {
+        "63d0da020016a": 0.253795,
+        "63d0da885f1a0": 86.019958,
+        "63d0daa4740ba": 2.799113,
+        "63d0daf2bcb74": 21.182377,
+        "63d0db066e993": 2.563264,
+        "63d0db8f77ecb": 44.372241,
+        "63d0dbb867a7c": 67.605019,
+        "63d0dbfe0a111": 33.312846,
+        "63d0dc28f109d": 59.291974,
+        "63d0dc5164112": 0,
+        "63d0dd3721886": 0,
+        "63d0dd4ff30c9": 180.677377,
+        "63d0ddf115956": 45.337437,
+        "63d0de104027f": 45.309498,
+        "63d0de34a0b72": 45.399454,
+        "63d0de7568a3b": 0.213921,
+        "63d0ea1253e8f": 380.414971,
+        "63d0ea927306d": 551.658069,
+        "63d0eb32b7070": 301.260466,
+        "63d0eb591ee3a": 0,
+        "63d0eb7f49e34": 240.149424,
+        "63d0eba20cd96": 238.966229,
+        "63d0ebc89f18d": 225.781688,
+        "63d0ebfa17c49": 352.504609,
+        "63d0ec7aa5a61": 341.032785,
+        "63d0ec9873bc3": 296.276449,
+        "63d0ecc9829f2": 282.081268,
+        "63d0ee3fcd99a": 150,
+        "63d0eeb2aaeef": 169.809654,
+        "641d7b36d4413": 1.538427,
+        "6421673518c4f": 317.543331,
+        "64216914170b7": 7.419685,
+        "64216a7500e46": 74.912847,
+        "64216b8187e5e": 15.507303,
+        "6422ae0f8147e": 107
+      }
+    }
+  }
+}

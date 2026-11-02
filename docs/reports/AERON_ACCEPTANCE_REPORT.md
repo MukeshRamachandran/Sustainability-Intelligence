@@ -1,5 +1,7 @@
 # Aeron integration — acceptance report
 
+> **Historical (superseded 2026-11-02).** This document describes the retired Playwright/cookie integration. The current design, which uses the REST API v1 with a Bearer key, is in [AERON_INTEGRATION_ARCHITECTURE.md](AERON_INTEGRATION_ARCHITECTURE.md).
+
 Date: 2026-09-25. Branch `feature-aeron-integration`, starting commit `2686a87` (uncommitted work below). Local stack: the main API container on `127.0.0.1:8000`, PostgreSQL `microcosm_clean_20260922`, and the staging UI on `127.0.0.1:3001`.
 
 **Result: the pipeline is accepted on real data.**

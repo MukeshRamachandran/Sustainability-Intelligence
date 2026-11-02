@@ -14,23 +14,30 @@ from app.environment.normalizer import NORMALIZER_VERSION, NormalizedReading
 from app.models.environment import EnvironmentIngestionRun, EnvironmentReading
 
 SOURCE = "aeron-live3"
-SOURCE_ROUTE = "GET /api/stations/{station_id}/readings?mode=latest&region=india"
+SOURCE_ROUTE = "GET /api/v1/timeseries?station={station_id}"
 
 
-def insert_reading(db: Session, reading: NormalizedReading, ingested_at: datetime) -> bool:
-    """Store a reading once per station + observation instant. Returns True when a row was added."""
+def insert_reading(
+    db: Session, reading: NormalizedReading, ingested_at: datetime, fetched_at: datetime | None = None
+) -> bool:
+    """Store a reading once per station + observation instant. Returns True when a row was added.
+
+    A repeated observation leaves the existing row exactly as first stored.
+    """
     values: dict[str, Any] = {
         "station_id": reading.station_id,
         "observed_at": reading.observed_at,
         "ingested_at": ingested_at,
+        "fetched_at": fetched_at,
         "source_recorded_at_raw": reading.source_recorded_at_raw,
+        "source_epoch_ms": reading.source_epoch_ms,
         "source": SOURCE,
         "source_route": SOURCE_ROUTE,
         "normalizer_version": NORMALIZER_VERSION,
         "quality_flags": reading.quality_flags,
         "raw_payload": reading.raw_payload,
+        "unmapped_values": reading.unmapped_values,
         **reading.metrics,
-        **reading.health,
     }
     dialect = db.get_bind().dialect.name
     insert = postgresql.insert if dialect == "postgresql" else sqlite.insert

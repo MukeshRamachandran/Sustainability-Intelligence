@@ -5,8 +5,8 @@
 # Its own Compose project, its own volumes and its own host port (18000), so it
 # never touches the microcosm-local stack, its volumes or port 8000. The database
 # is filled only by pg_restore from a logical dump; no existing volume is attached.
-# The environment worker is deliberately absent: its browser driver (Playwright)
-# has no Alpine build, so the worker stays on its current image.
+# The environment worker is absent from this candidate stack. It no longer needs
+# a browser (REST API v1), so it can run from the same image as the API.
 name: kcosmos-alpine-validation
 
 services:

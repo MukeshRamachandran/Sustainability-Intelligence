@@ -11,6 +11,8 @@ dependencies = [
   "alembic>=1.19.1,<2.0",
   "argon2-cffi>=25.1.0,<26.0",
   "fastapi>=0.141.1,<0.142",
+  # Aeron REST API v1 client (environment worker).
+  "httpx>=0.28.1,<0.29",
   "psycopg[binary,pool]>=3.3.4,<4.0",
   "pydantic>=2.13.5,<3.0",
   "pydantic-settings>=2.10.1,<3.0",
@@ -22,15 +24,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-  "httpx>=0.28.1,<0.29",
   "mypy>=1.17.1,<2.0",
   "pytest>=8.4.1,<9.0",
   "pytest-asyncio>=1.1.0,<2.0",
   "ruff>=0.12.11,<0.13",
-]
-# Only the Aeron ingestion worker needs a browser; the API image does not.
-aeron-worker = [
-  "playwright>=1.63.0,<1.64",
 ]
 
 [tool.hatch.build.targets.wheel]

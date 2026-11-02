@@ -1,7 +1,7 @@
 """Public, read-only Aeron environment API.
 
-Serves persisted readings only. Nothing here contacts Aeron or starts a
-browser; ingestion belongs to ``app.environment.worker``.
+Serves persisted readings and static parameter metadata only. Nothing here
+contacts Aeron; ingestion belongs to ``app.environment.worker``.
 """
 
 from datetime import datetime
@@ -11,9 +11,15 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.environment.freshness import LIVE_BEFORE, STALE_UNTIL, classify_freshness, reading_age
+from app.environment.parameters import AERON_PARAMETERS
 from app.environment.repository import SOURCE, latest_reading, latest_run, reading_history
 from app.models.environment import EnvironmentReading
-from app.schemas.environment import EnvironmentReadingResponse, EnvironmentStatusResponse, FreshnessThresholds
+from app.schemas.environment import (
+    EnvironmentParameterResponse,
+    EnvironmentReadingResponse,
+    EnvironmentStatusResponse,
+    FreshnessThresholds,
+)
 from app.security.dependencies import DbSession
 
 router = APIRouter(prefix="/api/environment", tags=["environment"])
@@ -98,3 +104,19 @@ def environment_status(request: Request, response: Response, db: DbSession) -> E
         data_availability="available" if latest else "unavailable",
         connection_status=connection,
     )
+
+
+@router.get("/parameters", response_model=list[EnvironmentParameterResponse])
+def environment_parameters() -> list[EnvironmentParameterResponse]:
+    """Static parameter metadata (names, source units, categories, verification notes). No upstream call."""
+    return [
+        EnvironmentParameterResponse(
+            parameter_id=parameter_id,
+            field=parameter.field,
+            name=parameter.name,
+            unit=parameter.unit,
+            category=parameter.category,
+            note=parameter.note,
+        )
+        for parameter_id, parameter in AERON_PARAMETERS.items()
+    ]

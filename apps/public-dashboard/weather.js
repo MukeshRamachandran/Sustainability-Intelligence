@@ -137,15 +137,11 @@
 
   /* ---- AQI severity band: color + public-facing label (kept for the small
      secondary AQI card - this page no longer has a dedicated AQI hero). */
+  /* Aeron has not confirmed which AQI standard this index follows (US EPA,
+     Indian NAQI, ...), so no health category is assigned to the number. */
   function aqiSeverity(aqi) {
     if (aqi == null || isNaN(aqi)) return { label: 'No data yet', color: 'var(--faint)' };
-    const v = +aqi;
-    if (v <= 50) return { label: 'Good', color: '#10b981' };
-    if (v <= 100) return { label: 'Moderate', color: '#facc15' };
-    if (v <= 150) return { label: 'Unhealthy for Sensitive Groups', color: '#f97316' };
-    if (v <= 200) return { label: 'Unhealthy', color: '#ef4444' };
-    if (v <= 300) return { label: 'Very Unhealthy', color: '#a855f7' };
-    return { label: 'Hazardous', color: '#9f1239' };
+    return { label: 'Index standard unconfirmed', color: 'var(--faint)' };
   }
 
   /* 16-point compass label from a wind direction in degrees. */
@@ -201,6 +197,7 @@
     }
   }
   const fetchLatest = () => request('/latest');
+  const fetchStatus = () => request('/status');
   const fetchHistory = (limit) => request(`/history?limit=${limit}`);
 
   /* ---- nav dock dot: reflects connectivity regardless of which page is open ---- */
@@ -211,7 +208,14 @@
     dot.classList.add(status);
   }
 
-  function updateStatusBar(status, recordedAtISO) {
+  /* " · Last sync 16:30:05 IST" from the worker's last successful Aeron fetch. */
+  function syncSuffix(statusInfo) {
+    if (!statusInfo || !statusInfo.last_successful_sync) return '';
+    const t = new Date(statusInfo.last_successful_sync).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: DISPLAY_TZ });
+    return ` · Last sync ${t} IST`;
+  }
+
+  function updateStatusBar(status, recordedAtISO, statusInfo, reachable) {
     const pill = document.getElementById('weatherStatusPill');
     const text = document.getElementById('weatherStatusText');
     const updated = document.getElementById('weatherUpdatedText');
@@ -224,8 +228,9 @@
           : 'Waiting for first reading…';
       } else {
         const stamp = absoluteStamp(recordedAtISO), age = relativeAge(recordedAtISO);
-        const note = status === 'stale' ? ' — station may be offline' : status === 'offline' ? ' — station offline' : '';
-        updated.textContent = `Measured: ${stamp} (${age})${note}`;
+        const note = reachable === false ? ' — server unreachable, showing last stored reading'
+          : status === 'stale' ? ' — station may be offline' : status === 'offline' ? ' — station offline' : '';
+        updated.textContent = `Measured: ${stamp} (${age})${note}${syncSuffix(statusInfo)}`;
       }
     }
   }
@@ -317,7 +322,8 @@
     // ---- Primary: climate parameters (Ambient Temperature, Humidity, Rainfall, Wind Speed)
     kpis.innerHTML = [
       statCard('Ambient Temperature', 'wx-temp', '°C', colors.gold, 'sun', { subId: 'wx-temp-range' }),
-      statCard('Relative Humidity', 'wx-humidity', '%', colors.cyan, 'droplet'),
+      // Source unit is "Per"; Aeron has not confirmed it means percent.
+      statCard('Relative Humidity', 'wx-humidity', 'Per', colors.cyan, 'droplet', { note: 'Source unit “Per” — unconfirmed as %' }),
       statCard('Rainfall', 'wx-rain', 'mm', colors.blue, 'rain', { subId: 'wx-rain-total' }),
       statCard('Wind Speed', 'wx-wind', 'km/h', colors.emerald, 'wind', { subId: 'wx-wind-peak' })
     ].join('');
@@ -369,7 +375,7 @@
       data: {
         labels: [], datasets: [
           { label: 'Temp (°C)', data: [], borderColor: colors.gold, backgroundColor: 'rgba(193,138,46,.08)', fill: true, tension: .35, pointRadius: 0, borderWidth: 2, yAxisID: 'y' },
-          { label: 'Humidity (%)', data: [], borderColor: colors.cyan, tension: .35, pointRadius: 0, borderWidth: 2, yAxisID: 'y1' }
+          { label: 'Humidity (Per)', data: [], borderColor: colors.cyan, tension: .35, pointRadius: 0, borderWidth: 2, yAxisID: 'y1' }
         ]
       },
       options: {
@@ -418,8 +424,8 @@
     });
   }
 
-  function renderLatest(data, status) {
-    updateStatusBar(status, data ? data.recorded_at : lastRecordedAt);
+  function renderLatest(data, status, statusInfo) {
+    updateStatusBar(status, data ? data.recorded_at : lastRecordedAt, statusInfo, data != null || lastRecordedAt == null);
     syncConditionVideo(data);
     if (!data) return;
     lastRecordedAt = data.recorded_at;
@@ -513,10 +519,10 @@
 
   /* ---- polling ---- */
   async function tickLatest() {
-    const data = await fetchLatest();
+    const [data, statusInfo] = await Promise.all([fetchLatest(), fetchStatus()]);
     const status = computeStatus(data);
     updateNavDot(status);
-    if (document.body.dataset.page === 'weather') renderLatest(data, status);
+    if (document.body.dataset.page === 'weather') renderLatest(data, status, statusInfo);
   }
   async function tickHistory() {
     if (document.body.dataset.page !== 'weather') return;

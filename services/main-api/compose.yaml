@@ -50,10 +50,13 @@ services:
       start_period: 20s
     restart: unless-stopped
 
+  # Aeron REST API v1 ingestion (Bearer AERON_API_KEY from .env). Same image as
+  # the API; no browser. Exactly one replica: extra copies exit on the advisory lock.
   environment-worker:
     build:
       context: .
-      dockerfile: Dockerfile.worker
+      dockerfile: Dockerfile
+    command: ["python", "-m", "app.environment.worker"]
     env_file:
       - path: .env
         required: false
