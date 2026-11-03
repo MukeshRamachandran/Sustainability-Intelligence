@@ -24,7 +24,7 @@ Responsibilities:
 - approval
 - sustainability calculations
 - publication
-- read-only Aeron environment API (latest/history/status)
+- read-only Aeron environment API (latest/history/status/parameters)
 
 ## Aeron environmental ingestion
 
@@ -32,10 +32,14 @@ Path:
 services/main-api/app/environment
 
 Responsibilities:
-- Aeron REST API v1 polling with a Bearer API key (worker only, every 60 s by default)
+- Aeron REST API v1 polling with a Bearer API key (worker only, every 5 min by default)
 - sensor normalization and validation
 - environmental persistence (`environment` schema)
 - freshness classification
+
+Runs as the `environment-worker` container (same image as the API,
+`python -m app.environment.worker`). Guide:
+`docs/reports/AERON_INTEGRATION_ARCHITECTURE.md`.
 
 ## Report generation
 
@@ -47,7 +51,8 @@ services/report-generation
 Path:
 services/main-api/alembic
 
-The Aeron `environment` schema is migration `0012_environment_readings`.
+The Aeron `environment` schema is migration `0012_environment_readings`;
+`0018_aeron_api_v1` adds the API v1 provenance columns.
 
 ## Legacy Supabase reference
 

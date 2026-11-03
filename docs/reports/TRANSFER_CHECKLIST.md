@@ -45,7 +45,7 @@ These are recreated:
 - PostgreSQL
 - Manager/Admin portal
 - Public dashboard
-- Aeron API
+- Aeron AQI worker (REST API v1; copy `AERON_API_KEY` into the new `.env`, never into Git)
 - Nginx
 - Docker Compose
 - Backup automation

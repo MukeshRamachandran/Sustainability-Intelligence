@@ -15,18 +15,23 @@
    local staging: serve-staging.py). Nothing here triggers ingestion - the
    separate worker polls Aeron. Freshness (LIVE/STALE/OFFLINE) comes from
    the server so it never depends on the visitor's clock.
-   If the API isn't reachable, every widget here degrades to '--' and the
-   status pill/dock dot switch to OFFLINE rather than erroring.
+   If the API isn't reachable, the last good reading stays on screen (kept
+   in memory, and in localStorage so a fresh visit can show it too), the
+   dock dot turns OFFLINE, and nothing errors. With no reading ever seen,
+   the cards show '--'.
    ===================================================================== */
 (function () {
   const API_BASE = '/api/environment';
   const DISPLAY_TZ = 'Asia/Kolkata'; // the station's timezone, labelled IST
-  const POLL_MS = 20000;      // latest reading + status (drives the dock dot)
-  const HISTORY_POLL_MS = 60000; // trend charts, only while the page is open
+  // The worker stores a new reading about every 5-7 minutes, so polling faster
+  // only adds API and database load. Visitors never reach Aeron either way.
+  const POLL_MS = 60000;           // latest reading (drives the dock dot)
+  const HISTORY_POLL_MS = 300000;  // trend charts, only while the page is open
+  const REQUEST_TIMEOUT_MS = 10000; // a hung request is abandoned, never piled up
+  const CACHE_KEY = 'kcosmos.weather.latest';
 
   let shellBuilt = false;
   let charts = {};
-  let lastRecordedAt = null;
   let lastHistory = null;
   let lastData = null; // most recent full reading, so activate() can pick the right condition immediately instead of guessing
 
@@ -151,41 +156,31 @@
     return dirs[Math.round((+deg % 360) / 22.5) % 16];
   }
 
-  /* LIVE < 10 min old, STALE 10-30 min, OFFLINE beyond that or no reading at all.
+  /* LIVE < 20 min old, STALE 20-60 min, OFFLINE beyond that or no reading at all.
      The server classifies against its own clock; the local fallback only
      applies if an older API response lacks `freshness`. */
   function computeStatus(data) {
     if (!data || !data.recorded_at) return 'offline';
     if (data.freshness) return String(data.freshness).toLowerCase();
     const ageSec = (Date.now() - new Date(data.recorded_at).getTime()) / 1000;
-    if (ageSec > 30 * 60) return 'offline';
-    if (ageSec >= 10 * 60) return 'stale';
+    if (ageSec > 60 * 60) return 'offline';
+    if (ageSec >= 20 * 60) return 'stale';
     return 'live';
   }
 
-  function relativeAge(recordedAtISO) {
-    if (!recordedAtISO) return null;
-    const secs = Math.floor((Date.now() - new Date(recordedAtISO).getTime()) / 1000);
-    if (secs < 0) return 'just now';
-    if (secs < 60) return `${secs}s ago`;
-    if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
-    return `${Math.floor(secs / 3600)}h ago`;
-  }
+  /* Sea-level-equivalent atmospheric pressure is always roughly 870-1085 hPa.
+     The station currently reports a constant 150 (a calibration fault), so the
+     card keeps its value but shows a "!" marker until the sensor reads normally. */
+  const PRESSURE_RANGE_HPA = [870, 1085];
+  const plausiblePressure = v => v != null && !isNaN(v) && v >= PRESSURE_RANGE_HPA[0] && v <= PRESSURE_RANGE_HPA[1];
 
-  /* Absolute "28 Aug 2026 · 14:32:07 IST" for the always-visible measurement
-     timestamp - relative age alone ("2m ago") doesn't tell you *when*. */
-  function absoluteStamp(recordedAtISO) {
-    if (!recordedAtISO) return null;
-    const dt = new Date(recordedAtISO);
-    const datePart = dt.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric', timeZone: DISPLAY_TZ });
-    const timePart = dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: DISPLAY_TZ });
-    return `${datePart} · ${timePart} IST`;
-  }
   const istDay = dt => dt.toLocaleDateString('en-CA', { timeZone: DISPLAY_TZ });
 
   async function request(path) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
-      const res = await fetch(`${API_BASE}${path}`, { cache: 'no-store', credentials: 'omit' });
+      const res = await fetch(`${API_BASE}${path}`, { cache: 'no-store', credentials: 'omit', signal: controller.signal });
       if (!res.ok) {
         if (res.status !== 404) console.warn(`[weather] ${API_BASE}${path} responded ${res.status}`);
         return null;
@@ -194,10 +189,24 @@
     } catch (error) {
       console.warn(`[weather] could not reach ${API_BASE}${path}`, error);
       return null;
+    } finally {
+      clearTimeout(timer);
     }
   }
+
+  /* Last good reading, so a visit during an API outage still shows the most
+     recent stored values instead of empty cards. Storage may be blocked
+     (private mode, quota): the page then simply has no saved copy. */
+  function saveCachedReading(data) {
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch (_) { /* storage unavailable */ }
+  }
+  function loadCachedReading() {
+    try {
+      const data = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+      return data && data.recorded_at ? data : null;
+    } catch (_) { return null; }
+  }
   const fetchLatest = () => request('/latest');
-  const fetchStatus = () => request('/status');
   const fetchHistory = (limit) => request(`/history?limit=${limit}`);
 
   /* ---- nav dock dot: reflects connectivity regardless of which page is open ---- */
@@ -206,33 +215,6 @@
     if (!dot) return;
     dot.classList.remove('live', 'stale', 'offline');
     dot.classList.add(status);
-  }
-
-  /* " · Last sync 16:30:05 IST" from the worker's last successful Aeron fetch. */
-  function syncSuffix(statusInfo) {
-    if (!statusInfo || !statusInfo.last_successful_sync) return '';
-    const t = new Date(statusInfo.last_successful_sync).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: DISPLAY_TZ });
-    return ` · Last sync ${t} IST`;
-  }
-
-  function updateStatusBar(status, recordedAtISO, statusInfo, reachable) {
-    const pill = document.getElementById('weatherStatusPill');
-    const text = document.getElementById('weatherStatusText');
-    const updated = document.getElementById('weatherUpdatedText');
-    if (pill) pill.className = 'weather-status-pill ' + status;
-    if (text) text.textContent = status === 'live' ? 'LIVE' : status === 'stale' ? 'STALE' : 'OFFLINE';
-    if (updated) {
-      if (!recordedAtISO) {
-        updated.textContent = status === 'offline'
-          ? 'No station reading available'
-          : 'Waiting for first reading…';
-      } else {
-        const stamp = absoluteStamp(recordedAtISO), age = relativeAge(recordedAtISO);
-        const note = reachable === false ? ' — server unreachable, showing last stored reading'
-          : status === 'stale' ? ' — station may be offline' : status === 'offline' ? ' — station offline' : '';
-        updated.textContent = `Measured: ${stamp} (${age})${note}${syncSuffix(statusInfo)}`;
-      }
-    }
   }
 
   function animateNumber(id, target, dec) {
@@ -259,10 +241,9 @@
     opts = opts || {};
     return `<article class="kpi" style="--a:${accent}"${opts.cardId ? ` id="${opts.cardId}"` : ''}>
       <div class="icon">${ic(icon)}</div>
-      <div class="label">${title}</div>
+      <div class="label">${title}${opts.flagId ? ` <span class="wx-flag" id="${opts.flagId}" role="img" aria-label="${opts.flagText}" title="${opts.flagText}" hidden>!</span>` : ''}</div>
       <div class="value"><span id="${id}">--</span><small>${unit}</small></div>
       ${opts.subId ? `<div class="wx-sub" id="${opts.subId}">—</div>` : ''}
-      ${opts.note ? `<div class="wx-sub wx-note">${opts.note}</div>` : ''}
     </article>`;
   }
   function pollutantTile(label, id, unit) {
@@ -278,52 +259,30 @@
     const style = document.createElement('style');
     style.id = 'weatherStyles';
     style.textContent = `
-      .weather-statusbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
-        background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 18px;margin:14px 0 20px;}
-      .weather-statusbar-left{display:flex;align-items:center;flex-wrap:wrap;gap:12px;min-width:0;}
-      .weather-status-pill{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:99px;
-        background:var(--surface2);border:1px solid var(--line);font-size:11px;font-weight:700;letter-spacing:.06em;
-        text-transform:uppercase;color:var(--muted);white-space:nowrap;flex:none;}
-      .weather-status-dot{width:8px;height:8px;border-radius:50%;background:var(--faint);flex:none;}
-      .weather-status-pill.live .weather-status-dot{background:#10b981;animation:navDotPulseLive 1.8s ease-in-out infinite;}
-      .weather-status-pill.stale .weather-status-dot{background:#f59e0b;animation:navDotPulseStale 2.6s ease-in-out infinite;}
-      .weather-status-pill.offline .weather-status-dot{background:#ef4444;}
-      .weather-updated-text{font-size:12.5px;color:var(--muted);font-weight:500;}
-      .weather-network-badge{font-size:11px;font-weight:700;color:var(--faint);background:var(--surface2);
-        border:1px solid var(--line);border-radius:99px;padding:4px 10px;white-space:nowrap;}
       .wx-sub{font-size:11.5px;color:var(--faint);font-weight:600;margin-top:6px;}
-      .wx-note{color:#b8862e;}
+      .wx-flag{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;margin-left:6px;
+        border-radius:50%;background:#f59e0b;color:#fff;font-size:11px;font-weight:800;line-height:1;vertical-align:1px;cursor:help;}
+      .wx-flag[hidden]{display:none;}
     `;
     document.head.appendChild(style);
   }
 
   function buildShell() {
     if (shellBuilt) return;
-    const statusBar = document.getElementById('weatherStatusBar');
     const kpis = document.getElementById('weatherKpis');
     const kpis2 = document.getElementById('weatherKpis2');
     const aqiKpis = document.getElementById('weatherAqiKpis');
     const pollutants = document.getElementById('weatherPollutants');
     const noise = document.getElementById('weatherNoise');
-    if (!statusBar || !kpis || !kpis2 || !aqiKpis || !pollutants || !noise) return;
+    if (!kpis || !kpis2 || !aqiKpis || !pollutants || !noise) return;
 
     injectStyles();
-
-    statusBar.innerHTML = `
-      <div class="weather-statusbar">
-        <div class="weather-statusbar-left">
-          <span class="weather-status-pill" id="weatherStatusPill"><span class="weather-status-dot"></span><span id="weatherStatusText">CONNECTING</span></span>
-          <span class="weather-updated-text" id="weatherUpdatedText">Waiting for first reading…</span>
-          <span class="weather-network-badge" id="weatherNetworkBadge" style="display:none;"></span>
-        </div>
-        <button class="btn" id="weatherSyncBtn">Refresh</button>
-      </div>`;
 
     // ---- Primary: climate parameters (Ambient Temperature, Humidity, Rainfall, Wind Speed)
     kpis.innerHTML = [
       statCard('Ambient Temperature', 'wx-temp', '°C', colors.gold, 'sun', { subId: 'wx-temp-range' }),
-      // Source unit is "Per"; Aeron has not confirmed it means percent.
-      statCard('Relative Humidity', 'wx-humidity', 'Per', colors.cyan, 'droplet', { note: 'Source unit “Per” — unconfirmed as %' }),
+      // Aeron labels this unit "Per" (percent); relative humidity is 0-100 %.
+      statCard('Relative Humidity', 'wx-humidity', '%', colors.cyan, 'droplet'),
       statCard('Rainfall', 'wx-rain', 'mm', colors.blue, 'rain', { subId: 'wx-rain-total' }),
       statCard('Wind Speed', 'wx-wind', 'km/h', colors.emerald, 'wind', { subId: 'wx-wind-peak' })
     ].join('');
@@ -332,8 +291,11 @@
     kpis2.innerHTML = [
       statCard('Wind Direction', 'wx-wind-dir', '°', colors.emerald, 'gauge', { subId: 'wx-wind-compass' }),
       statCard('UV Index', 'wx-uv', '', colors.gold, 'shield'),
-      statCard('Barometric Pressure', 'wx-pressure', 'mba', '#7b8794', 'gauge', { note: '⚠ Verify sensor calibration' }),
-      statCard('CO₂', 'wx-co2', 'ppm', colors.teal, 'cloud', { note: 'Context reading — verify calibration' })
+      statCard('Barometric Pressure', 'wx-pressure', 'hPa', '#7b8794', 'gauge', {
+        flagId: 'wx-pressure-flag',
+        flagText: 'Reading outside the normal 870–1085 hPa range; the station sensor needs calibration'
+      }),
+      statCard('CO₂', 'wx-co2', 'ppm', colors.teal, 'cloud')
     ].join('');
 
     // ---- Secondary: Air Quality & Pollutants (below climate metrics)
@@ -357,8 +319,6 @@
       statusRow('Maximum', 'wx-noise-max')
     ].join('');
 
-    document.getElementById('weatherSyncBtn').addEventListener('click', triggerSync);
-
     shellBuilt = true;
   }
 
@@ -375,7 +335,7 @@
       data: {
         labels: [], datasets: [
           { label: 'Temp (°C)', data: [], borderColor: colors.gold, backgroundColor: 'rgba(193,138,46,.08)', fill: true, tension: .35, pointRadius: 0, borderWidth: 2, yAxisID: 'y' },
-          { label: 'Humidity (Per)', data: [], borderColor: colors.cyan, tension: .35, pointRadius: 0, borderWidth: 2, yAxisID: 'y1' }
+          { label: 'Humidity (%)', data: [], borderColor: colors.cyan, tension: .35, pointRadius: 0, borderWidth: 2, yAxisID: 'y1' }
         ]
       },
       options: {
@@ -424,11 +384,9 @@
     });
   }
 
-  function renderLatest(data, status, statusInfo) {
-    updateStatusBar(status, data ? data.recorded_at : lastRecordedAt, statusInfo, data != null || lastRecordedAt == null);
+  function renderLatest(data) {
     syncConditionVideo(data);
     if (!data) return;
-    lastRecordedAt = data.recorded_at;
     lastData = data;
 
     // ---- Climate parameters
@@ -441,6 +399,8 @@
     if (compassEl) compassEl.textContent = data.wind_direction_deg != null ? windCompass(data.wind_direction_deg) + ' prevailing' : '—';
     animateNumber('wx-uv', data.uv_index, 1);
     animateNumber('wx-pressure', data.barometric_pressure_mba, 0);
+    const pressureFlag = document.getElementById('wx-pressure-flag');
+    if (pressureFlag) pressureFlag.hidden = data.barometric_pressure_mba == null || plausiblePressure(data.barometric_pressure_mba);
     animateNumber('wx-co2', data.co2_ppm, 0);
 
     // ---- Secondary: air quality
@@ -457,13 +417,6 @@
     animateNumber('wx-so2', data.so2_ug_m3, 1);
     animateNumber('wx-co', data.co_mg_m3, 2);
     animateNumber('wx-no', data.no_ug_m3, 1);
-
-    // ---- Network badge (kept as a small ambient indicator; battery/charging/device-temp dropped)
-    const netBadge = document.getElementById('weatherNetworkBadge');
-    if (netBadge) {
-      if (data.network != null) { netBadge.style.display = ''; netBadge.textContent = `Signal ${data.network}/4`; }
-      else netBadge.style.display = 'none';
-    }
 
     animateNumber('wx-noise-avg', data.noise_average_db, 1);
     animateNumber('wx-noise-min', data.noise_min_db, 1);
@@ -517,33 +470,39 @@
     if (windPeakEl) windPeakEl.textContent = winds.length ? `Peak: ${Math.max(...winds).toFixed(1)} km/h` : '—';
   }
 
-  /* ---- polling ---- */
+  /* ---- polling ----
+     One request of each kind at a time, and none while the browser tab is in
+     the background; a slow or down API therefore never gets a pile-up. */
+  let latestInFlight = false;
+  let historyInFlight = false;
+
   async function tickLatest() {
-    const [data, statusInfo] = await Promise.all([fetchLatest(), fetchStatus()]);
-    const status = computeStatus(data);
-    updateNavDot(status);
-    if (document.body.dataset.page === 'weather') renderLatest(data, status, statusInfo);
+    if (latestInFlight || document.hidden) return;
+    latestInFlight = true;
+    try {
+      let data = await fetchLatest();
+      let status;
+      if (data) {
+        status = computeStatus(data);
+        saveCachedReading(data);
+      } else {
+        // Unreachable, or no reading stored yet: keep the last good values.
+        data = lastData || loadCachedReading();
+        status = 'offline';
+      }
+      updateNavDot(status);
+      if (document.body.dataset.page === 'weather') renderLatest(data);
+    } finally {
+      latestInFlight = false;
+    }
   }
   async function tickHistory() {
-    if (document.body.dataset.page !== 'weather') return;
-    const history = await fetchHistory(500);
-    renderCharts(history);
-  }
-
-  /* Re-reads the stored data only. Ingestion is scheduled server-side and
-     can never be triggered from a visitor's browser. */
-  async function triggerSync() {
-    const btn = document.getElementById('weatherSyncBtn');
-    if (!btn) return;
-    const original = btn.textContent;
-    btn.textContent = 'Refreshing…';
-    btn.disabled = true;
+    if (historyInFlight || document.hidden || document.body.dataset.page !== 'weather') return;
+    historyInFlight = true;
     try {
-      await tickLatest();
-      await tickHistory();
+      renderCharts(await fetchHistory(500));
     } finally {
-      btn.textContent = original;
-      btn.disabled = false;
+      historyInFlight = false;
     }
   }
 
@@ -579,4 +538,8 @@
   tickLatest();
   setInterval(tickLatest, POLL_MS);
   setInterval(tickHistory, HISTORY_POLL_MS);
+  // Catch up at once when a background tab becomes visible again.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) { tickLatest(); tickHistory(); }
+  });
 })();

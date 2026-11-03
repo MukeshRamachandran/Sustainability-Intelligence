@@ -50,6 +50,35 @@ Do not use `docker compose down --volumes` unless destruction of the local datab
 and evidence volumes is explicitly intended. Production deployment is documented
 in `../../docs/DEPLOYMENT.md`.
 
+### Aeron environment worker
+
+`compose.yaml` also defines `environment-worker`. It is built from the same
+`Dockerfile` as the API and runs `python -m app.environment.worker`. It polls
+Aeron's REST API v1 (`GET /timeseries?station=…`, Bearer `AERON_API_KEY`) every
+5 minutes and stores new readings in `environment.readings`. No browser is used.
+
+Set `AERON_API_KEY` in `.env` (the other `AERON_*` defaults are in
+`.env.example`), then:
+
+```bash
+docker compose up -d environment-worker
+docker compose logs --tail 30 environment-worker
+curl http://127.0.0.1:8000/api/environment/status
+```
+
+One cycle only, for a test (stop the running worker first; a second copy exits
+with code 2 because of the advisory lock):
+
+```bash
+docker compose stop environment-worker
+docker compose run --rm environment-worker python -m app.environment.worker --once
+docker compose up -d environment-worker
+```
+
+Exit codes: 0 success, 1 cycle failed, 2 another worker holds the lock, 3
+`AERON_API_KEY` missing. Full guide:
+`../../docs/reports/AERON_INTEGRATION_ARCHITECTURE.md`.
+
 ### Evidence recovery
 
 Evidence audit recovery requires both a PostgreSQL backup and a backup of the

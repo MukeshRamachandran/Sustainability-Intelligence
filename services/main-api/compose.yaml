@@ -5,6 +5,14 @@
 
 name: kcosmos
 
+# Docker's default json-file log has no size limit and would slowly fill the
+# disk. Keep at most 5 x 10 MB per container.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   postgres:
     image: postgres:17
@@ -20,6 +28,7 @@ services:
       timeout: 5s
       retries: 12
     restart: unless-stopped
+    logging: *default-logging
 
   api:
     build:
@@ -49,9 +58,11 @@ services:
       retries: 12
       start_period: 20s
     restart: unless-stopped
+    logging: *default-logging
 
   # Aeron REST API v1 ingestion (Bearer AERON_API_KEY from .env). Same image as
   # the API; no browser. Exactly one replica: extra copies exit on the advisory lock.
+  # Polls every AERON_POLL_INTERVAL_SECONDS (default 300, clamped to 120-3600).
   environment-worker:
     build:
       context: .
@@ -68,6 +79,7 @@ services:
     init: true
     restart: unless-stopped
     stop_grace_period: 20s
+    logging: *default-logging
 
 volumes:
   postgres_data:

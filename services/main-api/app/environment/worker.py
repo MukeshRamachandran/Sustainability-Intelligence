@@ -9,8 +9,11 @@ trigger any of this. A PostgreSQL advisory lock keeps a single worker active
 per database, and the loop is single-threaded, so cycles never overlap.
 
 When to poll next is decided by ``PollScheduler``: the normal interval after
-success or a transient failure; ``Retry-After`` after HTTP 429; and a pause
-of 5 minutes doubling to 1 hour after 401/403/404, which retrying cannot fix.
+success or a transient failure; ``Retry-After`` after HTTP 429; a pause of 5
+minutes doubling to 1 hour after 401/403/404, which retrying cannot fix; and
+30 minutes while Aeron reports fewer than 500 requests left for the day.
+After a restart the first poll waits until one interval has passed since the
+last recorded run, so restarts and redeploys never add extra Aeron calls.
 """
 
 from __future__ import annotations
@@ -35,7 +38,7 @@ from app.db.session import create_database_engine, create_session_factory
 from app.environment.config import AeronWorkerSettings
 from app.environment.normalizer import InvalidReadingError, StationMismatchError, normalize_timeseries
 from app.environment.parameters import AERON_PARAMETERS
-from app.environment.repository import insert_reading, record_run
+from app.environment.repository import insert_reading, latest_run, record_run
 from app.environment.source import AeronApiClient, AeronSourceError, RateLimitedError
 from app.models.environment import EnvironmentIngestionRun
 
@@ -45,6 +48,9 @@ ADVISORY_LOCK_KEY = 0x4B434F534D4F5301
 PERSISTENT_ERROR_CODES = frozenset({"AUTH_FAILED", "FORBIDDEN", "NOT_FOUND", "STATION_MISMATCH"})
 PERSISTENT_BACKOFF_BASE_SECONDS = 300.0
 PERSISTENT_BACKOFF_MAX_SECONDS = 3600.0
+# Below this many requests left for the day, poll at most every LOW_BUDGET_DELAY_SECONDS.
+LOW_DAILY_BUDGET = 500
+LOW_BUDGET_DELAY_SECONDS = 1800.0
 
 logger = structlog.get_logger("app.environment.worker")
 
@@ -57,6 +63,7 @@ def _utc_now() -> datetime:
 class CycleResult:
     run: EnvironmentIngestionRun
     retry_after_seconds: float | None = None
+    remaining_day: int | None = None
 
 
 def run_cycle(
@@ -110,7 +117,7 @@ def run_cycle(
         rate_limit_remaining_minute=rate.remaining_minute if rate else None,
         rate_limit_remaining_day=rate.remaining_day if rate else None,
     )
-    return CycleResult(run=run, retry_after_seconds=retry_after)
+    return CycleResult(run=run, retry_after_seconds=retry_after, remaining_day=rate.remaining_day if rate else None)
 
 
 class PollScheduler:
@@ -131,7 +138,23 @@ class PollScheduler:
         self._persistent_failures = 0
         if code == "RATE_LIMITED":
             return max(self._interval, result.retry_after_seconds or 0.0)
+        if result.remaining_day is not None and result.remaining_day < LOW_DAILY_BUDGET:
+            return max(self._interval, LOW_BUDGET_DELAY_SECONDS)
         return max(1.0, self._interval - elapsed_seconds)
+
+
+def initial_delay(session_factory: sessionmaker[Session], interval_seconds: float, now: datetime) -> float:
+    """Seconds to wait before the first poll so a restart never polls sooner than one interval."""
+    try:
+        with session_factory() as db:
+            last = latest_run(db)
+    except SQLAlchemyError:
+        return 0.0
+    if last is None:
+        return 0.0
+    started = last.started_at if last.started_at.tzinfo else last.started_at.replace(tzinfo=UTC)
+    elapsed = (now - started).total_seconds()
+    return min(max(0.0, interval_seconds - elapsed), interval_seconds)
 
 
 def check_parameter_metadata(client: AeronApiClient) -> None:
@@ -227,6 +250,11 @@ def main(argv: list[str] | None = None) -> int:
     logger.info("environment_worker_started", interval_seconds=settings.AERON_POLL_INTERVAL_SECONDS)
     try:
         if not args.once:
+            delay = initial_delay(session_factory, settings.AERON_POLL_INTERVAL_SECONDS, _utc_now())
+            if delay > 0:
+                logger.info("environment_worker_waiting_after_restart", seconds=round(delay))
+                if stop.wait(delay):
+                    return 0
             check_parameter_metadata(client)
         while True:
             cycle_started = _utc_now()

@@ -235,9 +235,11 @@ test('Weather status follows server freshness and shows the station time in IST'
   assert.equal(computeStatus(null), 'offline');
   assert.equal(computeStatus({ recorded_at: new Date().toISOString(), freshness: 'OFFLINE' }), 'offline');
   assert.equal(computeStatus({ recorded_at: '2020-01-01T00:00:00Z', freshness: 'LIVE' }), 'live');
-  assert.equal(computeStatus({ recorded_at: new Date(Date.now() - 10 * 60 * 1000).toISOString() }), 'stale');
+  assert.equal(computeStatus({ recorded_at: new Date(Date.now() - 19 * 60 * 1000).toISOString() }), 'live');
+  assert.equal(computeStatus({ recorded_at: new Date(Date.now() - 20 * 60 * 1000).toISOString() }), 'stale');
+  assert.equal(computeStatus({ recorded_at: new Date(Date.now() - 61 * 60 * 1000).toISOString() }), 'offline');
   assert.match(weather, /const DISPLAY_TZ = 'Asia\/Kolkata';/);
-  assert.match(weather, /IST`/);
+  assert.match(weather, /timeZone: DISPLAY_TZ/);
   assert.doesNotMatch(weather, /Data fetched:/);
 });
 
@@ -3022,15 +3024,40 @@ test('no certificate content is written into the dashboard code', () => {
   assert.match(source, /domain: 'waste', pageId: 'waste'/);
 });
 
-test('Weather shows the last successful sync and assigns no unconfirmed AQI category or humidity unit', () => {
+test('Weather KPI cards carry no status bar or calibration notes and flag an impossible pressure', () => {
   const weather = read('weather.js');
+  const html = read('index.html');
   const code = weather.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
-  assert.match(code, /request\('\/status'\)/);
-  assert.match(code, /last_successful_sync/);
-  assert.match(code, /server unreachable, showing last stored reading/);
+  assert.doesNotMatch(html, /weatherStatusBar/);
+  for (const removed of ['weatherStatusPill', 'weatherSyncBtn', 'Last sync', 'verify calibration', 'Verify sensor calibration', 'unconfirmed as %', 'wx-note']) {
+    assert.ok(!code.includes(removed), `${removed} must not appear on the Weather page`);
+  }
   for (const category of ['Unhealthy', 'Hazardous', "'Good'", "'Moderate'"]) {
     assert.ok(!code.includes(category), `AQI category ${category} must not be assigned until the standard is confirmed`);
   }
-  assert.match(code, /statCard\('Relative Humidity', 'wx-humidity', 'Per'/);
-  assert.doesNotMatch(code, /Humidity \(%\)/);
+  assert.match(code, /statCard\('Relative Humidity', 'wx-humidity', '%'/);
+  assert.match(code, /Humidity \(%\)/);
+
+  const source = weather.match(/const PRESSURE_RANGE_HPA = [^\n]+\n  const plausiblePressure = [^\n]+/)[0];
+  const plausiblePressure = vm.runInNewContext(`${source}; plausiblePressure`, { isNaN });
+  assert.equal(plausiblePressure(150), false);
+  assert.equal(plausiblePressure(null), false);
+  assert.equal(plausiblePressure(1012), true);
+  assert.match(code, /statCard\('Barometric Pressure', 'wx-pressure', 'hPa'/);
+  assert.match(code, /pressureFlag\.hidden = /);
+  assert.doesNotMatch(code, /style\.display = pressureOk/);
+});
+
+test('Weather polling is bounded and falls back to the last good reading', () => {
+  const code = read('weather.js').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+  const poll = Number(code.match(/const POLL_MS = (\d+);/)[1]);
+  const history = Number(code.match(/const HISTORY_POLL_MS = (\d+);/)[1]);
+  assert.ok(poll >= 60000, 'latest poll must not be faster than once a minute');
+  assert.ok(history >= 300000, 'history poll must not be faster than every five minutes');
+  assert.match(code, /new AbortController\(\)/);
+  assert.match(code, /controller\.abort\(\), REQUEST_TIMEOUT_MS/);
+  assert.match(code, /if \(latestInFlight \|\| document\.hidden\) return;/);
+  assert.match(code, /historyInFlight \|\| document\.hidden/);
+  assert.match(code, /data = lastData \|\| loadCachedReading\(\);\s*status = 'offline';/);
+  assert.match(code, /saveCachedReading\(data\)/);
 });

@@ -7,7 +7,8 @@ A plain-language, file-by-file tour of everything in this repository: what each 
 - Prepared: 29 September 2026
 - Branch at time of writing: `production-fix-2026-09-27`
 - Latest commit: `c94d10b feat(public-dashboard): stabilize KPI rendering, chart periods, and responsive layout`
-- Database migration head in code: `0012_environment_readings`
+- Database migration head in code: `0018_aeron_api_v1`
+- Aeron sections updated: 3 November 2026 (REST API v1 with a Bearer API key)
 
 ---
 
@@ -98,7 +99,7 @@ It also holds **historical data** — older institutional spreadsheets imported 
 | **Schema version** | The shape of a release's JSON payload. New releases use **1.4**; older releases keep the version they were frozen with. |
 | **Historical data** | Pre-portal institutional records imported from CSV files into the `history` schema, each value tagged MONTHLY / YTD / ANNUAL / STATIC. |
 | **Aeron** | The campus environmental sensor station (weather, air quality, noise). |
-| **Freshness** | Whether the latest sensor reading is `LIVE` (< 10 min old), `STALE` (10–30 min) or `OFFLINE` (older, missing or future-dated). |
+| **Freshness** | Whether the latest sensor reading is `LIVE` (< 20 min old), `STALE` (20–60 min) or `OFFLINE` (older, missing or future-dated). |
 
 ---
 
@@ -144,7 +145,7 @@ These rules appear again and again in code comments, tests and reports. Knowing 
 8. **Factors are versioned and dated.** Each month uses the factor set whose effective date applies to it — never "whatever is current today".
 9. **History keeps its true shape.** An annual figure is never split into months; a YTD figure is never shown as a single month.
 10. **Public visitors never trigger ingestion.** Only the background worker talks to Aeron.
-11. **No secrets in the repository.** (See [section 17](#17-known-issues-and-clean-up-candidates) — one file currently breaks this rule.)
+11. **No secrets in the repository.** The Aeron API key and all passwords live only in `services/main-api/.env` on the server. (Old credentials remain in Git history; see [section 17](#17-known-issues-and-clean-up-candidates).)
 
 ---
 
@@ -181,9 +182,9 @@ The heart of the system. A **FastAPI** (Python 3.12) application backed by **Pos
 | --- | --- | --- |
 | `pyproject.toml` | Python package definition. Runtime deps: FastAPI, SQLAlchemy, psycopg, Alembic, Argon2, Pydantic, structlog, uvicorn. httpx (Aeron REST client). Extra: `dev` (pytest, ruff, mypy). Configures ruff (lint) and mypy (strict types). | The shopping list of libraries plus the code-quality settings. |
 | `uv.lock` | Exact locked versions of every dependency. | Makes installs reproducible. |
-| `.env.example` | Template of every setting (database URL, secrets, cookie names, session times, evidence folder, login lockout, Aeron worker settings). | Copy to `.env` for local runs. **Contains what look like real Aeron credentials — see §17.** |
-| `compose.yaml` | Docker Compose for local dev: a `postgres:17.6` container and the `api` container on `127.0.0.1:8000`, plus volumes for the database and evidence files. Points at the clean database `microcosm_clean_20260922`. | One command (`docker compose up`) starts the database and the API. |
-| `Dockerfile` | Builds the API image as a non-root user, creates evidence folders, runs `uvicorn app.main:app`. | Recipe for the API container. |
+| `.env.example` | Template of every setting (database URL, secrets, cookie names, session times, evidence folder, login lockout, Aeron worker settings: `AERON_STATION_ID`, `AERON_API_BASE_URL`, empty `AERON_API_KEY`, poll interval, timeouts). Secret fields are empty. | Copy to `.env` and fill it in. The Aeron key goes only in `.env`. |
+| `compose.yaml` | Docker Compose (project `kcosmos`): `postgres`, `api` on `127.0.0.1:8000`, and `environment-worker` (Aeron ingestion, same image as the API, command `python -m app.environment.worker`). Volumes for the database, evidence and certificates. Reads `.env`. | `docker compose up -d` starts the database, API and worker. The live VPS uses its own `compose.production.yaml`; see `docs/reports/AERON_INTEGRATION_ARCHITECTURE.md` §4. |
+| `Dockerfile` | Builds the image as a non-root user, creates evidence folders, runs `uvicorn app.main:app`. The environment worker uses the same image with a different command. | Recipe for the API and worker containers. There is no separate worker Dockerfile and no browser in any image. |
 | `alembic.ini`, `alembic/env.py`, `alembic/script.py.mako` | Alembic configuration and migration template. | Tells Alembic how to reach the database. |
 | `README.md` | How to run with Docker, run checks, apply migrations, and bootstrap accounts. | Setup notes (partly outdated — it still says "D3 contains no schema migration"). |
 | `DELIVERY_SOURCE_OF_TRUTH.md` | Early checkpoint note: which folders were authoritative and which demo behaviours must be removed from the production path. | Historical note; its paths point to another machine (`C:\Users\Ram\...`). |
@@ -214,7 +215,7 @@ The database is split into **schemas** (named groups of tables).
 | `publication.py` | `publication` | **public_releases** (version, status, checksum, who prepared/published; only one `active`), **public_release_payloads** (the frozen JSON), **public_release_metadata** (marks a release `official` or `test`; a test release can never be public). |
 | `audit.py` | `audit` | **audit_logs**: who did what, to what, outcome, request ID, safe metadata. |
 | `history.py` | `history` | **import_batches** (one per source file + mapping version, identified by SHA-256), **source_rows** (raw rows), **periods**, **metric_values** (with granularity MONTHLY/YTD/ANNUAL/STATIC, verification status, authority status and qualifier EXACT/AT_LEAST/APPROXIMATE), **calculation_results**, **conflicts**. |
-| `environment.py` | `environment` | **readings** (one row per station per observation time; 35 sensor fields such as PM2.5, PM10, NO₂, SO₂, O₃, CO, CO₂, temperature, humidity, rain, wind, noise, UV, AQI, plus device health and the raw payload), **ingestion_runs** (one row per worker cycle: `INSERTED`, `DUPLICATE` or `FAILED` with a fixed error code). |
+| `environment.py` | `environment` | **readings** (one row per station per observation time; 35 sensor fields such as PM2.5, PM10, NO₂, SO₂, O₃, CO, CO₂, temperature, humidity, rain, wind, noise, UV, AQI, plus `observed_at`/`fetched_at`/`ingested_at`, quality flags, the raw payload and `unmapped_values`; device-health columns stay NULL for API v1 rows), **ingestion_runs** (one row per worker cycle: `INSERTED`, `DUPLICATE` or `FAILED` with a fixed error code). |
 
 **The metric catalogue** (seeded in migration `0001`, adjusted by later migrations):
 
@@ -252,7 +253,7 @@ Every route below starts from the API base (`http://localhost:8000` locally). "C
 | `audit.py` | `GET /api/admin/audit-logs` (filters: action, user, domain, dates, resource; paginated) | admin | Browse the audit trail; metadata is sanitised before display. |
 | `emission_factors.py` | `GET/POST /api/admin/emission-factor-sets`, `GET/PUT /api/admin/emission-factor-sets/{id}`, `POST …/{id}/activate` | admin, CSRF | Create and edit draft factor sets; activation requires an effective date, the three core factors (petrol, diesel, grid; LPG optional), correct units, and a source reference. |
 | `releases.py` | Admin: `GET /api/admin/reporting-periods/{id}/publication-readiness`, `POST /api/admin/releases/prepare`, `GET /api/admin/releases?reporting_period_id=`, `GET /api/admin/releases/{id}/preview`, `POST /api/admin/releases/{id}/publish`. Public: `GET /api/public/dashboard`, `/api/public/dashboard/timeline`, `/api/public/dashboard/history` | admin / anyone | Readiness check (6/6 domains approved), prepare a checksummed candidate, preview, publish. Public routes serve only official, publicly visible releases, plus the merged timeline with history. |
-| `environment.py` | `GET /api/environment/latest`, `/history` (start, end, limit ≤ 1000), `/status` | anyone | Read-only sensor data from the database, with server-computed freshness. Never contacts Aeron. |
+| `environment.py` | `GET /api/environment/latest`, `/history` (start, end, limit ≤ 1000), `/status`, `/parameters` | anyone | Read-only sensor data from the database, with server-computed freshness and last-sync status. Never contacts Aeron. |
 
 ### 7.6 Request/response shapes — `app/schemas/`
 
@@ -301,7 +302,7 @@ Imports older institutional CSVs into the `history` schema without ever pretendi
 
 | File | What it does |
 | --- | --- |
-| `config.py` | Worker-only settings (station ID, API v1 base URL, `AERON_API_KEY` as `SecretStr`, poll interval 60 s, timeouts, retry attempts). Read from `services/main-api/.env`. |
+| `config.py` | Worker-only settings (station ID, API v1 base URL, `AERON_API_KEY` as `SecretStr`, poll interval 300 s clamped to 120–3600 s, timeouts, retry attempts). Read from `services/main-api/.env`. |
 | `parameters.py` | `PARAMETER_MAP`: the 35 Aeron parameter IDs with name, unit and category, bound to the existing reading columns, plus verification notes. Checked against the live API on 2026-11-02. No unit conversion. |
 | `normalizer.py` | Turns one `/timeseries` response into a reading. `reading.timestamp` is true UTC — **no +330-minute correction** (verified). Missing values become NULL with a quality flag; unknown IDs go to `unmapped_values`. |
 | `source.py` | `AeronApiClient`: httpx with Bearer auth, connection reuse, timeouts, bounded jittered retries for timeouts/5xx only, `Retry-After` on 429. Errors carry fixed codes, never upstream text or the key. |
@@ -309,7 +310,7 @@ Imports older institutional CSVs into the `history` schema without ever pretendi
 | `freshness.py` | LIVE / STALE / OFFLINE classification from server time. |
 | `worker.py` | `python -m app.environment.worker` (loop) or `--once`. Each cycle: fetch latest → normalise → insert if new → record the run. `PollScheduler` waits the interval, honours `Retry-After`, and backs off 5 min → 1 h on 401/403/404. A PostgreSQL advisory lock guarantees only one worker runs. |
 
-**In simple words:** a robot that checks the campus weather station every minute and writes down what it sees. The website only reads the robot's notebook.
+**In simple words:** a robot that checks the campus weather station every five minutes and writes down what it sees. The website only reads the robot's notebook.
 
 ### 7.11 Database migrations — `alembic/versions/`
 
@@ -329,6 +330,8 @@ Run in order with `alembic upgrade head`.
 | `0010_publication_1_3` | Release schema 1.3 and the population reference (6,991 people for 2026). |
 | `0011_historical_data_layer` | The `history` schema and release classification (`official`/`test`). |
 | `0012_environment_readings` | The `environment` schema for Aeron readings and worker runs. |
+| `0013_lpg_kg_governance_v2` … `0017_public_certificate_registry` | LPG kg governance v2, history coverage end, DG kWh methodology, renewable excludes thermal, public certificate registry. |
+| `0018_aeron_api_v1` | Three nullable columns on `environment.readings`: `fetched_at`, `source_epoch_ms`, `unmapped_values`. Additive only. |
 
 ### 7.12 Backend tests — `tests/`
 
@@ -350,8 +353,9 @@ Run with `pytest` (many need a real PostgreSQL; unit tests use in-memory SQLite)
 | `test_publication_readiness_integration.py`, `test_publication_integration.py` | Readiness, prepare, publish, checksum, public endpoints. |
 | `test_derived_kpi_contract.py` | Schema 1.4 derived indicators match the contract. |
 | `test_historical_integration.py` | Import, reconciliation, timeline. |
-| `test_environment_*.py` | Normaliser, freshness, worker cycle, API, Postgres persistence. |
-| `fixtures/aeron/aeron_real_sample_sanitized.json` | A real Aeron response with secrets removed. |
+| `test_environment_*.py` | API v1 client (auth, retries, rate limits), normaliser, freshness, worker cycle and scheduler, API, Postgres persistence. |
+| `fixtures/aeron/aeron_v1_sample_sanitized.json` | Real API v1 responses (`/stations`, `/parameters`, `/timeseries`) with the device IMEI redacted. |
+| `fixtures/aeron/aeron_real_sample_sanitized.json` | Older sample kept for regression tests of stored v1 rows. |
 
 ---
 
@@ -461,7 +465,7 @@ A year and month selector drives every page; "All" means the backend's Full-Year
 | `public-api.js` | The single adapter for `/api/public/dashboard`, `/history` and `/timeline`. Normalises numbers; missing stays `null`. | Talks to the public API. |
 | `public-data-loader.js` | Turns the timeline into the per-year, per-month arrays `app.js` expects, attaching the backend's aggregates (with coverage) and display context. Annual/YTD records are never put into a month. Green cover is the only data still read from a CSV (`data/green_master.csv`). | Reshapes API data for the charts. |
 | `app.js` | The dashboard core (≈2,260 lines): KPI cards with source badges and trend arrows, the GHG hero, all Chart.js charts, data explorer, green map, period controls, KPI detail modal, page switching (`go()`), animations. Formats — never calculates — official values. | Draws everything. |
-| `weather.js` | Weather page: polls `/api/environment/latest` and `/status` every 20 s, history charts, IST display; degrades to `--` and OFFLINE if the API is unreachable. | Live weather widgets. |
+| `weather.js` | Weather page: polls `/api/environment/latest` every 60 s and history every 5 min (one request at a time, paused in background tabs, 10 s timeout), IST display; if the API is unreachable it keeps the last good reading and the nav dot turns red. | Live weather widgets. |
 | `walkthrough.js`, `walkthrough.css` | "The Carbon Story" — a cinematic, scroll-driven tour that reads numbers off the rendered KPI cards and adds everyday equivalents (trees, homes, car-km). | Guided storytelling mode. |
 | `mobile.js`, `mobile.css` | Phone-only extras (collapsible filter bar, etc.). No effect on desktop. | Mobile layout helpers. |
 | `styles.css` | Main styles. | Look and feel. |
@@ -520,7 +524,7 @@ A standalone engine that turns dashboard data into a designed PDF sustainability
 | `README.md` | Short overview of apps, services, schemas and security. |
 | `PROJECT_MAP.md` | One-page folder map with responsibilities. |
 | `TRANSFER_CHECKLIST.md` | Steps for moving the project to a new machine safely. |
-| `PROJECT_PROGRESS_HANDOFF.md` (untracked) | Narrative of work so far. **Its Aeron sections are out of date** — they describe Phase 2 as blocked, but the contract and acceptance reports below show it was later verified and built. |
+| `PROJECT_PROGRESS_HANDOFF.md` | Narrative of work so far, with the current Aeron status. |
 | `DERIVED_KPI_CALCULATION_CONTRACT.md` | **The authoritative formula contract** for schema 1.4 (grid, renewable, total electricity, renewable share, avoided emissions, water per capita, static landfill diversion) with a worked September 2026 example. |
 | `CALCULATION_CONTRACT_REPORT.md` | Historical data audit and calculation contract (at `0009`). |
 | `FINAL_CALCULATION_ACCEPTANCE.md` | End-to-end calculation and live acceptance audit for September 2026 (at `0010`). |
@@ -529,10 +533,8 @@ A standalone engine that turns dashboard data into a designed PDF sustainability
 | `HISTORICAL_IMPORT_DRY_RUN.md` | Output of the dry run and proof the commit is idempotent. |
 | `HISTORICAL_RECONCILIATION_REPORT.md` | Conflicts found: 27 total, 23 still unresolved (not published). |
 | `HISTORICAL_COVERAGE_REPORT.md` | What months/years each metric covers, by granularity. |
-| `AERON_INTEGRATION_AUDIT.md` | Phase 1 read-only audit of the supplied Aeron Playwright code. |
-| `AERON_REAL_API_CONTRACT.md` | Phase 2: verified live contract (authentication, endpoints, 35 parameters, UTC timestamps, no +330 fix). |
-| `AERON_INTEGRATION_ARCHITECTURE.md` | Final design: worker → PostgreSQL → read-only API → Weather UI. |
-| `AERON_ACCEPTANCE_REPORT.md` | Pipeline accepted on real data (25 Sep 2026); a *fresh* LIVE reading was not yet observed because the station had stopped reporting. |
+| `AERON_REAL_API_CONTRACT.md` | Verified Aeron REST API v1 contract: Bearer key, endpoints, rate limits, 35 parameters, UTC timestamps (no +330 fix), error codes. |
+| `AERON_INTEGRATION_ARCHITECTURE.md` | Production guide for the AQI integration: worker → PostgreSQL → read-only API → Weather UI, configuration, fresh install, upgrade of the live server, checks, troubleshooting. |
 
 ---
 
@@ -558,9 +560,11 @@ docker compose exec api alembic upgrade head
 docker compose exec -e MICROCOSM_DEV_BOOTSTRAP_PASSWORD='<12+ chars>' api \
     python -m app.bootstrap development   # demo.admin, demo.transport, ...
 
-# 2. Aeron worker (optional; needs AERON_* variables in your environment)
-docker compose -f compose.yaml -f compose.worker.yaml up environment-worker
-#    or a single cycle:  python -m app.environment.worker --once
+# 2. Aeron worker (optional; needs AERON_STATION_ID and AERON_API_KEY in .env)
+docker compose up -d environment-worker
+docker compose logs -f environment-worker
+#    one cycle only (stop the container first):
+#    docker compose run --rm environment-worker python -m app.environment.worker --once
 
 # 3. Manager/Admin portal  (from apps/manager-admin)
 python serve-portal.py                 # http://127.0.0.1:3000
@@ -594,8 +598,8 @@ Note: `compose.yaml` targets the database `microcosm_clean_20260922`. The older 
 **In progress (uncommitted on this branch):** changes to the staging dashboard's `app.js`, `index.html`, `styles.css` and its contract test. The composition charts (Emission Profile, Electricity Mix, Fossil-Fuel Mix, Water Source) now show the **selected period's own record** — the month, or the backend's Full-Year/YTD aggregate — instead of summing months in the browser, and each chart gets a note naming parts that are missing or only partially covered. The staging and portal JS contract suites pass (86/86) with these changes.
 
 **Still to do (from the project's own documents):**
-- Production packaging: Nginx, full Docker Compose, backups (the `deployment/` and `docs/` folders are empty).
-- Observe a fresh LIVE Aeron reading once the station reports again.
+- Apply the Aeron API v1 worker on the live server (`docs/reports/AERON_INTEGRATION_ARCHITECTURE.md` §4) and confirm `/api/environment/status` shows `LIVE`.
+- Confirm the AQI standard, the humidity unit and the pressure calibration with Aeron.
 - Resolve the 23 unresolved historical conflicts, with owner decisions.
 - Connect report generation to published data, if it is to be kept.
 
@@ -607,13 +611,13 @@ Found while preparing this guide. Most urgent first.
 
 | # | Issue | Where | Suggested action |
 | --- | --- | --- | --- |
-| 1 | **Real Aeron login credentials remain in Git history** (removed from the current `.env.example`; the REST API v1 worker no longer uses them). | Commits `0aa3a94`, `c94d10b` (`services/main-api/.env.example`) | Rotate the Aeron account password. Scrubbing history is a separate, explicitly approved operation. |
+| 1 | **Old Aeron account credentials remain in Git history.** The current worker uses only an API key and never the account password. | Commits `0aa3a94`, `c94d10b` (`services/main-api/.env.example`) | Change the Aeron account password. Scrubbing history is a separate, explicitly approved operation. |
 | 2 | Root JS tests fail 11/11: they look for `app.js`, `data-loader.js` etc. in `tests/` instead of the app folder. | `tests/manager-admin/*.test.js` (`root = path.resolve(__dirname, '..')`) | Fix the path, or retire them if the app-local suites already cover them. |
 | 3 | Waste is missing from some admin/manager helpers: overview counts, history entry links and evidence labels list only five domains. | `admin-overview-api.js`, `manager-history.js`, `admin-evidence.js` | Add `waste`. |
 | 4 | Legacy login route points to a page that doesn't exist (`manager.html`). | `login.html`, `admin.html`, `portal-router.js`, `portal-guard.js` | Remove, or clearly mark as legacy. |
 | 5 | Report generation is not connected and its test imports a missing function. | `services/report-generation` | Decide: integrate with `/api/public/dashboard/timeline`, or archive. |
 | 6 | Large binaries in git: a ≈90 MB MSYS2 installer, ≈18 MB of exported PDFs, many duplicated `.mp4` files across app folders. | `services/report-generation`, `apps/*` | Move installers and generated output out of git; share media from one place. |
 | 7 | Unused copies of the old CSV engine and data in the staging dashboard and portal. | `calculations.js`, `data-loader.js`, `data/`, videos, walkthrough in `manager-admin` | Remove from the deployable app once the history importer no longer needs them there. |
-| 8 | Out-of-date docs: root `README.md` names the old dashboard; `services/main-api/README.md` says there are no migrations; `apps/manager-admin/README.md` describes a UI-only prototype; the handoff's Aeron status is stale. | various `*.md` | Refresh to match this guide. |
-| 9 | Backup files kept alongside live code. | `compose.yaml.before-aeron-worker`, `broken-login-backup/`, `transport-login.broken-backup.html`, `apps/manager-admin-backup-before-recovery/` | Move to `recovery-backups/` (git-ignored) or delete. |
+| 8 | Out-of-date docs: root `README.md` names the old dashboard; `services/main-api/README.md` says there are no migrations; `apps/manager-admin/README.md` describes a UI-only prototype. | various `*.md` | Refresh to match this guide. |
+| 9 | Backup files kept alongside live code. | `broken-login-backup/`, `transport-login.broken-backup.html`, `apps/manager-admin-backup-before-recovery/` | Move to `recovery-backups/` (git-ignored) or delete. |
 | 10 | AI design skills duplicated in two folders inside the public app. | `apps/public-dashboard-final-staging/.claude/skills` and `.agents/skills` | Keep one, outside the deployable app folder. |

@@ -27,6 +27,9 @@ PostgreSQL   Environment worker
  network)
 
 Nginx /admin/* -> Manager/Admin static files on 127.0.0.1:3002
+
+Environment worker --HTTPS, Bearer API key--> Aeron REST API v1
+                    (live3.aeronsystems.com, outbound only, every 5 min)
 ```
 
 | Browser URL | Upstream |
@@ -43,7 +46,7 @@ The browser calls `/api/...` on the same HTTPS origin. It does not call port 800
 
 - `apps/public-dashboard` is anonymous. It reads published data from `/api/public/...` and local CSV files shipped with the page.
 - `apps/manager-admin` is the administrator portal and the six manager domains: transport, energy, LPG, water, outreach, and waste. Authentication is shared. The API enforces role and domain.
-- `services/main-api` is the FastAPI application, Alembic migrations, and the Aeron environment worker.
+- `services/main-api` is the FastAPI application, Alembic migrations, and the Aeron environment worker. The API and the worker are two containers built from the same `Dockerfile`. Only the worker calls Aeron; it writes readings to PostgreSQL, and the API serves them read-only under `/api/environment/`. Details: [reports/AERON_INTEGRATION_ARCHITECTURE.md](reports/AERON_INTEGRATION_ARCHITECTURE.md).
 
 The frontend never opens a database connection.
 
@@ -57,7 +60,7 @@ The frontend never opens a database connection.
 | `/api/manager/` | A signed-in manager, and only for the assigned domain. |
 | `/api/admin/` | A signed-in administrator. |
 | `/api/access/` | Signed-in users, for their own access description. |
-| `/api/environment/` | Read-only environment readings served by the API. |
+| `/api/environment/` | Anyone. Read-only Aeron readings, status and parameter list from the database. Never calls Aeron. |
 
 OpenAPI (`/docs`, `/redoc`, `/openapi.json`) is on when `APP_ENV` is not `production`. Set `OPENAPI_ENABLED=true` or `false` to override that.
 
@@ -71,7 +74,8 @@ OpenAPI (`/docs`, `/redoc`, `/openapi.json`) is on when `APP_ENV` is not `produc
 | `postgres:5432` inside Compose | Production required | Docker DNS only |
 | `file://` | Remove | Not used by the production pages |
 | Cloudflare Insights script tags | Remove | Not added by this application |
-| Passwords, `SECRET_KEY`, `CSRF_SECRET`, `DATABASE_URL` values | Configure | `.env` on the server, never Git |
+| Passwords, `SECRET_KEY`, `CSRF_SECRET`, `DATABASE_URL`, `AERON_API_KEY` values | Configure | `.env` on the server, never Git |
+| `https://live3.aeronsystems.com/api/v1` | Production required | Worker only, outbound. Never in a browser file. |
 
 ## What does not start by itself
 

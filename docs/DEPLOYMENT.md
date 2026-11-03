@@ -1,6 +1,8 @@
 # Deployment
 
-Target host: Ubuntu VPS. Public ports: 22, 80, and 443. Do not open 3001, 3002, 8000, or 5432.
+Target host: Ubuntu VPS. Public ports: 22, 80, and 443. Do not open 3001, 3002, 8000, or 5432. Outbound HTTPS (443) to `live3.aeronsystems.com` must be allowed for the environment worker.
+
+This document is for a new server. The live server at `/opt/sustainability_intelligence_system` already runs under the Compose project `sustainability-production`; for that server read [section 10](#10-existing-production-server) first.
 
 Clone path used below: `/opt/kcosmos/Sustainability-Intelligence`. The systemd units are rendered with the real checkout path by `deploy.sh`.
 
@@ -52,7 +54,7 @@ cp .env.example .env
 nano .env
 ```
 
-Fill `POSTGRES_PASSWORD`, `DATABASE_URL`, `SECRET_KEY`, `CSRF_SECRET`, and the `AERON_*` values. `DATABASE_URL` must be a complete URL. Compose does not expand `${POSTGRES_PASSWORD}` inside the `.env` file.
+Fill `POSTGRES_PASSWORD`, `DATABASE_URL`, `SECRET_KEY`, `CSRF_SECRET`, and `AERON_API_KEY` (the Aeron REST API v1 key; `AERON_STATION_ID` and the other `AERON_*` defaults are already set). `DATABASE_URL` must be a complete URL. Compose does not expand `${POSTGRES_PASSWORD}` inside the `.env` file.
 
 ```text
 DATABASE_URL=postgresql+psycopg://microcosm_app:YOUR_PASSWORD@postgres:5432/microcosm
@@ -66,6 +68,10 @@ python3 -c "import secrets; print(secrets.token_urlsafe(48))"
 
 `APP_ENV=production`, `SESSION_COOKIE_SECURE=true`, and `ALLOWED_ORIGINS=https://sustainability.kct.ac.in`.
 
+```bash
+chmod 600 .env
+```
+
 ## 5. Database and API
 
 ```bash
@@ -77,6 +83,17 @@ docker compose up -d
 ```
 
 `docker compose up` does not migrate. Run `alembic upgrade head` yourself, or use `deployment/scripts/deploy.sh`, which does it in order.
+
+`docker compose up -d` starts three services: `postgres`, `api` and `environment-worker`. The worker is built from the same `Dockerfile` as the API and runs `python -m app.environment.worker`. It needs no browser or extra packages.
+
+Check the worker:
+
+```bash
+docker compose logs --tail 30 environment-worker      # expect environment_ingestion_cycle outcome=INSERTED or DUPLICATE
+curl -s http://127.0.0.1:8000/api/environment/status
+```
+
+Details, error codes and fixes: [docs/reports/AERON_INTEGRATION_ARCHITECTURE.md](reports/AERON_INTEGRATION_ARCHITECTURE.md).
 
 ## 6. Frontends
 
@@ -130,6 +147,7 @@ Refresh `deployment/nginx/cloudflare-real-ip.conf` from <https://www.cloudflare.
 ```bash
 curl -f https://sustainability.kct.ac.in/health/live
 curl -f https://sustainability.kct.ac.in/health/ready
+curl -f https://sustainability.kct.ac.in/api/environment/status
 deployment/scripts/health-check.sh
 ```
 
@@ -139,7 +157,7 @@ Later deploys:
 deployment/scripts/deploy.sh
 ```
 
-That script pulls, checks `.env`, builds images, starts PostgreSQL, migrates, restarts the API and worker, restarts the frontend units, and runs the health check when the public name answers.
+That script pulls, checks `.env` (including that `AERON_STATION_ID` and `AERON_API_KEY` are set), builds images, starts PostgreSQL, migrates, restarts the API and worker, restarts the frontend units, and runs the health check when the public name answers. It uses the repository's `compose.yaml` (project `kcosmos`); do not run it on the existing production server, see section 10.
 
 ## 9. Backups
 
@@ -156,7 +174,42 @@ cd /opt/kcosmos/Sustainability-Intelligence/services/main-api
 docker compose stop api environment-worker
 cd /opt/kcosmos/Sustainability-Intelligence
 sudo CONFIRM_RESTORE=yes deployment/scripts/restore-db.sh --replace /var/backups/kcosmos/microcosm-TIMESTAMP.dump
+cd services/main-api
 docker compose start api environment-worker
 ```
 
 Nothing in deploy or container startup calls the restore script.
+
+## 10. Existing production server
+
+The live VPS keeps its own deployment method. Do not run `deploy.sh` or a plain `docker compose up` there: the project name would differ and Compose would create a new, empty database volume.
+
+| Item | Value |
+| --- | --- |
+| Project root | `/opt/sustainability_intelligence_system` |
+| Backend and Compose file | `services/main-api/compose.production.yaml` (server file, not in Git) |
+| Compose project | `sustainability-production` |
+| Containers | `sustainability-production-api-1`, `-environment-worker-1`, `-postgres-1` |
+
+```bash
+cd /opt/sustainability_intelligence_system/services/main-api
+DC="docker compose -p sustainability-production -f compose.production.yaml"
+
+# back up first
+$DC exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' \
+  | sudo tee /var/backups/kcosmos/microcosm-$(date +%Y%m%d-%H%M%S).dump >/dev/null
+
+# update code (confirm the branch first)
+cd /opt/sustainability_intelligence_system && git pull --ff-only && cd services/main-api
+
+# build, migrate, restart
+$DC build api environment-worker
+$DC run --rm --no-deps api alembic upgrade head
+$DC up -d api environment-worker
+$DC ps
+$DC logs --tail 30 environment-worker
+```
+
+The first deploy after the switch to the Aeron API key also needs a one-time change to `.env` and to the `environment-worker` service in `compose.production.yaml`. Follow section 4 of [AERON_INTEGRATION_ARCHITECTURE.md](reports/AERON_INTEGRATION_ARCHITECTURE.md#4-upgrade-the-existing-production-server).
+
+Never run `docker compose down -v` on this server.

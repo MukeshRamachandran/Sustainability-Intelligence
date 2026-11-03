@@ -7,8 +7,11 @@ from typing import Literal
 
 Freshness = Literal["LIVE", "STALE", "OFFLINE"]
 
-LIVE_BEFORE = timedelta(minutes=10)
-STALE_UNTIL = timedelta(minutes=30)
+# Aeron publishes a new reading about every 7 minutes and delivers it up to ~8
+# minutes late; the worker polls every 5. A healthy pipeline can therefore show a
+# reading up to ~20 minutes old, so LIVE must cover that or the page flickers STALE.
+LIVE_BEFORE = timedelta(minutes=20)
+STALE_UNTIL = timedelta(minutes=60)
 # A reading may be marginally ahead of the server clock; anything beyond this
 # is treated as untrustworthy rather than "LIVE".
 FUTURE_TOLERANCE = timedelta(minutes=2)
@@ -21,7 +24,7 @@ def reading_age(observed_at: datetime, now: datetime) -> timedelta:
 
 
 def classify_freshness(observed_at: datetime | None, now: datetime) -> Freshness:
-    """LIVE: age < 10 min. STALE: 10 <= age <= 30 min. OFFLINE: older, missing or future-dated."""
+    """LIVE: age < 20 min. STALE: 20 <= age <= 60 min. OFFLINE: older, missing or future-dated."""
     if observed_at is None:
         return "OFFLINE"
     age = reading_age(observed_at, now)

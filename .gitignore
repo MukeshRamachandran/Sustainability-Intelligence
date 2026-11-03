@@ -19,6 +19,9 @@ node_modules/
 .env.*.local
 *.secret
 services/main-api/.env
+.env.bak*
+*.env.bak*
+compose.production.yaml.bak*
 
 # Database backups produced by deployment/scripts/backup-db.sh
 deployment/backups/

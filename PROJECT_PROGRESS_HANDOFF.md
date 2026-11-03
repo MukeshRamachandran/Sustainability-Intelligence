@@ -1,10 +1,10 @@
 # K-COSMOS — work completed and current handoff
 
-Prepared: 29 September 2026
+Prepared: 29 September 2026. Aeron sections updated: 3 November 2026.
 
 Authoritative project: `C:\Projects\K-COSMOS-FINAL`
 
-This document summarizes the conversation, the project-owner baseline, and the recorded Aeron audits. It distinguishes completed or reported work from requests whose completion is not evidenced. The terminal tool was unavailable when this summary was prepared, so current Git state, test counts, running services, and database contents were not rechecked today.
+This document summarizes the conversation, the project-owner baseline, and the current Aeron integration. It distinguishes completed or reported work from requests whose completion is not evidenced. The terminal tool was unavailable when this summary was prepared, so current Git state, test counts, running services, and database contents were not rechecked today.
 
 ## 1. What you have been building
 
@@ -71,88 +71,59 @@ You requested historical-data auditing before importing any history, final calcu
 
 At the switch to Aeron work, the recorded task update said **v2 remained active and no v3 candidate had been prepared or published**. That is the last recorded publication statement in this conversation, not a fresh database verification.
 
-## 5. Aeron Phase 1 — completed architecture audit
+## 5. Aeron AQI integration — current state (3 November 2026)
 
-Phase 1 inspected K-COSMOS and the supplied source snapshot under:
+The Aeron integration is built and runs on Aeron's **REST API v1 with a Bearer API key**. The earlier browser-login approach has been removed from the code, the images and the dependencies. The production guide is [docs/reports/AERON_INTEGRATION_ARCHITECTURE.md](docs/reports/AERON_INTEGRATION_ARCHITECTURE.md); the verified source contract is [docs/reports/AERON_REAL_API_CONTRACT.md](docs/reports/AERON_REAL_API_CONTRACT.md).
 
-`C:\Projects\AERON-PLAYWRIGHT\AQI-integration--main`
+How it works:
 
-The deliverable was [AERON_INTEGRATION_AUDIT.md](AERON_INTEGRATION_AUDIT.md). Only the audit document was created for that phase; application code, UI, Docker, database, and publication state were not changed.
+1. The `environment-worker` container (`python -m app.environment.worker`, same image as the API) calls `GET https://live3.aeronsystems.com/api/v1/timeseries?station=b1ce41c2-586a-4a26-9382-9d8bfe757e78` every 5 minutes with `Authorization: Bearer $AERON_API_KEY`.
+2. It normalizes the reading (UTC timestamp, no +330 correction, 35 parameters in source units) and inserts it into `environment.readings` only if the observation time is new. Each cycle is recorded in `environment.ingestion_runs`.
+3. The API serves stored rows at `GET /api/environment/latest`, `/history`, `/status` and `/parameters`. These routes never contact Aeron.
+4. The Weather page (`apps/public-dashboard/weather.js`) reads those routes on the same origin every 60 seconds (charts every 5 minutes) and keeps the last good reading if the API is unreachable.
 
-The recorded K-COSMOS branch was `feature-aeron-integration`, with HEAD `2686a87ed41498b2583431bb0697057b502363f1`. The supplied Aeron snapshot had no `.git` metadata, so its commit, branch, and secret-tracking history could not be verified.
+Settled facts:
 
-The principal findings were:
-
-1. Playwright authenticates and obtains cookies. It does not extract sensor readings from dashboard DOM elements.
-2. The Python client then requests readings through HTTP: a public API path or an internal cookie-authenticated path.
-3. The supplied `api_response.json` was empty. Synthetic tests and mock payloads did not prove a working live source.
-4. The source and existing backend apply a +330-minute timestamp adjustment. Its correctness was not proven, and a supplied test contradicted the implementation.
-5. The source mapping contains 35 configured parameter IDs. Their presence in the mapping does not prove that a live station returns all 35.
-6. The existing `services/aeron-api` has useful environmental models, normalization mappings, read routes, and sync contracts worth preserving or adapting.
-7. Main-api has no environmental API implementation in the inspected code.
-
-The target design remains scheduled ingestion into PostgreSQL followed by public read APIs. Public visitors must not trigger Playwright or upstream ingestion.
-
-## 6. Aeron UI and routing findings
-
-There are two public Weather implementations:
-
-| Location | Inspected behavior |
+| Question | Answer |
 | --- | --- |
-| `apps/public-dashboard` | Same-origin `/api/environment/latest` and `/api/environment/history` |
-| `apps/public-dashboard-final-staging` | Calls port 8000 for environment data and exposes the older `/api/sync/aeron` action |
-| `services/aeron-api` | Separate service configured for port 8001; read routes under `/api/environment/*`; protected sync at `/api/environment/sync` |
+| Authentication | Bearer API key in `services/main-api/.env` only |
+| Rate limits | 60 requests/minute, 10,000/day; the 5-minute poll uses 288/day; the interval is clamped to 120–3600 s |
+| Timestamp | `reading.timestamp` is true UTC; no +330 shift |
+| Parameters | 35 codes; all match the K-COSMOS map |
+| Single worker | PostgreSQL advisory lock; a second copy exits with code 2 |
+| Missing key | Worker exits with code 3; the API keeps serving stored data |
+| Schema | `0012_environment_readings` plus additive `0018_aeron_api_v1` |
+| Device health | Not available in API v1 |
 
-This creates a staging route/port mismatch. A local Phase 2 check found port 8000 returned 404 for `/api/environment/latest`, while port 8001 was unreachable. Those were observations at the time of the check, not a current service-health claim.
+Verified on 2026-11-02 against the live API: `/stations`, `/parameters` and `/timeseries` all returned 200 JSON for station Air Quality KCT. A sanitized copy is in `services/main-api/tests/fixtures/aeron/aeron_v1_sample_sanitized.json`.
 
-The existing UI expects weather, pollution, noise, and device-health fields. Time is displayed using the browser's local timezone. The frontend's exact ten-minute freshness boundary differs from the requested rule. Rainfall aggregation semantics and several source units also require live-source confirmation.
+## 6. Production server
 
-No routing or UI fix has been made during the Aeron verification phases.
-
-## 7. Aeron Phase 2 — started, but live verification is incomplete
-
-The deliverable currently is [AERON_REAL_API_CONTRACT.md](AERON_REAL_API_CONTRACT.md). It explicitly records an incomplete verification, not a proven real-data contract.
-
-You configured Aeron variables at Windows User scope. Checks outside the workspace sandbox confirmed presence of the required configuration and optional authentication configuration without printing values. Earlier sandboxed checks could not see those variables; therefore those initial failures reflected visibility limits rather than proof that Windows User configuration was absent.
-
-The remaining immediate problem was the Python path:
-
-| Path | Recorded result |
+| Item | Value |
 | --- | --- |
-| `C:\Projects\AERON-PLAYWRIGHT\AQI-integration--main.venv\Scripts\python.exe` | Explicitly approved in your messages, but did not exist when checked |
-| `C:\Projects\AERON-PLAYWRIGHT\AQI-integration--main\.venv\Scripts\python.exe` | Found on disk; it is inside the source directory and has not been run in the recorded verification |
+| URL | `https://sustainability.kct.ac.in` |
+| Project root | `/opt/sustainability_intelligence_system` |
+| Backend / Compose | `/opt/sustainability_intelligence_system/services/main-api` |
+| Compose project | `sustainability-production` (`compose.production.yaml`) |
+| Containers | `sustainability-production-api-1` (127.0.0.1:8000), `sustainability-production-environment-worker-1`, `sustainability-production-postgres-1` |
 
-The difference is the directory separator before `.venv`. The previous turns stopped because the supplied exact path failed the first prerequisite and an alternate environment was not used.
+The live server still runs the older worker image until it is upgraded. The step-by-step upgrade (back up, pull, update `.env`, change the worker service to use `Dockerfile`, migrate to `0018`, restart, check) is section 4 of the architecture guide. Always pass `-p sustainability-production -f compose.production.yaml` so Compose works on the existing database.
 
-Current recorded verification state:
-
-- Required Windows User environment configuration: presence confirmed.
-- Dedicated Python execution: not yet verified at the approved path.
-- Playwright import and headless Chromium launch: not attempted with the found dedicated environment.
-- Real login: not attempted.
-- Existing cookie validity or fresh-cookie acquisition: not tested.
-- Live sensor endpoint: not verified.
-- Non-empty real reading: not obtained.
-- Sanitized real-response fixture: not created.
-- Timestamp semantics and +330 correction: unresolved.
-- Two-reading comparison, session reuse, and real UI metric coverage: unresolved.
-
-No Aeron secrets were printed in the recorded checks. No database ingestion or Phase 3 integration has begun.
-
-## 8. Files produced during the recorded Aeron work
+## 7. Aeron files
 
 | File | Purpose |
 | --- | --- |
-| `AERON_INTEGRATION_AUDIT.md` | Phase 1 architecture, mapping, deployment, timestamp, and integration-risk audit |
-| `AERON_REAL_API_CONTRACT.md` | Phase 2 verification attempts, observed blockers, and unresolved live-source contract |
-| `PROJECT_PROGRESS_HANDOFF.md` | This overall progress summary |
+| `docs/reports/AERON_INTEGRATION_ARCHITECTURE.md` | Production guide: design, configuration, install, server upgrade, checks, troubleshooting |
+| `docs/reports/AERON_REAL_API_CONTRACT.md` | Verified API v1 contract and parameter map |
+| `services/main-api/app/environment/` | Worker, API client, normalizer, parameters, repository, freshness |
+| `services/main-api/app/routers/environment.py` | Read-only public routes |
+| `services/main-api/alembic/versions/0012_*.py`, `0018_*.py` | `environment` schema |
+| `services/main-api/tests/test_environment_*.py` | Client, normalizer, worker, API and PostgreSQL tests |
 
-Pre-existing untracked `.claude/` and `FINAL_CALCULATION_ACCEPTANCE.md` were observed during the earlier status checks and were left alone. No Git commit was made as part of the recorded Aeron audit/verification work. Today's Git status could not be rechecked because the terminal tool failed to start.
+## 8. Next work
 
-## 9. Next work needed
-
-First resolve the dedicated Python path and pass the import/browser prerequisites. Then use the configured authentication to perform a controlled live reading request with secrets kept out of output and saved files.
-
-Once a real response is available, sanitize it, inventory every returned field and unit, verify station identity, compare timestamps against the Aeron dashboard, and settle the +330-minute question. Reuse the same authenticated session for a second reading if practical. Only after these checks can the source contract be considered ready for Phase 3 ingestion design.
-
-The manager/admin, sustainability, history, publication, UI, Docker, and routing code remain outside this verification phase's change scope.
+1. Upgrade the live server to the API v1 worker and confirm `/api/environment/status` reports `LIVE` with no error code.
+2. Confirm which directory serves the public dashboard on the server, so the updated `weather.js` is live.
+3. Change the old Aeron account password; it remains in Git history from earlier commits.
+4. Ask Aeron to confirm the AQI standard, the humidity unit "Per", the constant 150 "mBa" pressure and the `CO_ppm`/ppb naming.
+5. Optional later work: hourly and daily aggregates, a diagnostics view for the mV and ppb channels, and Aeron history import once its v1 parameters are documented.

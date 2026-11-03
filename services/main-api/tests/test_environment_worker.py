@@ -11,8 +11,9 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.environment.config import AeronWorkerSettings
+from app.environment.repository import record_run
 from app.environment.source import AeronApiClient
-from app.environment.worker import CycleResult, PollScheduler, build_client, run_cycle
+from app.environment.worker import CycleResult, PollScheduler, build_client, initial_delay, run_cycle
 from app.models.environment import EnvironmentIngestionRun, EnvironmentReading
 from tests.environment_support import (
     environment_sqlite_engine,
@@ -256,6 +257,34 @@ def test_scheduler_backs_off_auth_failures_instead_of_retrying_every_minute() ->
     assert scheduler.next_delay(failed("FORBIDDEN"), 0) == 300
 
 
+def test_scheduler_slows_down_when_the_daily_budget_runs_low() -> None:
+    scheduler = PollScheduler(300)
+    low = CycleResult(ok().run, remaining_day=499)
+    plenty = CycleResult(ok().run, remaining_day=9000)
+    assert scheduler.next_delay(low, elapsed_seconds=1) == 1800
+    assert scheduler.next_delay(plenty, elapsed_seconds=1) == 299
+
+
+@pytest.mark.parametrize(("configured", "effective"), [(5, 120), (60, 120), (300, 300), (99999, 3600)])
+def test_poll_interval_is_clamped_to_a_safe_range(configured: int, effective: int) -> None:
+    settings = AeronWorkerSettings(_env_file=None, AERON_STATION_ID=STATION, AERON_POLL_INTERVAL_SECONDS=configured)
+    assert settings.AERON_POLL_INTERVAL_SECONDS == effective
+
+
+def test_restart_waits_out_the_rest_of_the_interval(factory: sessionmaker[Session]) -> None:
+    assert initial_delay(factory, 300, NOW) == 0.0  # no previous run: poll at once
+    with factory() as db:
+        record_run(
+            db,
+            EnvironmentIngestionRun(
+                station_id=STATION, started_at=NOW - timedelta(seconds=100), finished_at=NOW, outcome="DUPLICATE"
+            ),
+        )
+        db.commit()
+    assert initial_delay(factory, 300, NOW) == 200.0
+    assert initial_delay(factory, 300, NOW + timedelta(minutes=10)) == 0.0
+
+
 def test_worker_is_not_built_without_an_api_key() -> None:
     settings = AeronWorkerSettings(_env_file=None, AERON_STATION_ID=STATION, AERON_API_KEY="  ")
     assert build_client(settings) is None
@@ -264,7 +293,7 @@ def test_worker_is_not_built_without_an_api_key() -> None:
 def test_settings_hide_the_key_and_require_https() -> None:
     settings = AeronWorkerSettings(_env_file=None, AERON_STATION_ID=STATION, AERON_API_KEY=API_KEY)
     assert API_KEY not in repr(settings) and API_KEY not in str(settings.model_dump())
-    assert settings.AERON_POLL_INTERVAL_SECONDS == 60
+    assert settings.AERON_POLL_INTERVAL_SECONDS == 300
     with pytest.raises(ValueError):
         AeronWorkerSettings(
             _env_file=None, AERON_STATION_ID=STATION, AERON_API_BASE_URL="http://live3.aeronsystems.com/api/v1"

@@ -97,7 +97,7 @@ def test_latest_returns_the_ui_contract_with_server_side_freshness(
         assert private not in body
 
 
-@pytest.mark.parametrize(("minutes", "expected"), [(9, "LIVE"), (10, "STALE"), (30, "STALE"), (31, "OFFLINE")])
+@pytest.mark.parametrize(("minutes", "expected"), [(19, "LIVE"), (20, "STALE"), (60, "STALE"), (61, "OFFLINE")])
 def test_latest_freshness_uses_server_time(
     api: TestClient, factory: sessionmaker[Session], clock: Clock, minutes: int, expected: str
 ) -> None:
@@ -146,7 +146,7 @@ def test_status_without_data_is_offline(api: TestClient) -> None:
     assert body["freshness"] == "OFFLINE"
     assert body["data_availability"] == "unavailable"
     assert body["connection_status"] == "connected"
-    assert body["thresholds"] == {"live_before_minutes": 10, "stale_until_minutes": 30}
+    assert body["thresholds"] == {"live_before_minutes": 20, "stale_until_minutes": 60}
 
 
 def test_status_reports_freshness_and_worker_health(
@@ -162,13 +162,13 @@ def test_status_reports_freshness_and_worker_health(
                 )
             )
         db.commit()
-    clock.now = OBSERVED + timedelta(minutes=12)
+    clock.now = OBSERVED + timedelta(minutes=25)
 
     body = api.get("/api/environment/status").json()
 
     assert body["station"] == STATION
     assert body["freshness"] == "STALE"
-    assert body["age_seconds"] == 12 * 60
+    assert body["age_seconds"] == 25 * 60
     assert parse(body["observed_at"]) == OBSERVED
     assert body["last_sync_outcome"] == "FAILED"
     assert body["last_sync_error_code"] == "TIMEOUT"

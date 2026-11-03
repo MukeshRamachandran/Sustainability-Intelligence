@@ -59,6 +59,7 @@ The API, worker, Compose, and backup scripts read one file: `services/main-api/.
 | `ALLOWED_ORIGINS` | `https://sustainability.kct.ac.in` |
 | `SESSION_COOKIE_SECURE` | `true` in production |
 | `AERON_STATION_ID`, `AERON_API_KEY` | Environment worker only (Aeron REST API v1, Bearer key). Never put the key in a frontend file. |
+| `AERON_API_BASE_URL`, `AERON_POLL_INTERVAL_SECONDS` | Defaults `https://live3.aeronsystems.com/api/v1` and `300` (clamped to 120–3600). Timeouts and retry count are in `.env.example`. |
 
 `OPENAPI_ENABLED` overrides the default, which hides `/docs` in production.
 
@@ -99,23 +100,35 @@ python deployment/scripts/static-server.py --host 127.0.0.1 --port 3002 --direct
 
 The manager portal is written to be browsed under `/admin/`.
 
-## Running the worker
+## Running the Aeron AQI worker
 
 ```bash
 cd services/main-api
 docker compose up -d environment-worker
+docker compose logs --tail 30 environment-worker
+curl -s http://127.0.0.1:8000/api/environment/status
 ```
 
-The worker polls Aeron's REST API v1 every `AERON_POLL_INTERVAL_SECONDS` (default 60) and writes environment readings. It needs `AERON_STATION_ID` and `AERON_API_KEY` in `.env`. It runs from the API image; no browser is involved. See `docs/reports/AERON_INTEGRATION_ARCHITECTURE.md`.
+The worker polls `GET /timeseries?station=…` on Aeron's REST API v1 every `AERON_POLL_INTERVAL_SECONDS` (default 60) with `Authorization: Bearer $AERON_API_KEY`, and stores new readings in `environment.readings`. It runs from the same image as the API and needs no browser or extra packages. Only one worker runs per database (PostgreSQL advisory lock). Without `AERON_API_KEY` it exits with code 3 and the API keeps serving stored readings.
+
+The Weather page reads `/api/environment/latest`, `/history` and `/status`; those routes never call Aeron. To see it locally with the API proxied on the same origin:
+
+```bash
+python deployment/scripts/dev-server.py --port 3000     # http://127.0.0.1:3000
+```
+
+Setup, the live-server upgrade, error codes and fixes: [docs/reports/AERON_INTEGRATION_ARCHITECTURE.md](docs/reports/AERON_INTEGRATION_ARCHITECTURE.md). Source contract: [docs/reports/AERON_REAL_API_CONTRACT.md](docs/reports/AERON_REAL_API_CONTRACT.md).
 
 ## Production deployment
 
-Follow [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Short form on the server:
+Follow [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Short form on a new server:
 
 ```bash
 cd /opt/kcosmos/Sustainability-Intelligence
 deployment/scripts/deploy.sh
 ```
+
+The existing server at `/opt/sustainability_intelligence_system` runs the Compose project `sustainability-production` with `compose.production.yaml`. Use the commands in [docs/DEPLOYMENT.md section 10](docs/DEPLOYMENT.md#10-existing-production-server) there, not `deploy.sh`.
 
 ## Nginx
 

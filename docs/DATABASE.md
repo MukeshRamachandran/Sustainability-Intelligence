@@ -17,6 +17,7 @@ Alembic revision `0001` creates the application schemas, including:
 - `publication` — releases
 - `audit` — audit events
 - later revisions add evidence, outreach, waste, LPG units, emission-factor governance, historical data, and environment readings
+- `environment` — Aeron readings (`readings`) and worker cycles (`ingestion_runs`); written only by the environment worker (`0012`, `0018`)
 
 Current revisions are in `services/main-api/alembic/versions/`. Apply them with:
 
